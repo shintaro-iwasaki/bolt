@@ -19,4 +19,5 @@ task_nested_omp
 task_nested_abt_task
 task_nested_lvl2_omp
 task_nested_lvl2_abt_task
+taskwait_omp
 
