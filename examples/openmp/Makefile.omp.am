@@ -11,7 +11,8 @@ TESTS = \
 	task_multiple_producer_omp \
 	task_nested_omp \
 	task_nested_lvl2_omp \
-	taskwait_omp
+	taskwait_omp \
+	taskyield_omp
 
 check_PROGRAMS = $(TESTS)
 noinst_PROGRAMS = $(TESTS)
@@ -27,6 +28,7 @@ task_multiple_producer_omp_SOURCES = task_multiple_producer_omp.c
 task_nested_omp_SOURCES = task_nested_omp.c
 task_nested_lvl2_omp_SOURCES = task_nested_lvl2_omp.c
 taskwait_omp_SOURCES = taskwait_omp.c
+taskyield_omp_SOURCES = taskyield_omp.c
 
 testing:
 	./parallel_for_omp
@@ -37,3 +39,4 @@ testing:
 	./task_nested_omp
 	./task_nested_lvl2_omp
 	./taskwait_omp
+	./taskyield_omp
