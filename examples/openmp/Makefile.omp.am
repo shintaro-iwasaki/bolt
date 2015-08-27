@@ -1,0 +1,18 @@
+# -*- Mode: Makefile; -*-
+#
+# See COPYRIGHT in top-level directory.
+#
+
+TESTS = \
+	parallel_for_omp
+
+check_PROGRAMS = $(TESTS)
+noinst_PROGRAMS = $(TESTS)
+
+AM_CPPFLAGS = @OPENMP_CFLAGS@
+AM_LDFLAGS = @OPENMP_CFLAGS@
+
+parallel_for_omp_SOURCES = parallel_for_omp.c
+
+testing:
+	./parallel_for_omp
