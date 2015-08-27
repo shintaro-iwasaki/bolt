@@ -17,4 +17,6 @@ task_multiple_producer_abt_task
 task_multiple_producer_abt_thread
 task_nested_omp
 task_nested_abt_task
+task_nested_lvl2_omp
+task_nested_lvl2_abt_task
 
