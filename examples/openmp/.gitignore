@@ -6,4 +6,7 @@ parallel_for_abt_thread
 nested_parallel_for_omp
 nested_parallel_for_abt_task
 nested_parallel_for_abt_thread
+nested_parallel_for_irregular_omp
+nested_parallel_for_irregular_abt_task
+nested_parallel_for_irregular_abt_thread
 

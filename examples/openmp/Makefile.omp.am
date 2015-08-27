@@ -5,7 +5,8 @@
 
 TESTS = \
 	parallel_for_omp \
-	nested_parallel_for_omp
+	nested_parallel_for_omp \
+	nested_parallel_for_irregular_omp
 
 check_PROGRAMS = $(TESTS)
 noinst_PROGRAMS = $(TESTS)
@@ -15,7 +16,9 @@ AM_LDFLAGS = @OPENMP_CFLAGS@
 
 parallel_for_omp_SOURCES = parallel_for_omp.c
 nested_parallel_for_omp_SOURCES = nested_parallel_for_omp.c
+nested_parallel_for_irregular_omp_SOURCES = nested_parallel_for_irregular_omp.c
 
 testing:
 	./parallel_for_omp
 	./nested_parallel_for_omp
+	./nested_parallel_for_irregular_omp

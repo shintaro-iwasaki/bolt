@@ -7,7 +7,9 @@ TESTS = \
 	parallel_for_abt_task \
 	parallel_for_abt_thread \
 	nested_parallel_for_abt_task \
-	nested_parallel_for_abt_thread
+	nested_parallel_for_abt_thread \
+	nested_parallel_for_irregular_abt_task \
+	nested_parallel_for_irregular_abt_thread
 
 check_PROGRAMS = $(TESTS)
 noinst_PROGRAMS = $(TESTS)
@@ -18,9 +20,13 @@ parallel_for_abt_task_SOURCES = parallel_for_abt_task.c
 parallel_for_abt_thread_SOURCES = parallel_for_abt_thread.c
 nested_parallel_for_abt_task_SOURCES = nested_parallel_for_abt_task.c
 nested_parallel_for_abt_thread_SOURCES = nested_parallel_for_abt_thread.c
+nested_parallel_for_irregular_abt_task_SOURCES = nested_parallel_for_irregular_abt_task.c
+nested_parallel_for_irregular_abt_thread_SOURCES = nested_parallel_for_irregular_abt_thread.c
 
 testing:
 	./parallel_for_abt_task
 	./parallel_for_abt_thread
 	./nested_parallel_for_abt_task
 	./nested_parallel_for_abt_thread
+	./nested_parallel_for_irregular_abt_task
+	./nested_parallel_for_irregular_abt_thread
