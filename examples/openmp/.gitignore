@@ -12,4 +12,7 @@ nested_parallel_for_irregular_abt_thread
 task_single_producer_omp
 task_single_producer_abt_task
 task_single_producer_abt_thread
+task_multiple_producer_omp
+task_multiple_producer_abt_task
+task_multiple_producer_abt_thread
 

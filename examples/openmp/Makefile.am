@@ -11,7 +11,9 @@ TESTS = \
 	nested_parallel_for_irregular_abt_task \
 	nested_parallel_for_irregular_abt_thread \
 	task_single_producer_abt_task \
-	task_single_producer_abt_thread
+	task_single_producer_abt_thread \
+	task_multiple_producer_abt_task \
+	task_multiple_producer_abt_thread
 
 check_PROGRAMS = $(TESTS)
 noinst_PROGRAMS = $(TESTS)
@@ -26,6 +28,8 @@ nested_parallel_for_irregular_abt_task_SOURCES = nested_parallel_for_irregular_a
 nested_parallel_for_irregular_abt_thread_SOURCES = nested_parallel_for_irregular_abt_thread.c
 task_single_producer_abt_task_SOURCES = task_single_producer_abt_task.c
 task_single_producer_abt_thread_SOURCES = task_single_producer_abt_thread.c
+task_multiple_producer_abt_task_SOURCES = task_multiple_producer_abt_task.c
+task_multiple_producer_abt_thread_SOURCES = task_multiple_producer_abt_thread.c
 
 testing:
 	./parallel_for_abt_task
@@ -36,3 +40,5 @@ testing:
 	./nested_parallel_for_irregular_abt_thread
 	./task_single_producer_abt_task
 	./task_single_producer_abt_thread
+	./task_multiple_producer_abt_task
+	./task_multiple_producer_abt_thread
