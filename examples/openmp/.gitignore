@@ -9,4 +9,7 @@ nested_parallel_for_abt_thread
 nested_parallel_for_irregular_omp
 nested_parallel_for_irregular_abt_task
 nested_parallel_for_irregular_abt_thread
+task_single_producer_omp
+task_single_producer_abt_task
+task_single_producer_abt_thread
 
