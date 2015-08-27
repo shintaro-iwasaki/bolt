@@ -13,7 +13,8 @@ TESTS = \
 	task_single_producer_abt_task \
 	task_single_producer_abt_thread \
 	task_multiple_producer_abt_task \
-	task_multiple_producer_abt_thread
+	task_multiple_producer_abt_thread \
+	task_nested_abt_task
 
 check_PROGRAMS = $(TESTS)
 noinst_PROGRAMS = $(TESTS)
@@ -30,6 +31,7 @@ task_single_producer_abt_task_SOURCES = task_single_producer_abt_task.c
 task_single_producer_abt_thread_SOURCES = task_single_producer_abt_thread.c
 task_multiple_producer_abt_task_SOURCES = task_multiple_producer_abt_task.c
 task_multiple_producer_abt_thread_SOURCES = task_multiple_producer_abt_thread.c
+task_nested_abt_task_SOURCES = task_nested_abt_task.c
 
 testing:
 	./parallel_for_abt_task
@@ -42,3 +44,4 @@ testing:
 	./task_single_producer_abt_thread
 	./task_multiple_producer_abt_task
 	./task_multiple_producer_abt_thread
+	./task_nested_abt_task
