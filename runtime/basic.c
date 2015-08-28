@@ -465,8 +465,15 @@ void create_argobots_team(){
 
     int i;
     main_team = (team_t *) malloc (sizeof(team_t));
-    main_team->num_xstreams=atoi(getenv("OMP_NUM_THREADS"));
-    main_team->using_task=atoi(getenv("OMP_USING_TASK"));
+    if(getenv("OMP_NUM_THREADS")!=NULL)
+        main_team->num_xstreams=atoi(getenv("OMP_NUM_THREADS"));
+    else
+        main_team->num_xstreams=1;
+    if(getenv("OMP_USING_TASK")!=NULL)
+        main_team->using_task=atoi(getenv("OMP_USING_TASK"));
+    else
+        main_team->using_task=0;
+
     main_team->num_pools=main_team->num_xstreams;
     ABT_xstream_self(&main_team->master);
     main_team->team=(ABT_xstream *) malloc(sizeof (ABT_xstream) * main_team->num_xstreams);
@@ -591,7 +598,7 @@ __kmpc_fork_call(ident_t *loc, int argc, kmpc_micro microtask, ...)
     if(gtid==0)
         g_nested++;
 
-    if(gtid!=0 || gtid==0 && g_nested>1){
+    if((gtid!=0) || (gtid==0 && g_nested>1)){
         nested=1;
     }
 
