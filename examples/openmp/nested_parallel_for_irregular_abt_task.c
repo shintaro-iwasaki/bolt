@@ -4,9 +4,10 @@
  * See COPYRIGHT in top-level directory.
  */
 
-/*  argo_parallel_for.c code mimics the parallel for OpenMP directive
- *  It creates as many streams as user requires and tasks are created and
- *  assigned by static blocs to each stream.
+/*  This code mimics the parallel for OpenMP directive in nested loops.
+ *  It creates as many streams as user requires and threads  are created and
+ *  assigned by static blocs to each stream for the outer loop.
+ *  For the inner loop, as many task as the user requires are created.
  */
 
 #include <stdio.h>
