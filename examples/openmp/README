@@ -49,10 +49,15 @@ parallel_for_{omp,abt_task,abt_thread}:
        performance
 
 nested_parallel_for_{omp,abt_task,abt_thread}:
-    --
+    -- Implementation sample using nested parallel constructions
+    -- An Argobots code implementation is included in order to study the
+       performance
 
 nested_parallel_for_irregular_{omp,abt_task,abt_thread}:
-    --
+    -- Implementation sample using nested parallel constructions when each iteration 
+       has different workload
+    -- An Argobots code implementation is included in order to study the
+       performance
 
 task_single_producer_{omp,abt_task,abt_thread}:
     -- Implementation sample where just a thread creates all the work (tasks) and
