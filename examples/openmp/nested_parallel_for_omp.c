@@ -4,7 +4,7 @@
  * See COPYRIGHT in top-level directory.
  */
 
-/* Pragma omp parallel for directive evaluation
+/* Nested Pragma omp parallel for directives evaluation
  * Output: avg time
  */
 

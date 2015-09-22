@@ -4,10 +4,12 @@
  * See COPYRIGHT in top-level directory.
  */
 
-/*  This code mimics the parallel for OpenMP directive.
- *  It creates as many streams as user requires and tasks are created and
- *  assigned by static blocs to each stream.
+/*  This code mimics the parallel for OpenMP directive in nested loops.
+ *  It creates as many streams as user requires and threads are created and
+ *  assigned by static blocs to each stream for the outer loop.
+ *  For the inner loop, as many threads as the user requires are created.
  */
+
 
 #include <stdio.h>
 #include <stdlib.h>
