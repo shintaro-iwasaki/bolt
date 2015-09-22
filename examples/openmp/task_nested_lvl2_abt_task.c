@@ -28,7 +28,6 @@ int o = 0;
 ABT_pool *g_pools;
 int lvl;
 
-/* structure to pass arguments to expand tasks */
 void vector_scal(void *arguments)
 {
     float *a;
@@ -45,7 +44,6 @@ void prevector_scal2(void *arguments)
 {
     int rank;
     ABT_xstream_self_rank(&rank);
-
     ABT_task_create(g_pools[rank], vector_scal, arguments, NULL);
     ABT_task_create(g_pools[rank], na, arguments, NULL);
 }
