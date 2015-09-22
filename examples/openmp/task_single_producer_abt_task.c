@@ -20,7 +20,6 @@
 #define NUM_XSTREAMS    4
 #define NUM_REPS        1
 
-/* structure to pass arguments to expand tasks */
 void vector_scal(void *arguments)
 {
     float *a;
@@ -31,7 +30,6 @@ void vector_scal(void *arguments)
 int main(int argc, char *argv[])
 {
     int i, j;
-    //int reps;
     int ntasks;
     int num_xstreams;
     int num_pools;
@@ -50,9 +48,7 @@ int main(int argc, char *argv[])
     if (ntasks < num_xstreams) {
         ntasks = num_xstreams;
     }
-    //reps = argc > 4 ? atoi(argv[4]) : NUM_REPS;
     num_pools = argc > 5 ? atoi(argv[5]) : num_xstreams;
-    //printf("# of ESs: %d Pools: %d\n", num_xstreams,num_pools);
 
     a = malloc(sizeof(float) * ntasks);
 
