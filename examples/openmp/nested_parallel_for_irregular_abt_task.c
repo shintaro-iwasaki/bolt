@@ -22,7 +22,7 @@
 #define NUM_REPS        1
 
 ABT_pool *g_pools;
-/* structure to pass arguments to expand tasks */
+
 typedef struct {
     int start;
     int end;
@@ -67,12 +67,12 @@ void random_launch(void *arguments)
     num_ults = arg->nxstreams;
     mystart = arg->start;
     myend = arg->end;
-    //int iterations = myend - mystart;
     int current = 0;
+    
     args = (vector_scal_args_t *) malloc(sizeof(vector_scal_args_t)
                                          * num_ults);
     tasks = (ABT_task *)malloc(sizeof(ABT_task) * num_ults);
-    /* ES creation */
+    
     int bloc = it / (num_ults);
     int rest = it % (num_ults);
     int start = 0;
@@ -127,7 +127,6 @@ void random_launch(void *arguments)
 int main(int argc, char *argv[])
 {
     int i, j;
-    //int reps;
     int ntasks;
     int num_xstreams;
     char *str, *endptr;
@@ -150,7 +149,6 @@ int main(int argc, char *argv[])
     it = ceil(sqrt(ntasks));
     ntasks = it * it;
     inner_xstreams = argc > 3 ? atoi(argv[3]) : NUM_XSTREAMS;
-    //reps = argc > 4 ? atoi(argv[4]) : NUM_REPS;
     g_pools = (ABT_pool *)malloc(sizeof(ABT_pool) * num_xstreams);
 
     xstreams = (ABT_xstream *) malloc(sizeof(ABT_xstream) * num_xstreams);

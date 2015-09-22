@@ -4,9 +4,10 @@
  * See COPYRIGHT in top-level directory.
  */
 
-/*  This code mimics the parallel for OpenMP directive.
- *  It creates as many streams as user requires and tasks are created and
- *  assigned by static blocs to each stream.
+/*  This code mimics the parallel for OpenMP directive in nested loops.
+ *  It creates as many streams as user requires and threads  are created and
+ *  assigned by static blocs to each stream for the outer loop.
+ *  For the inner loop, as many task as the user requires are created.
  */
 
 #include <stdio.h>
@@ -21,7 +22,7 @@
 #define NUM_REPS        1
 
 ABT_pool *g_pools;
-/* structure to pass arguments to expand tasks */
+
 typedef struct {
     float *ptr;
     float value;
@@ -108,7 +109,6 @@ void vector_scal_launch(void *arguments)
 int main(int argc, char *argv[])
 {
     int i, j;
-    //int reps;
     int ntasks;
     int num_xstreams;
     char *str, *endptr;
@@ -130,8 +130,6 @@ int main(int argc, char *argv[])
     it = ceil(sqrt(ntasks));
     ntasks = it * it;
     inner_xstreams = argc > 3 ? atoi(argv[3]) : NUM_XSTREAMS;
-
-    //reps = argc > 4 ? atoi(argv[4]) : NUM_REPS;
 
     g_pools = (ABT_pool *)malloc(sizeof(ABT_pool) * num_xstreams);
 
