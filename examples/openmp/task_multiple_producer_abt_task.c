@@ -32,8 +32,6 @@ typedef struct {
     int id;
 } vector_scal_task_args_t;
 
-/* structure to pass arguments to expand tasks */
-
 void task_function(void *args)
 {
     float *a;
@@ -56,7 +54,6 @@ void task_creator(void *args)
 int main(int argc, char *argv[])
 {
     int i, j;
-    //int reps;
     int ntasks;
     int start, end;
     int num_xstreams;
@@ -76,7 +73,6 @@ int main(int argc, char *argv[])
         ntasks = num_xstreams;
     }
 
-    //reps = argc > 4 ? atoi(argv[4]) : NUM_REPS;
     printf("# of ESs: %d\n", num_xstreams);
 
     xstreams = (ABT_xstream *)malloc(sizeof(ABT_xstream) * num_xstreams);
