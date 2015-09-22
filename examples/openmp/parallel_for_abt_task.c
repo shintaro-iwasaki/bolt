@@ -22,7 +22,6 @@
 
 ABT_pool *g_pools;
 
-/* structure to pass arguments to expand tasks */
 typedef struct {
     float *ptr;
     float value;
@@ -49,7 +48,6 @@ void vector_scal(void *arguments)
 int main(int argc, char *argv[])
 {
     int i, j;
-    //int reps;
     int ntasks;
     int num_xstreams;
     char *str, *endptr;
@@ -63,7 +61,6 @@ int main(int argc, char *argv[])
         str = argv[2];
     }
     ntasks = argc > 2 ? strtoll(str, &endptr, 10) : NUM_ELEMS;
-    //reps = argc > 3 ? atoi(argv[3]) : NUM_REPS;
     g_pools = (ABT_pool *)malloc(sizeof(ABT_pool) * num_xstreams);
     tasks = (ABT_task *)malloc(sizeof(ABT_task) * num_xstreams);
     a = malloc(sizeof(float) * ntasks);
