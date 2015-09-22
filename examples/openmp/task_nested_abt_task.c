@@ -27,7 +27,6 @@ int num_xstreams;
 int pool_for_task = 0;
 int o = 0;
 
-/* structure to pass arguments to expand tasks */
 void vector_scal(void *arguments)
 {
     float *a;
