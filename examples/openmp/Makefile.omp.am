@@ -6,6 +6,7 @@
 TESTS = \
 	parallel_for_omp \
 	nested_parallel_for_omp \
+	nested_parallel_for_block_omp \
 	nested_parallel_for_irregular_omp \
 	task_single_producer_omp \
 	task_multiple_producer_omp \
@@ -22,6 +23,7 @@ AM_LDFLAGS = @OPENMP_CFLAGS@
 
 parallel_for_omp_SOURCES = parallel_for_omp.c
 nested_parallel_for_omp_SOURCES = nested_parallel_for_omp.c
+nested_parallel_for_block_omp_SOURCES = nested_parallel_for_block_omp.c
 nested_parallel_for_irregular_omp_SOURCES = nested_parallel_for_irregular_omp.c
 task_single_producer_omp_SOURCES = task_single_producer_omp.c
 task_multiple_producer_omp_SOURCES = task_multiple_producer_omp.c
@@ -33,6 +35,7 @@ taskyield_omp_SOURCES = taskyield_omp.c
 testing:
 	./parallel_for_omp
 	./nested_parallel_for_omp
+	./nested_parallel_for_block_omp
 	./nested_parallel_for_irregular_omp
 	./task_single_producer_omp
 	./task_multiple_producer_omp
