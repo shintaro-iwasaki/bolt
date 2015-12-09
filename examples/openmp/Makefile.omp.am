@@ -37,7 +37,7 @@ testing:
 	./nested_parallel_for_omp
 	./nested_parallel_for_block_omp
 	./nested_parallel_for_irregular_omp
-	./task_single_producer_omp
+	./task_single_producer_omp 1000
 	./task_multiple_producer_omp
 	./task_nested_omp
 	./task_nested_lvl2_omp
