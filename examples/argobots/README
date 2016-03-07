@@ -5,6 +5,8 @@ implementations with Argobots APIs. These are just examples in order to show
 how Argobots APIs can be used to mimic OpenMP behaviors. Please note that they
 are not intended to provide optimized implementations.
 
+NOTE:
+Examples in this directory are originated from those in examples of Argobots.
 
 1. Build and Testing
 2. Examples
@@ -21,22 +23,13 @@ Makefile for Argobots examples and Makefile.omp for OpenMP examples.
 (a) To build and test Argobots examples:
 
     build: make
+    test : make testing
 
-    test:  make check
-
-           OR
-
-           make testing
 
 (b) To build and test OpenMP examples:
 
     build: make -f Makefile.omp
-
-    test:  make -f Makefile.omp check
-
-           OR
-
-           make -f Makefile.omp testing
+    test : make -f Makefile.omp testing
 
 -------------------------------------------------------------------------------
 
