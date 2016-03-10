@@ -1,5 +1,3 @@
-Makefile.omp
-Makefile.omp.in
 parallel_for_omp
 parallel_for_abt_task
 parallel_for_abt_thread
