@@ -149,6 +149,12 @@ set(LIBOMP_USE_HWLOC FALSE CACHE BOOL
 set(LIBOMP_HWLOC_INSTALL_DIR /usr/local CACHE PATH
   "Install path for hwloc library")
 
+# Argobots-support
+set(LIBOMP_USE_ARGOBOTS FALSE CACHE BOOL
+  "Use Argobots (http://collab.cels.anl.gov/display/argobots/) as threading model?")
+set(LIBOMP_ARGOBOTS_INSTALL_DIR /usr/local CACHE PATH
+  "Install path for Argobots")
+
 # Get the build number from kmp_version.c
 libomp_get_build_number("${CMAKE_CURRENT_SOURCE_DIR}" LIBOMP_VERSION_BUILD)
 math(EXPR LIBOMP_VERSION_BUILD_YEAR "${LIBOMP_VERSION_BUILD}/10000")
@@ -311,6 +317,11 @@ if(LIBOMP_USE_HWLOC AND (NOT LIBOMP_HAVE_HWLOC))
   libomp_error_say("Hwloc requested but not available")
 endif()
 
+# Error check Argobots support after config-ix has run
+if(LIBOMP_USE_ARGOBOTS AND (NOT LIBOMP_HAVE_ARGOBOTS))
+  libomp_error_say("Argobots requested but not available")
+endif()
+
 # Setting final library name
 set(LIBOMP_DEFAULT_LIB_NAME libomp)
 if(${PROFILE_LIBRARY})
@@ -362,6 +373,7 @@ if(${LIBOMP_STANDALONE_BUILD})
   libomp_say("Use Adaptive locks   -- ${LIBOMP_USE_ADAPTIVE_LOCKS}")
   libomp_say("Use quad precision   -- ${LIBOMP_USE_QUAD_PRECISION}")
   libomp_say("Use Hwloc library    -- ${LIBOMP_USE_HWLOC}")
+  libomp_say("Use Argobots         -- ${LIBOMP_USE_ARGOBOTS}")
 endif()
 
 add_subdirectory(src)
