@@ -510,7 +510,11 @@ typedef int PACKED_REDUCTION_METHOD_T;
 #endif
 
 #if KMP_OS_UNIX
+#if KMP_USE_ARGOBOTS
+# include <abt.h>
+#else
 # include <pthread.h>
+#endif
 # include <dlfcn.h>
 #endif
 
@@ -1211,8 +1215,13 @@ struct kmp_region_info {
 #endif /* KMP_OS_WINDOWS */
 
 #if KMP_OS_UNIX
+#if KMP_USE_ARGOBOTS
+    typedef ABT_thread          kmp_thread_t;
+    typedef ABT_key             kmp_key_t;
+#else
     typedef pthread_t           kmp_thread_t;
     typedef pthread_key_t       kmp_key_t;
+#endif
 #endif
 
 extern kmp_key_t  __kmp_gtid_threadprivate_key;
@@ -1877,7 +1886,11 @@ typedef struct kmp_win32_cond
 union KMP_ALIGN_CACHE kmp_cond_union {
     double              c_align;
     char                c_pad[ CACHE_LINE ];
+#if KMP_USE_ARGOBOTS
+    ABT_cond            c_cond;
+#else
     pthread_cond_t      c_cond;
+#endif
 };
 
 typedef union kmp_cond_union kmp_cond_align_t;
@@ -1885,7 +1898,11 @@ typedef union kmp_cond_union kmp_cond_align_t;
 union KMP_ALIGN_CACHE kmp_mutex_union {
     double              m_align;
     char                m_pad[ CACHE_LINE ];
+#if KMP_USE_ARGOBOTS
+    ABT_mutex           m_mutex;
+#else
     pthread_mutex_t     m_mutex;
+#endif
 };
 
 typedef union kmp_mutex_union kmp_mutex_align_t;
