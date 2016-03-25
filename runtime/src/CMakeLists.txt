@@ -81,7 +81,7 @@ else()
     libomp_append(LIBOMP_CFILES z_Windows_NT_util.c)
     libomp_append(LIBOMP_CFILES z_Windows_NT-586_util.c)
     libomp_append(LIBOMP_ASMFILES z_Windows_NT-586_asm.asm) # Windows assembly file
-  else(${LIBOMP_USE_ARGOBOTS})
+  elseif(${LIBOMP_USE_ARGOBOTS})
     # Unix specific files
     libomp_append(LIBOMP_CFILES z_Linux_abt_util.c)
     libomp_append(LIBOMP_CFILES kmp_gsupport.c)
