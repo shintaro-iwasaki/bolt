@@ -96,10 +96,95 @@ __kmp_print_cond( char *buffer, kmp_cond_align_t *cond )
 }
 #endif
 
+/* ------------------------------------------------------------------------ */
+/* ------------------------------------------------------------------------ */
+
+typedef struct kmp_abt {
+    ABT_xstream *xstream;
+    ABT_sched *sched;
+    ABT_pool *pool;
+    int num_xstreams;
+    int num_pools;
+} kmp_abt_t;
+
+static kmp_abt_t *__kmp_abt = NULL;
+
 static inline
 ABT_pool __kmp_abt_get_pool( int gtid )
 {
-    return ABT_POOL_NULL;
+    assert(__kmp_abt);
+
+    int eid = (gtid >= 0) ? (gtid % __kmp_abt->num_xstreams)
+                          : ((-gtid) % __kmp_abt->num_xstreams);
+    return __kmp_abt->pool[eid];
+}
+
+static void __kmp_abt_initialize(void)
+{
+    int status;
+
+    status = ABT_init(0, NULL);
+    KMP_CHECK_SYSFAIL( "ABT_init", status );
+
+    int num_xstreams, num_pools;
+    int i;
+
+    /* Is __kmp_xproc a reasonable value for the number of ESs? */
+    num_xstreams = __kmp_xproc;
+    num_pools    = num_xstreams;
+
+    __kmp_abt = (kmp_abt_t *)__kmp_allocate(sizeof(kmp_abt_t));
+    __kmp_abt->xstream = (ABT_xstream *)__kmp_allocate(num_xstreams * sizeof(ABT_xstream));
+    __kmp_abt->sched = (ABT_sched *)__kmp_allocate(num_xstreams * sizeof(ABT_sched));
+    __kmp_abt->pool = (ABT_pool *)__kmp_allocate(num_pools * sizeof(ABT_pool));
+    __kmp_abt->num_xstreams = num_xstreams;
+    __kmp_abt->num_pools = num_pools;
+
+    /* Create pools */
+    for (i = 0; i < num_pools; i++) {
+        status = ABT_pool_create_basic(ABT_POOL_FIFO, ABT_POOL_ACCESS_MPSC, ABT_TRUE,
+                                       &__kmp_abt->pool[i]);
+        KMP_CHECK_SYSFAIL( "ABT_pool_create_basic", status );
+    }
+
+    /* Create schedulers */
+    for (i = 0; i < num_xstreams; i++) {
+        status = ABT_sched_create_basic(ABT_SCHED_DEFAULT, 1, &__kmp_abt->pool[i],
+                                        ABT_SCHED_CONFIG_NULL, &__kmp_abt->sched[i]);
+        KMP_CHECK_SYSFAIL( "ABT_sched_create_basic", status );
+    }
+
+    /* Create ESs */
+    status = ABT_xstream_self(&__kmp_abt->xstream[0]);
+    KMP_CHECK_SYSFAIL( "ABT_xstream_self", status );
+    status = ABT_xstream_set_main_sched(__kmp_abt->xstream[0], __kmp_abt->sched[0]);
+    KMP_CHECK_SYSFAIL( "ABT_xstream_set_main_sched", status );
+    for (i = 1; i < num_xstreams; i++) {
+        status = ABT_xstream_create(__kmp_abt->sched[i], &__kmp_abt->xstream[i]);
+        KMP_CHECK_SYSFAIL( "ABT_xstream_create", status );
+    }
+}
+
+static void __kmp_abt_finalize(void)
+{
+    int status;
+    int i;
+
+    for (i = 1; i < __kmp_abt->num_xstreams; i++) {
+        status = ABT_xstream_join(__kmp_abt->xstream[i]);
+        KMP_CHECK_SYSFAIL( "ABT_xstream_join", status );
+        status = ABT_xstream_free(&__kmp_abt->xstream[i]);
+        KMP_CHECK_SYSFAIL( "ABT_xstream_free", status );
+    }
+
+    status = ABT_finalize();
+    KMP_CHECK_SYSFAIL( "ABT_finalize", status );
+
+    __kmp_free(__kmp_abt->xstream);
+    __kmp_free(__kmp_abt->sched);
+    __kmp_free(__kmp_abt->pool);
+    __kmp_free(__kmp_abt);
+    __kmp_abt = NULL;
 }
 
 /* ------------------------------------------------------------------------ */
@@ -2026,6 +2111,8 @@ __kmp_runtime_initialize( void )
     /* Set up minimum number of threads to switch to TLS gtid */
     __kmp_tls_gtid_min = KMP_TLS_GTID_MIN;
 
+    __kmp_abt_initialize();
+
     #ifdef BUILD_TV
         {
             int rc = ABT_key_create( NULL, & __kmp_tv_key );
@@ -2077,6 +2164,8 @@ __kmp_runtime_destroy( void )
     #if KMP_AFFINITY_SUPPORTED
         __kmp_affinity_uninitialize();
     #endif
+
+    __kmp_abt_finalize();
 
     __kmp_init_runtime = FALSE;
 }
