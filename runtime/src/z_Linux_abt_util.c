@@ -2111,6 +2111,9 @@ __kmp_runtime_initialize( void )
     /* Set up minimum number of threads to switch to TLS gtid */
     __kmp_tls_gtid_min = KMP_TLS_GTID_MIN;
 
+    /* use TLS functions to store gtid */
+    __kmp_gtid_mode = 2;
+
     __kmp_abt_initialize();
 
     #ifdef BUILD_TV
