@@ -185,7 +185,7 @@ void    __kmp_msg( kmp_msg_severity_t severity, kmp_msg_t message, ... );
 #endif // KMP_DEBUG
 
 #ifdef __cplusplus
-    }; // extern "C"
+    } // extern "C"
 #endif // __cplusplus
 
 #endif // KMP_I18N_H
