@@ -112,7 +112,7 @@ static kmp_abt_t *__kmp_abt = NULL;
 static inline
 ABT_pool __kmp_abt_get_pool( int gtid )
 {
-    assert(__kmp_abt);
+    KMP_DEBUG_ASSERT(__kmp_abt != NULL);
 
     int eid = (gtid >= 0) ? (gtid % __kmp_abt->num_xstreams)
                           : ((-gtid) % __kmp_abt->num_xstreams);
