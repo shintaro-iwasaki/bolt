@@ -50,9 +50,10 @@
 #elif KMP_OS_DARWIN
 # include <sys/sysctl.h>
 # include <mach/mach.h>
+#endif
+
 /* TODO: Do we need to include pthread.h? */
 # include <pthread.h>
-#endif
 
 #include <dirent.h>
 #include <ctype.h>
