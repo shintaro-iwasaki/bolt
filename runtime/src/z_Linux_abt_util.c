@@ -768,10 +768,6 @@ __kmp_launch_worker( void *thr )
 #ifdef KMP_BLOCK_SIGNALS
     sigset_t    new_set, old_set;
 #endif /* KMP_BLOCK_SIGNALS */
-    void *exit_val;
-#if KMP_OS_LINUX || KMP_OS_FREEBSD || KMP_OS_NETBSD
-    void * volatile padding = 0;
-#endif
     int gtid;
 
     gtid = ((kmp_info_t*)thr) -> th.th_info.ds.ds_gtid;
@@ -817,18 +813,12 @@ __kmp_launch_worker( void *thr )
     //KMP_CHECK_SYSFAIL( "pthread_sigmask", status );
 #endif /* KMP_BLOCK_SIGNALS */
 
-#if KMP_OS_LINUX || KMP_OS_FREEBSD || KMP_OS_NETBSD
-    if ( __kmp_stkoffset > 0 && gtid > 0 ) {
-        padding = KMP_ALLOCA( gtid * __kmp_stkoffset );
-    }
-#endif
-
     KMP_MB();
     __kmp_set_stack_info( gtid, (kmp_info_t*)thr );
 
     __kmp_check_stack_overlap( (kmp_info_t*)thr );
 
-    exit_val = __kmp_launch_thread( (kmp_info_t *) thr );
+    __kmp_launch_thread( (kmp_info_t *) thr );
 
 #ifdef KMP_BLOCK_SIGNALS
     //status = pthread_sigmask( SIG_SETMASK, & old_set, NULL );
