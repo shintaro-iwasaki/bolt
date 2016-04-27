@@ -846,8 +846,6 @@ __kmp_launch_monitor( void *thr )
     sigset_t    new_set;
 #endif /* KMP_BLOCK_SIGNALS */
     struct timespec  interval;
-    int yield_count;
-    int yield_cycles = 0;
 
     KMP_MB();       /* Flush all pending memory write invalidates.  */
 
@@ -931,13 +929,6 @@ __kmp_launch_monitor( void *thr )
 
     KA_TRACE( 10, ("__kmp_launch_monitor: #2 monitor\n" ) );
 
-    if (__kmp_yield_cycle) {
-        __kmp_yielding_on = 0;  /* Start out with yielding shut off */
-        yield_count = __kmp_yield_off_count;
-    } else {
-        __kmp_yielding_on = 1;  /* Yielding is on permanently */
-    }
-
     while( ! TCR_4( __kmp_global.g.g_done ) ) {
         struct timespec  now;
         struct timeval   tval;
@@ -971,22 +962,6 @@ __kmp_launch_monitor( void *thr )
         };
         status = ABT_mutex_unlock( __kmp_wait_mx.m_mutex );
         KMP_CHECK_SYSFAIL( "ABT_mutex_unlock", status );
-
-        if (__kmp_yield_cycle) {
-            yield_cycles++;
-            if ( (yield_cycles % yield_count) == 0 ) {
-                if (__kmp_yielding_on) {
-                    __kmp_yielding_on = 0;   /* Turn it off now */
-                    yield_count = __kmp_yield_off_count;
-                } else {
-                    __kmp_yielding_on = 1;   /* Turn it on now */
-                    yield_count = __kmp_yield_on_count;
-                }
-                yield_cycles = 0;
-            }
-        } else {
-            __kmp_yielding_on = 1;
-        }
 
         TCW_4( __kmp_global.g.g_time.dt.t_value,
           TCR_4( __kmp_global.g.g_time.dt.t_value ) + 1 );
@@ -1884,9 +1859,8 @@ __kmp_resume_monitor()
 void
 __kmp_yield( int cond )
 {
-    if (cond && __kmp_yielding_on) {
-        ABT_thread_yield();
-    }
+    /* We always yield. */
+    ABT_thread_yield();
 }
 
 /* ------------------------------------------------------------------------ */
