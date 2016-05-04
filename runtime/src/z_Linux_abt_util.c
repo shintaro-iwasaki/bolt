@@ -127,6 +127,7 @@ ABT_pool __kmp_abt_get_pool( int gtid )
 static void __kmp_abt_initialize(void)
 {
     int status;
+    char *env;
 
     status = ABT_init(0, NULL);
     KMP_CHECK_SYSFAIL( "ABT_init", status );
@@ -135,8 +136,14 @@ static void __kmp_abt_initialize(void)
     int i;
 
     /* Is __kmp_xproc a reasonable value for the number of ESs? */
-    num_xstreams = __kmp_xproc;
-    num_pools    = num_xstreams;
+    env = getenv("KMP_ABT_NUM_ESS");
+    if (env) {
+        num_xstreams = atoi(env);
+    } else {
+        num_xstreams = __kmp_xproc;
+    }
+    num_pools = num_xstreams;
+    KA_TRACE( 10, ("__kmp_abt_initialize: # of ESs = %d\n", num_xstreams ) );
 
     __kmp_abt = (kmp_abt_t *)__kmp_allocate(sizeof(kmp_abt_t));
     __kmp_abt->xstream = (ABT_xstream *)__kmp_allocate(num_xstreams * sizeof(ABT_xstream));
