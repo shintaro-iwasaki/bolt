@@ -100,6 +100,10 @@ __kmp_print_cond( char *buffer, kmp_cond_align_t *cond )
 /* ------------------------------------------------------------------------ */
 /* ------------------------------------------------------------------------ */
 
+static int __kmp_abt_sched_init(ABT_sched sched, ABT_sched_config config);
+static void __kmp_abt_sched_run(ABT_sched sched);
+static int __kmp_abt_sched_free(ABT_sched sched);
+
 typedef struct kmp_abt {
     ABT_xstream *xstream;
     ABT_sched *sched;
@@ -149,11 +153,29 @@ static void __kmp_abt_initialize(void)
     }
 
     /* Create schedulers */
+    ABT_sched_config_var cv_freq = {
+        .idx = 0,
+        .type = ABT_SCHED_CONFIG_INT
+    };
+
+    ABT_sched_def sched_def = {
+        .type = ABT_SCHED_TYPE_ULT,
+        .init = __kmp_abt_sched_init,
+        .run  = __kmp_abt_sched_run,
+        .free = __kmp_abt_sched_free,
+        .get_migr_pool = NULL
+    };
+
+    ABT_sched_config config;
+    ABT_sched_config_create(&config, cv_freq, 10, ABT_sched_config_var_end);
+
     for (i = 0; i < num_xstreams; i++) {
-        status = ABT_sched_create_basic(ABT_SCHED_DEFAULT, 1, &__kmp_abt->pool[i],
-                                        ABT_SCHED_CONFIG_NULL, &__kmp_abt->sched[i]);
-        KMP_CHECK_SYSFAIL( "ABT_sched_create_basic", status );
+        status = ABT_sched_create(&sched_def, 1, &__kmp_abt->pool[i],
+                                  config, &__kmp_abt->sched[i]);
+        KMP_CHECK_SYSFAIL( "ABT_sched_create", status );
     }
+
+    ABT_sched_config_free(&config);
 
     /* Create ESs */
     status = ABT_xstream_self(&__kmp_abt->xstream[0]);
@@ -178,6 +200,12 @@ static void __kmp_abt_finalize(void)
         KMP_CHECK_SYSFAIL( "ABT_xstream_free", status );
     }
 
+    /* Free schedulers */
+    for (i = 1; i < __kmp_abt->num_xstreams; i++) {
+        status = ABT_sched_free(&__kmp_abt->sched[i]);
+        KMP_CHECK_SYSFAIL( "ABT_sched_free", status );
+    }
+
     status = ABT_finalize();
     KMP_CHECK_SYSFAIL( "ABT_finalize", status );
 
@@ -186,6 +214,96 @@ static void __kmp_abt_finalize(void)
     __kmp_free(__kmp_abt->pool);
     __kmp_free(__kmp_abt);
     __kmp_abt = NULL;
+}
+
+typedef struct {
+    uint32_t event_freq;
+} __kmp_abt_sched_data_t;
+
+static int __kmp_abt_sched_init(ABT_sched sched, ABT_sched_config config)
+{
+    __kmp_abt_sched_data_t *p_data;
+    p_data = (__kmp_abt_sched_data_t *)calloc(1, sizeof(__kmp_abt_sched_data_t));
+
+    ABT_sched_config_read(config, 1, &p_data->event_freq);
+    ABT_sched_set_data(sched, (void *)p_data);
+
+    return ABT_SUCCESS;
+}
+
+static void __kmp_abt_sched_run(ABT_sched sched)
+{
+    uint32_t work_count = 0;
+    __kmp_abt_sched_data_t *p_data;
+    int num_pools;
+    ABT_pool *pools;
+    ABT_unit unit;
+    int target;
+    ABT_bool stop;
+    unsigned seed = time(NULL);
+
+    int run_cnt;
+    struct timespec sleep_time;
+    sleep_time.tv_sec = 0;
+    sleep_time.tv_nsec = 100;
+
+    ABT_sched_get_data(sched, (void **)&p_data);
+    ABT_sched_get_num_pools(sched, &num_pools);
+    pools = (ABT_pool *)malloc(num_pools * sizeof(ABT_pool));
+    ABT_sched_get_pools(sched, num_pools, 0, pools);
+
+    while (1) {
+        run_cnt = 0;
+
+        /* Execute one work unit from the scheduler's pool */
+        size_t size;
+        ABT_pool_get_size(pools[0], &size);
+        if (size > 0) {
+            ABT_pool_pop(pools[0], &unit);
+            if (unit != ABT_UNIT_NULL) {
+                ABT_xstream_run_unit(unit, pools[0]);
+                run_cnt++;
+            }
+        } else if (num_pools > 1) {
+            /* Steal a work unit from other pools */
+            target = (num_pools == 2) ? 1 : (rand_r(&seed) % (num_pools-1) + 1);
+            ABT_pool_get_size(pools[target], &size);
+            if (size > 0) {
+                ABT_pool_pop(pools[target], &unit);
+                if (unit != ABT_UNIT_NULL) {
+                    ABT_xstream_run_unit(unit, pools[target]);
+                    run_cnt++;
+                }
+            }
+        }
+
+        if (++work_count >= p_data->event_freq) {
+            ABT_xstream_check_events(sched);
+            ABT_sched_has_to_stop(sched, &stop);
+            if (stop == ABT_TRUE) break;
+            work_count = 0;
+            if (run_cnt == 0) {
+                nanosleep(&sleep_time, NULL);
+                if (sleep_time.tv_nsec < 1000000) {
+                    sleep_time.tv_nsec *= 10;
+                }
+            } else {
+                sleep_time.tv_nsec = 100;
+            }
+        }
+    }
+
+    free(pools);
+}
+
+static int __kmp_abt_sched_free(ABT_sched sched)
+{
+    __kmp_abt_sched_data_t *p_data;
+
+    ABT_sched_get_data(sched, (void **)&p_data);
+    free(p_data);
+
+    return ABT_SUCCESS;
 }
 
 /* ------------------------------------------------------------------------ */
