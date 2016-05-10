@@ -1815,7 +1815,7 @@ static inline void __kmp_suspend_template( int th_gtid, C *flag )
                 KMP_SYSFAIL( "ABT_cond_wait", status );
             }
 #ifdef KMP_DEBUG
-            if (status == ETIMEDOUT) {
+            if (status == ABT_ERR_COND_TIMEDOUT) {
                 if ( flag->is_sleeping() ) {
                     KF_TRACE( 100, ( "__kmp_suspend_template: T#%d timeout wakeup\n", th_gtid ) );
                 } else {
