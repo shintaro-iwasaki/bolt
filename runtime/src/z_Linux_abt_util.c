@@ -161,6 +161,7 @@ static void __kmp_abt_initialize(void)
     env = getenv("KMP_ABT_NUM_ESS");
     if (env) {
         num_xstreams = atoi(env);
+        if (num_xstreams < __kmp_xproc) __kmp_xproc = num_xstreams;
     } else {
         num_xstreams = __kmp_xproc;
     }
