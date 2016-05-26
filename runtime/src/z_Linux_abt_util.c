@@ -59,6 +59,8 @@
 #include <ctype.h>
 #include <fcntl.h>
 
+//#define ABT_USE_MONITOR
+
 /* ------------------------------------------------------------------------ */
 /* ------------------------------------------------------------------------ */
 
@@ -1261,6 +1263,7 @@ __kmp_create_worker( int gtid, kmp_info_t *th, size_t stack_size )
 void
 __kmp_create_monitor( kmp_info_t *th )
 {
+#ifdef ABT_USE_MONITOR
     ABT_thread          handle;
     ABT_thread_attr     thread_attr;
     size_t              size;
@@ -1368,6 +1371,7 @@ __kmp_create_monitor( kmp_info_t *th )
 
     KA_TRACE( 10, ( "__kmp_create_monitor: monitor created %#.8lx\n", th->th.th_info.ds.ds_thread ) );
 
+#endif /* ABT_USE_MONITOR */
 } // __kmp_create_monitor
 
 void
@@ -1382,6 +1386,7 @@ void __kmp_resume_monitor();
 void
 __kmp_reap_monitor( kmp_info_t *th )
 {
+#ifdef ABT_USE_MONITOR
     int          status;
     void        *exit_val;
 
@@ -1428,6 +1433,7 @@ __kmp_reap_monitor( kmp_info_t *th )
 
     KMP_MB();       /* Flush all pending memory write invalidates.  */
 
+#endif /* ABT_USE_MONITOR */
 }
 
 void
