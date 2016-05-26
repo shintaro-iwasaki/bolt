@@ -60,6 +60,8 @@
 #include <fcntl.h>
 
 //#define ABT_USE_MONITOR
+#define ABT_USE_PRIVATE_POOLS
+//#define ABT_USE_SCHED_SLEEP
 
 /* ------------------------------------------------------------------------ */
 /* ------------------------------------------------------------------------ */
@@ -103,13 +105,15 @@ __kmp_print_cond( char *buffer, kmp_cond_align_t *cond )
 /* ------------------------------------------------------------------------ */
 
 static int __kmp_abt_sched_init(ABT_sched sched, ABT_sched_config config);
+static void __kmp_abt_sched_run_es0(ABT_sched sched);
 static void __kmp_abt_sched_run(ABT_sched sched);
 static int __kmp_abt_sched_free(ABT_sched sched);
 
 typedef struct kmp_abt {
     ABT_xstream *xstream;
     ABT_sched *sched;
-    ABT_pool *pool;
+    ABT_pool *priv_pool;
+    ABT_pool *shared_pool;
     int num_xstreams;
     int num_pools;
 } kmp_abt_t;
@@ -121,9 +125,25 @@ ABT_pool __kmp_abt_get_pool( int gtid )
 {
     KMP_DEBUG_ASSERT(__kmp_abt != NULL);
 
-    int eid = (gtid >= 0) ? (gtid % __kmp_abt->num_xstreams)
-                          : ((-gtid) % __kmp_abt->num_xstreams);
-    return __kmp_abt->pool[eid];
+    gtid = (gtid >= 0) ? gtid : -gtid;
+    int eid = gtid % __kmp_abt->num_xstreams;
+
+#ifdef ABT_USE_PRIVATE_POOLS
+    if (gtid < __kmp_abt->num_xstreams)
+        return __kmp_abt->priv_pool[eid];
+    else
+        return __kmp_abt->shared_pool[eid];
+#else /* ABT_USE_PRIVATE_POOLS */
+    return __kmp_abt->shared_pool[eid];
+#endif /* ABT_USE_PRIVATE_POOLS */
+}
+
+static inline
+ABT_pool __kmp_abt_get_my_pool(int gtid)
+{
+    int eid;
+    ABT_xstream_self_rank(&eid);
+    return __kmp_abt->shared_pool[eid];
 }
 
 static void __kmp_abt_initialize(void)
@@ -135,7 +155,7 @@ static void __kmp_abt_initialize(void)
     KMP_CHECK_SYSFAIL( "ABT_init", status );
 
     int num_xstreams, num_pools;
-    int i;
+    int i, k;
 
     /* Is __kmp_xproc a reasonable value for the number of ESs? */
     env = getenv("KMP_ABT_NUM_ESS");
@@ -150,40 +170,85 @@ static void __kmp_abt_initialize(void)
     __kmp_abt = (kmp_abt_t *)__kmp_allocate(sizeof(kmp_abt_t));
     __kmp_abt->xstream = (ABT_xstream *)__kmp_allocate(num_xstreams * sizeof(ABT_xstream));
     __kmp_abt->sched = (ABT_sched *)__kmp_allocate(num_xstreams * sizeof(ABT_sched));
-    __kmp_abt->pool = (ABT_pool *)__kmp_allocate(num_pools * sizeof(ABT_pool));
+    __kmp_abt->priv_pool = (ABT_pool *)__kmp_allocate(num_pools * sizeof(ABT_pool));
+    __kmp_abt->shared_pool = (ABT_pool *)__kmp_allocate(num_pools * sizeof(ABT_pool));
     __kmp_abt->num_xstreams = num_xstreams;
     __kmp_abt->num_pools = num_pools;
 
-    /* Create pools */
-    for (i = 0; i < num_pools; i++) {
+    /* Create private pools */
+#ifdef ABT_USE_PRIVATE_POOLS
+    for (i = 0; i < num_xstreams; i++) {
         status = ABT_pool_create_basic(ABT_POOL_FIFO, ABT_POOL_ACCESS_MPSC, ABT_TRUE,
-                                       &__kmp_abt->pool[i]);
+                                       &__kmp_abt->priv_pool[i]);
+        KMP_CHECK_SYSFAIL( "ABT_pool_create_basic", status );
+
+        status = ABT_pool_create_basic(ABT_POOL_FIFO, ABT_POOL_ACCESS_MPMC, ABT_TRUE,
+                                       &__kmp_abt->shared_pool[i]);
         KMP_CHECK_SYSFAIL( "ABT_pool_create_basic", status );
     }
+#else /* ABT_USE_PRIVATE_POOLS */
+    /* NOTE: We create only one private pool for ES0. */
+    status = ABT_pool_create_basic(ABT_POOL_FIFO, ABT_POOL_ACCESS_MPSC, ABT_TRUE,
+                                   &__kmp_abt->priv_pool[0]);
+    KMP_CHECK_SYSFAIL( "ABT_pool_create_basic", status );
 
-    /* Create schedulers */
+    for (i = 0; i < num_xstreams; i++) {
+        status = ABT_pool_create_basic(ABT_POOL_FIFO, ABT_POOL_ACCESS_MPMC, ABT_TRUE,
+                                       &__kmp_abt->shared_pool[i]);
+        KMP_CHECK_SYSFAIL( "ABT_pool_create_basic", status );
+    }
+#endif /* ABT_USE_PRIVATE_POOLS */
+
+    /* Create a scheduler for ES0 */
     ABT_sched_config_var cv_freq = {
         .idx = 0,
         .type = ABT_SCHED_CONFIG_INT
     };
 
+    ABT_sched_config config;
+    ABT_sched_config_create(&config, cv_freq, 10, ABT_sched_config_var_end);
+
     ABT_sched_def sched_def = {
         .type = ABT_SCHED_TYPE_ULT,
         .init = __kmp_abt_sched_init,
-        .run  = __kmp_abt_sched_run,
+        .run  = __kmp_abt_sched_run_es0,
         .free = __kmp_abt_sched_free,
         .get_migr_pool = NULL
     };
 
-    ABT_sched_config config;
-    ABT_sched_config_create(&config, cv_freq, 10, ABT_sched_config_var_end);
+    ABT_pool *my_pools = (ABT_pool *)malloc((num_xstreams+1) * sizeof(ABT_pool));
+    my_pools[0] = __kmp_abt->priv_pool[0];
+    for (k = 0; k < num_xstreams; k++) {
+        my_pools[k+1] = __kmp_abt->shared_pool[k];
+    }
+    status = ABT_sched_create(&sched_def, num_xstreams+1, my_pools,
+                              config, &__kmp_abt->sched[0]);
+    KMP_CHECK_SYSFAIL( "ABT_sched_create", status );
 
-    for (i = 0; i < num_xstreams; i++) {
-        status = ABT_sched_create(&sched_def, 1, &__kmp_abt->pool[i],
+    /* Create schedulers for other ESs */
+    sched_def.run = __kmp_abt_sched_run;
+#ifdef ABT_USE_PRIVATE_POOLS
+    for (i = 1; i < num_xstreams; i++) {
+        my_pools[0] = __kmp_abt->priv_pool[i];
+        for (k = 0; k < num_xstreams; k++) {
+            my_pools[k+1] = __kmp_abt->shared_pool[(i + k) % num_xstreams];
+        }
+        status = ABT_sched_create(&sched_def, num_xstreams+1, my_pools,
                                   config, &__kmp_abt->sched[i]);
         KMP_CHECK_SYSFAIL( "ABT_sched_create", status );
     }
+#else /* ABT_USE_PRIVATE_POOLS */
+    for (i = 1; i < num_xstreams; i++) {
+        for (k = 0; k < num_xstreams; k++) {
+            my_pools[k] = __kmp_abt->shared_pool[(i + k) % num_xstreams];
+        }
+        status = ABT_sched_create(&sched_def, num_xstreams, my_pools,
+                                  config, &__kmp_abt->sched[i]);
+        KMP_CHECK_SYSFAIL( "ABT_sched_create", status );
+    }
+#endif /* ABT_USE_PRIVATE_POOLS */
 
+    free(my_pools);
     ABT_sched_config_free(&config);
 
     /* Create ESs */
@@ -220,7 +285,8 @@ static void __kmp_abt_finalize(void)
 
     __kmp_free(__kmp_abt->xstream);
     __kmp_free(__kmp_abt->sched);
-    __kmp_free(__kmp_abt->pool);
+    __kmp_free(__kmp_abt->priv_pool);
+    __kmp_free(__kmp_abt->shared_pool);
     __kmp_free(__kmp_abt);
     __kmp_abt = NULL;
 }
@@ -240,7 +306,7 @@ static int __kmp_abt_sched_init(ABT_sched sched, ABT_sched_config config)
     return ABT_SUCCESS;
 }
 
-static void __kmp_abt_sched_run(ABT_sched sched)
+static void __kmp_abt_sched_run_es0(ABT_sched sched)
 {
     uint32_t work_count = 0;
     __kmp_abt_sched_data_t *p_data;
@@ -250,11 +316,12 @@ static void __kmp_abt_sched_run(ABT_sched sched)
     int target;
     ABT_bool stop;
     unsigned seed = time(NULL);
+    size_t size;
 
-    int run_cnt;
+    int run_cnt = 0;
     struct timespec sleep_time;
     sleep_time.tv_sec = 0;
-    sleep_time.tv_nsec = 100;
+    sleep_time.tv_nsec = 128;
 
     ABT_sched_get_data(sched, (void **)&p_data);
     ABT_sched_get_num_pools(sched, &num_pools);
@@ -262,10 +329,7 @@ static void __kmp_abt_sched_run(ABT_sched sched)
     ABT_sched_get_pools(sched, num_pools, 0, pools);
 
     while (1) {
-        run_cnt = 0;
-
-        /* Execute one work unit from the scheduler's pool */
-        size_t size;
+        /* Execute one work unit from the private pool */
         ABT_pool_get_size(pools[0], &size);
         if (size > 0) {
             ABT_pool_pop(pools[0], &unit);
@@ -273,14 +337,27 @@ static void __kmp_abt_sched_run(ABT_sched sched)
                 ABT_xstream_run_unit(unit, pools[0]);
                 run_cnt++;
             }
-        } else if (num_pools > 1) {
+        }
+
+        /* shared pool */
+        ABT_pool_get_size(pools[1], &size);
+        if (size > 0) {
+            ABT_pool_pop(pools[1], &unit);
+            if (unit != ABT_UNIT_NULL) {
+                ABT_xstream_run_unit(unit, pools[1]);
+                run_cnt++;
+            }
+        }
+
+        if (num_pools > 2) {
             /* Steal a work unit from other pools */
-            target = (num_pools == 2) ? 1 : (rand_r(&seed) % (num_pools-1) + 1);
+            target = rand_r(&seed) % (num_pools-2) + 2;
             ABT_pool_get_size(pools[target], &size);
             if (size > 0) {
                 ABT_pool_pop(pools[target], &unit);
                 if (unit != ABT_UNIT_NULL) {
-                    ABT_xstream_run_unit(unit, pools[target]);
+                    ABT_unit_set_associated_pool(unit, pools[1]);
+                    ABT_xstream_run_unit(unit, pools[1]);
                     run_cnt++;
                 }
             }
@@ -291,14 +368,118 @@ static void __kmp_abt_sched_run(ABT_sched sched)
             ABT_sched_has_to_stop(sched, &stop);
             if (stop == ABT_TRUE) break;
             work_count = 0;
+#ifdef ABT_USE_SCHED_SLEEP
             if (run_cnt == 0) {
                 nanosleep(&sleep_time, NULL);
-                if (sleep_time.tv_nsec < 1000000) {
-                    sleep_time.tv_nsec *= 10;
+                if (sleep_time.tv_nsec < 1048576) {
+                    sleep_time.tv_nsec <<= 2;
                 }
             } else {
-                sleep_time.tv_nsec = 100;
+                sleep_time.tv_nsec = 128;
+                run_cnt = 0;
             }
+#endif /* ABT_USE_SCHED_SLEEP */
+        }
+    }
+
+    free(pools);
+}
+
+static void __kmp_abt_sched_run(ABT_sched sched)
+{
+    uint32_t work_count = 0;
+    __kmp_abt_sched_data_t *p_data;
+    int num_pools;
+    ABT_pool *pools;
+    ABT_unit unit;
+    int target;
+    ABT_bool stop;
+    unsigned seed = time(NULL);
+    size_t size;
+
+    int run_cnt = 0;
+    struct timespec sleep_time;
+    sleep_time.tv_sec = 0;
+    sleep_time.tv_nsec = 128;
+
+    ABT_sched_get_data(sched, (void **)&p_data);
+    ABT_sched_get_num_pools(sched, &num_pools);
+    pools = (ABT_pool *)malloc(num_pools * sizeof(ABT_pool));
+    ABT_sched_get_pools(sched, num_pools, 0, pools);
+
+    while (1) {
+#ifdef ABT_USE_PRIVATE_POOLS
+        /* Execute one work unit from the private pool */
+        ABT_pool_get_size(pools[0], &size);
+        if (size > 0) {
+            ABT_pool_pop(pools[0], &unit);
+            if (unit != ABT_UNIT_NULL) {
+                ABT_xstream_run_unit(unit, pools[0]);
+                run_cnt++;
+            }
+        }
+
+        /* shared pool */
+        ABT_pool_get_size(pools[1], &size);
+        if (size > 0) {
+            ABT_pool_pop(pools[1], &unit);
+            if (unit != ABT_UNIT_NULL) {
+                ABT_xstream_run_unit(unit, pools[1]);
+                run_cnt++;
+            }
+        }
+
+        /* Steal a work unit from other pools */
+        target = rand_r(&seed) % (num_pools-2) + 2;
+        ABT_pool_get_size(pools[target], &size);
+        if (size > 0) {
+            ABT_pool_pop(pools[target], &unit);
+            if (unit != ABT_UNIT_NULL) {
+                ABT_unit_set_associated_pool(unit, pools[1]);
+                ABT_xstream_run_unit(unit, pools[1]);
+                run_cnt++;
+            }
+        }
+#else /* ABT_USE_PRIVATE_POOLS */
+        /* Execute one work unit from the scheduler's pool */
+        ABT_pool_get_size(pools[0], &size);
+        if (size > 0) {
+            ABT_pool_pop(pools[0], &unit);
+            if (unit != ABT_UNIT_NULL) {
+                ABT_xstream_run_unit(unit, pools[0]);
+                run_cnt++;
+            }
+        }
+
+        /* Steal a work unit from other pools */
+        target = rand_r(&seed) % (num_pools-1) + 1;
+        ABT_pool_get_size(pools[target], &size);
+        if (size > 0) {
+            ABT_pool_pop(pools[target], &unit);
+            if (unit != ABT_UNIT_NULL) {
+                ABT_unit_set_associated_pool(unit, pools[0]);
+                ABT_xstream_run_unit(unit, pools[0]);
+                run_cnt++;
+            }
+        }
+#endif /* ABT_USE_PRIVATE_POOLS */
+
+        if (++work_count >= p_data->event_freq) {
+            ABT_xstream_check_events(sched);
+            ABT_sched_has_to_stop(sched, &stop);
+            if (stop == ABT_TRUE) break;
+            work_count = 0;
+#ifdef ABT_USE_SCHED_SLEEP
+            if (run_cnt == 0) {
+                nanosleep(&sleep_time, NULL);
+                if (sleep_time.tv_nsec < 1048576) {
+                    sleep_time.tv_nsec <<= 2;
+                }
+            } else {
+                sleep_time.tv_nsec = 128;
+                run_cnt = 0;
+            }
+#endif /* ABT_USE_SCHED_SLEEP */
         }
     }
 
@@ -1239,7 +1420,13 @@ __kmp_create_worker( int gtid, kmp_info_t *th, size_t stack_size )
 
 #endif /* KMP_THREAD_ATTR */
 
-    status = ABT_thread_create( __kmp_abt_get_pool(gtid), __kmp_launch_worker, (void *) th, thread_attr, & handle );
+    ABT_pool tar_pool;
+    if (th->th.th_team->t.t_level > 0) {
+        tar_pool = __kmp_abt_get_my_pool(gtid);
+    } else {
+        tar_pool = __kmp_abt_get_pool(gtid);
+    }
+    status = ABT_thread_create( tar_pool, __kmp_launch_worker, (void *) th, thread_attr, & handle );
     if ( status != ABT_SUCCESS ) {
         KMP_SYSFAIL( "ABT_thread_create", status );
     }; // if
