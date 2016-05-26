@@ -5504,7 +5504,9 @@ __kmp_launch_thread( kmp_info_t *this_thr )
 #endif
 
         /* No tid yet since not part of a team */
+        __kmp_abt_print_thread(this_thr, "[BEFORE] __kmp_fork_barrier");
         __kmp_fork_barrier( gtid, KMP_GTID_DNE );
+        __kmp_abt_print_thread(this_thr, "[AFTER] __kmp_fork_barrier");
 
 #if OMPT_SUPPORT
         if (ompt_enabled) {

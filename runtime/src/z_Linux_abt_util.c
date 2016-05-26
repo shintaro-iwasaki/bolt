@@ -313,6 +313,38 @@ static int __kmp_abt_sched_free(ABT_sched sched)
     return ABT_SUCCESS;
 }
 
+#if KMP_DEBUG
+void __kmp_abt_print_thread( kmp_info_t *th, const char *msg )
+{
+    if (kmp_a_debug == 0) return;
+
+    int gtid = th->th.th_info.ds.ds_gtid;
+    ABT_thread thread = th->th.th_info.ds.ds_thread;
+    ABT_thread self;
+    ABT_thread_id thread_id;
+    ABT_xstream xstream;
+    ABT_pool pool;
+    int es_rank, pool_id;
+    size_t pool_size, pool_total_size;
+
+    ABT_thread_self(&self);
+    ABT_thread_get_id(self, &thread_id);
+
+    ABT_xstream_self(&xstream);
+    ABT_xstream_self_rank(&es_rank);
+    ABT_thread_get_last_pool(self, &pool);
+    ABT_pool_get_id(pool, &pool_id);
+    ABT_pool_get_size(pool, &pool_size);
+    ABT_pool_get_total_size(pool, &pool_total_size);
+
+    printf("%s: T#%d - U%u (%p) on ES%d (%p) from P%d (%p,%u,%u)\n",
+           msg, gtid, (unsigned)thread_id, self,
+           es_rank, xstream,
+           pool_id, pool, pool_size, pool_total_size);
+    fflush(stdout);
+}
+#endif
+
 /* ------------------------------------------------------------------------ */
 /* ------------------------------------------------------------------------ */
 

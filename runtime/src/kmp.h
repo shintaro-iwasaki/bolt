@@ -3348,6 +3348,12 @@ extern kmp_uint64 __kmp_hardware_timestamp(void);
 extern int  __kmp_read_from_file( char const *path, char const *format, ... );
 #endif
 
+#if KMP_USE_ARGOBOTS && KMP_DEBUG
+extern void __kmp_abt_print_thread( kmp_info_t *th, const char *msg );
+#else
+#define __kmp_abt_print_thread(th,msg)
+#endif
+
 /* ------------------------------------------------------------------------ */
 //
 // Assembly routines that have no compiler intrinsic replacement
