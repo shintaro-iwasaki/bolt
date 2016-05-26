@@ -2436,6 +2436,10 @@ typedef struct KMP_ALIGN_CACHE kmp_base_info {
     kmp_mutex_align_t th_suspend_mx;
     int               th_suspend_init_count;
 #endif
+#if KMP_USE_ARGOBOTS
+    ABT_eventual      th_bar_arrived;
+    ABT_eventual      th_bar_go;
+#endif
 
 #if USE_ITT_BUILD
     kmp_itt_mark_t        th_itt_mark_single;

@@ -5708,6 +5708,9 @@ __kmp_reap_thread(
             /* Need release fence here to prevent seg faults for tree forkjoin barrier (GEH) */
             kmp_flag_64 flag(&thread->th.th_bar[ bs_forkjoin_barrier ].bb.b_go, thread);
             __kmp_release_64(&flag);
+#if KMP_USE_ARGOBOTS
+            ABT_eventual_set(thread->th.th_bar_go, NULL, 0);
+#endif
         }; // if
 
         // Terminate OS thread.

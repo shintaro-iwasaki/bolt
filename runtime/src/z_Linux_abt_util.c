@@ -1150,6 +1150,9 @@ __kmp_create_worker( int gtid, kmp_info_t *th, size_t stack_size )
 
 #endif // KMP_STATS_ENABLED
 
+    ABT_eventual_create(0, &th->th.th_bar_arrived);
+    ABT_eventual_create(0, &th->th.th_bar_go);
+
     if ( KMP_UBER_GTID(gtid) ) {
         KA_TRACE( 10, ("__kmp_create_worker: uber thread (%d)\n", gtid ) );
         ABT_thread_self( &th -> th.th_info.ds.ds_thread );
@@ -1421,6 +1424,9 @@ __kmp_reap_worker( kmp_info_t *th )
         }
 #endif /* KMP_DEBUG */
     }
+
+    ABT_eventual_free(&th->th.th_bar_arrived);
+    ABT_eventual_free(&th->th.th_bar_go);
 
     KA_TRACE( 10, ("__kmp_reap_worker: done reaping T#%d\n", th->th.th_info.ds.ds_gtid ) );
 
