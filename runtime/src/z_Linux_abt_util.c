@@ -2018,8 +2018,7 @@ __kmp_resume_monitor()
 void
 __kmp_yield( int cond )
 {
-    /* We always yield. */
-    ABT_thread_yield();
+    if (cond) ABT_thread_yield();
 }
 
 /* ------------------------------------------------------------------------ */
