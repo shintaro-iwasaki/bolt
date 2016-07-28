@@ -116,6 +116,45 @@ libomp_append(LIBOMP_CFILES kmp_ftn_extra.c)
 libomp_append(LIBOMP_CFILES kmp_version.c)
 libomp_append(LIBOMP_CFILES ompt-general.c IF_TRUE LIBOMP_OMPT_SUPPORT)
 
+# If we use a new implementation, we ignore existing files.
+if(LIBOMP_USE_ARGOBOTS_NEW)
+  include_directories(${LIBOMP_SRC_DIR}/abt)
+  set(LIBOMP_CFILES
+      abt/kmp_abt_alloc.c
+      abt/kmp_abt_atomic.c
+      abt/kmp_abt_csupport.c
+      abt/kmp_abt_debug.c
+      abt/kmp_abt_environment.c
+      abt/kmp_abt_error.c
+      abt/kmp_abt_global.c
+      abt/kmp_abt_i18n.c
+      abt/kmp_abt_io.c
+      abt/kmp_abt_util_Linux.c
+      abt/kmp_abt_runtime.c
+      abt/kmp_abt_settings.c
+      abt/kmp_abt_str.c
+      abt/kmp_abt_tasking.c
+      abt/kmp_abt_taskq.c
+      abt/kmp_abt_threadprivate.c
+      abt/kmp_abt_utility.c
+  )
+  set(LIBOMP_CXXFILES
+      abt/kmp_abt_dispatch.cpp
+      abt/kmp_abt_sched.cpp)
+  set(LIBOMP_ASMFILES
+      z_Linux_asm.s)
+  if(${LIBOMP_OMP_VERSION} GREATER 40 OR ${LIBOMP_OMP_VERSION} EQUAL 40)
+    libomp_append(LIBOMP_CXXFILES abt/kmp_abt_taskdeps.cpp)
+  endif()
+endif()
+# Files common to stubs and normal library
+libomp_append(LIBOMP_CFILES abt/kmp_abt_ftn_cdecl.c)
+libomp_append(LIBOMP_CFILES abt/kmp_abt_ftn_extra.c)
+libomp_append(LIBOMP_CFILES abt/kmp_abt_version.c)
+
+
+#      abt/kmp_abt_omp.c
+
 set(LIBOMP_SOURCE_FILES ${LIBOMP_CFILES} ${LIBOMP_CXXFILES} ${LIBOMP_ASMFILES})
 # For Windows, there is a resource file (.rc -> .res) that is also compiled
 libomp_append(LIBOMP_SOURCE_FILES libomp.rc WIN32)

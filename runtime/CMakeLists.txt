@@ -152,6 +152,8 @@ set(LIBOMP_HWLOC_INSTALL_DIR /usr/local CACHE PATH
 # Argobots-support
 set(LIBOMP_USE_ARGOBOTS FALSE CACHE BOOL
   "Use Argobots (http://collab.cels.anl.gov/display/argobots/) as threading model?")
+set(LIBOMP_USE_ARGOBOTS_NEW FALSE CACHE BOOL
+  "Use Argobots (http://collab.cels.anl.gov/display/argobots/) as threading model?")
 set(LIBOMP_ARGOBOTS_INSTALL_DIR /usr/local CACHE PATH
   "Install path for Argobots")
 
@@ -375,6 +377,7 @@ if(${LIBOMP_STANDALONE_BUILD})
   libomp_say("Use quad precision   -- ${LIBOMP_USE_QUAD_PRECISION}")
   libomp_say("Use Hwloc library    -- ${LIBOMP_USE_HWLOC}")
   libomp_say("Use Argobots         -- ${LIBOMP_USE_ARGOBOTS}")
+  libomp_say("Use Argobots (new)   -- ${LIBOMP_USE_ARGOBOTS_NEW}")
 endif()
 
 add_subdirectory(src)
