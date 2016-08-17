@@ -408,31 +408,10 @@ xexpand(FTN_GET_THREAD_NUM)( void )
     #ifdef KMP_STUB
         return 0;
     #else
-        int gtid;
-
-        #if KMP_OS_DARWIN || KMP_OS_FREEBSD || KMP_OS_NETBSD
-            gtid = __kmp_entry_gtid();
-        #elif KMP_OS_LINUX
-            #if KMP_USE_ARGOBOTS
-            if (!__kmp_global.init_parallel) {
-                return 0;
-            }
-            void *keyval;
-            ABT_key_get( __kmp_global.gtid_threadprivate_key, &keyval );
-            gtid = (int)(intptr_t)keyval;
-            if (gtid == 0) {
-                return 0;
-            }
-            #else
-            if (!__kmp_global.init_parallel ||
-                    (gtid = (kmp_intptr_t)(pthread_getspecific( __kmp_global.gtid_threadprivate_key ))) == 0) {
-                return 0;
-            }
-            #endif
-            --gtid;
-        #else
-            #error Unknown or unsupported OS
-        #endif
+        if (!__kmp_global.init_parallel) {
+            return 0;
+        }
+        int gtid = __kmp_gtid_get_specific();
 
         return __kmp_tid_from_gtid( gtid );
     #endif

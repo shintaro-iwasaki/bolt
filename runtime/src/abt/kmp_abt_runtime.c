@@ -709,9 +709,6 @@ __kmp_cleanup( void )
 
     __kmp_i18n_catclose();
 
-    /* last cleanup part */
-    __kmp_global_destroy();
-
     KA_TRACE( 10, ("__kmp_cleanup: exit\n" ) );
 }
 
@@ -914,6 +911,9 @@ __kmp_internal_end_library( int gtid_req )
     #endif
 
     __kmp_fini_allocator();
+
+    /* last cleanup part */
+    __kmp_global_destroy();
 
 } // __kmp_internal_end_library
 
@@ -1497,7 +1497,7 @@ __kmp_register_root( int initial_thread )
     __kmp_initialize_info( root_thread, root->r.r_root_team, 0, gtid );
 
     /* prepare the master thread for get_gtid() */
-    __kmp_gtid_set_specific( gtid );
+    //__kmp_gtid_set_specific( gtid );
 
     __kmp_create_worker( gtid, root_thread, __kmp_global.stksize );
     KMP_DEBUG_ASSERT( __kmp_gtid_get_specific() == gtid );
@@ -1645,7 +1645,8 @@ __kmp_unregister_root_current_thread( int gtid )
     __kmp_reset_root(gtid, root);
 
     /* free up this thread slot */
-    __kmp_gtid_set_specific( KMP_GTID_DNE );
+    //__kmp_gtid_set_specific( KMP_GTID_DNE );
+    __kmp_set_self_info( NULL );
 
     KMP_MB();
     KC_TRACE( 10, ("__kmp_unregister_root_current_thread: T#%d unregistered\n", gtid ));
@@ -1851,66 +1852,66 @@ __kmp_aux_set_library (enum library_type arg)
 /* ------------------------------------------------------------------------ */
 
 /* caller must hold forkjoin_lock */
-void
-__kmp_check_stack_overlap( kmp_info_t *th )
-{
-    int f;
-    char *stack_beg = NULL;
-    char *stack_end = NULL;
-    int gtid;
-
-    KA_TRACE(10,("__kmp_check_stack_overlap: called\n"));
-    if ( __kmp_storage_map ) {
-        stack_end = (char *) th->th.th_info.ds.ds_stackbase;
-        stack_beg = stack_end - th->th.th_info.ds.ds_stacksize;
-
-        gtid = __kmp_gtid_from_thread( th );
-
-        if (gtid == KMP_GTID_MONITOR) {
-            __kmp_print_storage_map_gtid( gtid, stack_beg, stack_end, th->th.th_info.ds.ds_stacksize,
-                                     "th_%s stack (%s)", "mon",
-                                     ( th->th.th_info.ds.ds_stackgrow ) ? "initial" : "actual" );
-        } else {
-            __kmp_print_storage_map_gtid( gtid, stack_beg, stack_end, th->th.th_info.ds.ds_stacksize,
-                                     "th_%d stack (%s)", gtid,
-                                     ( th->th.th_info.ds.ds_stackgrow ) ? "initial" : "actual" );
-        }
-    }
-
-    /* No point in checking ubermaster threads since they use refinement and cannot overlap */
-    gtid = __kmp_gtid_from_thread( th );
-    if ( __kmp_global.env_checks == TRUE && !KMP_UBER_GTID(gtid))
-    {
-        KA_TRACE(10,("__kmp_check_stack_overlap: performing extensive checking\n"));
-        if ( stack_beg == NULL ) {
-            stack_end = (char *) th->th.th_info.ds.ds_stackbase;
-            stack_beg = stack_end - th->th.th_info.ds.ds_stacksize;
-        }
-
-        for( f=0 ; f < __kmp_global.threads_capacity ; f++ ) {
-            kmp_info_t *f_th = (kmp_info_t *)TCR_SYNC_PTR(__kmp_global.threads[f]);
-
-            if( f_th && f_th != th ) {
-                char *other_stack_end = (char *)TCR_PTR(f_th->th.th_info.ds.ds_stackbase);
-                char *other_stack_beg = other_stack_end -
-                                        (size_t)TCR_PTR(f_th->th.th_info.ds.ds_stacksize);
-                if((stack_beg > other_stack_beg && stack_beg < other_stack_end) ||
-                   (stack_end > other_stack_beg && stack_end < other_stack_end)) {
-
-                    /* Print the other stack values before the abort */
-                    if ( __kmp_storage_map )
-                        __kmp_print_storage_map_gtid( -1, other_stack_beg, other_stack_end,
-                            (size_t)TCR_PTR(f_th->th.th_info.ds.ds_stacksize),
-                            "th_%d stack (overlapped)",
-                                                 __kmp_gtid_from_thread( f_th ) );
-
-                    __kmp_msg( kmp_ms_fatal, KMP_MSG( StackOverlap ), KMP_HNT( ChangeStackLimit ), __kmp_msg_null );
-                }
-            }
-        }
-    }
-    KA_TRACE(10,("__kmp_check_stack_overlap: returning\n"));
-}
+///void
+///__kmp_check_stack_overlap( kmp_info_t *th )
+///{
+///    int f;
+///    char *stack_beg = NULL;
+///    char *stack_end = NULL;
+///    int gtid;
+///
+///    KA_TRACE(10,("__kmp_check_stack_overlap: called\n"));
+///    if ( __kmp_storage_map ) {
+///        stack_end = (char *) th->th.th_info.ds.ds_stackbase;
+///        stack_beg = stack_end - th->th.th_info.ds.ds_stacksize;
+///
+///        gtid = __kmp_gtid_from_thread( th );
+///
+///        if (gtid == KMP_GTID_MONITOR) {
+///            __kmp_print_storage_map_gtid( gtid, stack_beg, stack_end, th->th.th_info.ds.ds_stacksize,
+///                                     "th_%s stack (%s)", "mon",
+///                                     ( th->th.th_info.ds.ds_stackgrow ) ? "initial" : "actual" );
+///        } else {
+///            __kmp_print_storage_map_gtid( gtid, stack_beg, stack_end, th->th.th_info.ds.ds_stacksize,
+///                                     "th_%d stack (%s)", gtid,
+///                                     ( th->th.th_info.ds.ds_stackgrow ) ? "initial" : "actual" );
+///        }
+///    }
+///
+///    /* No point in checking ubermaster threads since they use refinement and cannot overlap */
+///    gtid = __kmp_gtid_from_thread( th );
+///    if ( __kmp_global.env_checks == TRUE && !KMP_UBER_GTID(gtid))
+///    {
+///        KA_TRACE(10,("__kmp_check_stack_overlap: performing extensive checking\n"));
+///        if ( stack_beg == NULL ) {
+///            stack_end = (char *) th->th.th_info.ds.ds_stackbase;
+///            stack_beg = stack_end - th->th.th_info.ds.ds_stacksize;
+///        }
+///
+///        for( f=0 ; f < __kmp_global.threads_capacity ; f++ ) {
+///            kmp_info_t *f_th = (kmp_info_t *)TCR_SYNC_PTR(__kmp_global.threads[f]);
+///
+///            if( f_th && f_th != th ) {
+///                char *other_stack_end = (char *)TCR_PTR(f_th->th.th_info.ds.ds_stackbase);
+///                char *other_stack_beg = other_stack_end -
+///                                        (size_t)TCR_PTR(f_th->th.th_info.ds.ds_stacksize);
+///                if((stack_beg > other_stack_beg && stack_beg < other_stack_end) ||
+///                   (stack_end > other_stack_beg && stack_end < other_stack_end)) {
+///
+///                    /* Print the other stack values before the abort */
+///                    if ( __kmp_storage_map )
+///                        __kmp_print_storage_map_gtid( -1, other_stack_beg, other_stack_end,
+///                            (size_t)TCR_PTR(f_th->th.th_info.ds.ds_stacksize),
+///                            "th_%d stack (overlapped)",
+///                                                 __kmp_gtid_from_thread( f_th ) );
+///
+///                    __kmp_msg( kmp_ms_fatal, KMP_MSG( StackOverlap ), KMP_HNT( ChangeStackLimit ), __kmp_msg_null );
+///                }
+///            }
+///        }
+///    }
+///    KA_TRACE(10,("__kmp_check_stack_overlap: returning\n"));
+///}
 
 /* ------------------------------------------------------------------------ */
 
@@ -5146,10 +5147,10 @@ __kmp_allocate_team( kmp_root_t *root, int new_nproc, int max_nproc,
     KA_TRACE( 20, ( "__kmp_allocate_team: making a new team\n" ) );
     __kmp_initialize_team( team, new_nproc, new_icvs, NULL );
 
-    KA_TRACE( 20, ( "__kmp_allocate_team: setting task_team[0] %p and task_team[1] %p to NULL\n",
-                    &team->t.t_task_team[0], &team->t.t_task_team[1] ) );
-    team->t.t_task_team[0] = NULL;    // to be removed, as __kmp_allocate zeroes memory, no need to duplicate
-    team->t.t_task_team[1] = NULL;    // to be removed, as __kmp_allocate zeroes memory, no need to duplicate
+///    KA_TRACE( 20, ( "__kmp_allocate_team: setting task_team[0] %p and task_team[1] %p to NULL\n",
+///                    &team->t.t_task_team[0], &team->t.t_task_team[1] ) );
+///    team->t.t_task_team[0] = NULL;    // to be removed, as __kmp_allocate zeroes memory, no need to duplicate
+///    team->t.t_task_team[1] = NULL;    // to be removed, as __kmp_allocate zeroes memory, no need to duplicate
 
     if ( __kmp_storage_map ) {
         __kmp_print_team_storage_map( "team", team, team->t.t_id, new_nproc );

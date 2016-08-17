@@ -1722,9 +1722,9 @@ copy_icvs( kmp_internal_control_t *dst, kmp_internal_control_t *src ) {
 
 
 typedef struct kmp_desc_base {
-    void    *ds_stackbase;
-    size_t            ds_stacksize;
-    int               ds_stackgrow;
+///    void    *ds_stackbase;
+///    size_t            ds_stacksize;
+///    int               ds_stackgrow;
     kmp_thread_t      ds_thread;
     volatile int      ds_tid;
     int               ds_gtid;
@@ -2595,7 +2595,7 @@ typedef struct KMP_ALIGN_CACHE kmp_global {
     /* end data protected by fork/join lock */
     /* --------------------------------------------------------------------------- */
 
-    kmp_key_t gtid_threadprivate_key;    /* thread key */
+    //kmp_key_t gtid_threadprivate_key;    /* thread key */
 
     //kmp_icv_t icv;                  /* default ICVs */
 
@@ -2713,7 +2713,7 @@ extern int  __kmp_get_load_balance( int );
 
 extern int  __kmp_get_global_thread_id( void );
 extern int  __kmp_get_global_thread_id_reg( void );
-extern void __kmp_exit_thread( int exit_status );
+///extern void __kmp_exit_thread( int exit_status );
 extern void __kmp_abort_thread( void );
 extern void __kmp_abort_process( void );
 extern void __kmp_warn( char const * format, ... );
@@ -2827,6 +2827,7 @@ extern void __kmp_runtime_destroy( void );
 ///extern void __kmp_cleanup_hierarchy();
 ///extern void __kmp_get_hierarchy(kmp_uint32 nproc, kmp_bstate_t *thr_bar);
 
+extern void __kmp_set_self_info( kmp_info_t *th );
 extern void __kmp_gtid_set_specific( int gtid );
 extern int  __kmp_gtid_get_specific( void );
 
@@ -2837,7 +2838,6 @@ extern int  __kmp_read_system_info( struct kmp_sys_info *info );
 extern void *__kmp_launch_thread( kmp_info_t *thr );
 extern void __kmp_create_worker( int gtid, kmp_info_t *th, size_t stack_size );
 extern void __kmp_reap_worker( kmp_info_t *th );
-extern void __kmp_terminate_thread( int gtid );
 
 extern void __kmp_elapsed( double * );
 extern void __kmp_elapsed_tick( double * );

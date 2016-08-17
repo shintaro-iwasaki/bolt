@@ -14,6 +14,7 @@
 
 
 #include "kmp_abt.h"
+#include "kmp_abt_stats.h"
 
 #include <unistd.h>
 #include <math.h>               // HUGE_VAL.
@@ -559,8 +560,8 @@ __kmp_runtime_initialize( void )
 
     // FIXME: Do we need a thread-specific key?
     //status = ABT_key_create( __kmp_internal_end_dest, &__kmp_global.gtid_threadprivate_key );
-    status = ABT_key_create( NULL, &__kmp_global.gtid_threadprivate_key );
-    KMP_CHECK_SYSFAIL( "ABT_key_create", status );
+//    status = ABT_key_create( NULL, &__kmp_global.gtid_threadprivate_key );
+//    KMP_CHECK_SYSFAIL( "ABT_key_create", status );
 
 //    status = ABT_mutex_create( & __kmp_wait_mx.m_mutex );
 //    KMP_CHECK_SYSFAIL( "ABT_mutex_create", status );
@@ -580,8 +581,8 @@ __kmp_runtime_destroy( void )
         return; // Nothing to do.
     };
 
-    status = ABT_key_free( & __kmp_global.gtid_threadprivate_key );
-    KMP_CHECK_SYSFAIL( "ABT_key_free", status );
+//    status = ABT_key_free( & __kmp_global.gtid_threadprivate_key );
+//    KMP_CHECK_SYSFAIL( "ABT_key_free", status );
 
 //    status = ABT_mutex_free( & __kmp_wait_mx.m_mutex );
 //    if ( status != ABT_SUCCESS ) {
@@ -602,6 +603,14 @@ __kmp_runtime_destroy( void )
 
 /* ------------------------------------------------------------------------ */
 /* ------------------------------------------------------------------------ */
+
+void
+__kmp_set_self_info( kmp_info_t *th )
+{
+    KMP_ASSERT( __kmp_global.init_runtime );
+
+    ABT_self_set_arg((void *)th);
+}
 
 void
 __kmp_gtid_set_specific( int gtid )
@@ -641,7 +650,6 @@ __kmp_gtid_get_specific()
     }
     KA_TRACE( 50, ("__kmp_gtid_get_specific: ULT:%p gtid:%d\n", self, gtid ));
 
-
 //    void *keyval;
 //    ABT_key_get( __kmp_global.gtid_threadprivate_key, & keyval );
 //    gtid = (int)(intptr_t)keyval;
@@ -654,6 +662,238 @@ __kmp_gtid_get_specific()
 //    KA_TRACE( 50, ("__kmp_gtid_get_specific: key:%d gtid:%d\n",
 //               __kmp_global.gtid_threadprivate_key, gtid ));
 //    return gtid;
+}
+
+/* ------------------------------------------------------------------------ */
+/* ------------------------------------------------------------------------ */
+
+/*
+ * Set thread stack info according to values returned by
+ * ABT_thread_get_attr().
+ * If values are unreasonable, assume call failed and use
+ * incremental stack refinement method instead.
+ * Returns TRUE if the stack parameters could be determined exactly,
+ * FALSE if incremental refinement is necessary.
+ */
+///static kmp_int32
+///__kmp_set_stack_info( int gtid, kmp_info_t *th )
+///{
+///    int             stack_data;
+///    ABT_thread_attr attr;
+///    int             status;
+///    size_t          size = 0;
+///    void *          addr = 0;
+///
+///    /* Always do incremental stack refinement for ubermaster threads since the initial
+///       thread stack range can be reduced by sibling thread creation so ABT_thread_attr_get_stack
+///       may cause thread gtid aliasing */
+///    if ( ! KMP_UBER_GTID(gtid) ) {
+///
+///        /* Fetch the real thread attributes */
+///        ABT_thread self;
+///        status = ABT_thread_self( &self );
+///        KMP_CHECK_SYSFAIL( "ABT_thread_self", status );
+///
+///        status = ABT_thread_get_attr( self, &attr );
+///        KMP_CHECK_SYSFAIL( "ABT_thread_get_attr", status );
+///
+///        status = ABT_thread_attr_get_stack( attr, &addr, &size );
+///        KMP_CHECK_SYSFAIL( "ABT_thread_attr_get_stack", status );
+///        KA_TRACE( 60, ( "__kmp_set_stack_info: T#%d ABT_thread_attr_get_stack returned size: %lu, "
+///                        "low addr: %p\n",
+///                        gtid, size, addr ));
+///
+///        status = ABT_thread_attr_free( &attr );
+///        KMP_CHECK_SYSFAIL( "ABT_thread_attr_free", status );
+///    }
+///
+///    if ( size != 0 && addr != 0 ) {     /* was stack parameter determination successful? */
+///        /* Store the correct base and size */
+///        TCW_PTR(th->th.th_info.ds.ds_stackbase, (((char *)addr) + size));
+///        TCW_PTR(th->th.th_info.ds.ds_stacksize, size);
+///        TCW_4(th->th.th_info.ds.ds_stackgrow, FALSE);
+///        return TRUE;
+///    }
+///
+///    /* Use incremental refinement starting from initial conservative estimate */
+///    TCW_PTR(th->th.th_info.ds.ds_stacksize, 0);
+///    TCW_PTR(th -> th.th_info.ds.ds_stackbase, &stack_data);
+///    TCW_4(th->th.th_info.ds.ds_stackgrow, TRUE);
+///    return FALSE;
+///}
+
+static void
+__kmp_launch_worker( void *thr )
+{
+    int status, old_type, old_state;
+    int gtid;
+    kmp_info_t *this_thr = (kmp_info_t *)thr;
+    kmp_team_t *(*volatile pteam);
+
+    gtid = this_thr->th.th_info.ds.ds_gtid;
+    KMP_DEBUG_ASSERT( this_thr == __kmp_global.threads[ gtid ] );
+
+///#if KMP_AFFINITY_SUPPORTED
+///    __kmp_affinity_set_init_mask( gtid, FALSE );
+///#endif
+
+#if KMP_ARCH_X86 || KMP_ARCH_X86_64
+    //
+    // Set the FP control regs to be a copy of
+    // the parallel initialization thread's.
+    //
+///    __kmp_clear_x87_fpu_status_word();
+///    __kmp_load_x87_fpu_control_word( &__kmp_global.init_x87_fpu_control_word );
+///    __kmp_load_mxcsr( &__kmp_global.init_mxcsr );
+#endif /* KMP_ARCH_X86 || KMP_ARCH_X86_64 */
+
+    KMP_MB();
+    //__kmp_set_stack_info( gtid, (kmp_info_t*)thr );
+
+    //__kmp_launch_thread( (kmp_info_t *) thr );
+    pteam = (kmp_team_t *(*))(& this_thr->th.th_team);
+    if ( TCR_SYNC_PTR(*pteam) && !TCR_4(__kmp_global.g.g_done) ) {
+        /* we were just woken up, so run our new task */
+        if ( TCR_SYNC_PTR((*pteam)->t.t_pkfn) != NULL ) {
+            int rc;
+            KA_TRACE(20, ("__kmp_launch_worker: T#%d(%d:%d) invoke microtask = %p\n",
+                          gtid, (*pteam)->t.t_id, __kmp_tid_from_gtid(gtid), (*pteam)->t.t_pkfn));
+
+            //updateHWFPControl (*pteam);
+
+            KMP_STOP_DEVELOPER_EXPLICIT_TIMER(USER_launch_thread_loop);
+            {
+                KMP_TIME_DEVELOPER_BLOCK(USER_worker_invoke);
+                rc = (*pteam)->t.t_invoke( gtid );
+            }
+            KMP_START_DEVELOPER_EXPLICIT_TIMER(USER_launch_thread_loop);
+            KMP_ASSERT( rc );
+
+            KMP_MB();
+            KA_TRACE(20, ("__kmp_launch_worker: T#%d(%d:%d) done microtask = %p\n",
+                          gtid, (*pteam)->t.t_id, __kmp_tid_from_gtid(gtid), (*pteam)->t.t_pkfn));
+        }
+    }
+
+    //this_thr->th.th_task_team = NULL;
+    /* run the destructors for the threadprivate data for this thread */
+    //__kmp_common_destroy_gtid( gtid );
+
+    KA_TRACE( 10, ("__kmp_launch_worker: T#%d done\n", gtid ) );
+}
+
+void
+__kmp_create_worker( int gtid, kmp_info_t *th, size_t stack_size )
+{
+    ABT_thread      handle;
+    ABT_thread_attr thread_attr;
+    int             status;
+
+    th->th.th_info.ds.ds_gtid = gtid;
+
+    if ( KMP_UBER_GTID(gtid) ) {
+        KA_TRACE( 10, ("__kmp_create_worker: uber thread (%d)\n", gtid ) );
+        ABT_thread_self( &handle );
+        ABT_thread_set_arg(handle, (void *)th);
+        th -> th.th_info.ds.ds_thread = handle;
+        //__kmp_set_stack_info( gtid, th );
+        return;
+    }; // if
+
+    KA_TRACE( 10, ("__kmp_create_worker: try to create thread (%d)\n", gtid ) );
+
+    KMP_MB();       /* Flush all pending memory write invalidates.  */
+
+    status = ABT_thread_attr_create( &thread_attr );
+    if ( status != ABT_SUCCESS ) {
+        __kmp_msg(kmp_ms_fatal, KMP_MSG( CantInitThreadAttrs ), KMP_ERR( status ), __kmp_msg_null);
+    }; // if
+
+    KA_TRACE( 10, ( "__kmp_create_worker: T#%d, default stacksize = %lu bytes, "
+                    "__kmp_global.stksize = %lu bytes, final stacksize = %lu bytes\n",
+                    gtid, KMP_DEFAULT_STKSIZE, __kmp_global.stksize, stack_size ) );
+
+    status = ABT_thread_attr_set_stacksize( thread_attr, stack_size );
+    if ( status != ABT_SUCCESS ) {
+        __kmp_msg(kmp_ms_fatal, KMP_MSG( CantSetWorkerStackSize, stack_size ), KMP_ERR( status ),
+                  KMP_HNT( ChangeWorkerStackSize  ), __kmp_msg_null);
+    }; // if
+
+    ABT_pool tar_pool;
+    if (th->th.th_team->t.t_level > 0) {
+        tar_pool = __kmp_abt_get_my_pool(gtid);
+    } else {
+        tar_pool = __kmp_abt_get_pool(gtid);
+    }
+    status = ABT_thread_create( tar_pool, __kmp_launch_worker, (void *)th, thread_attr, &handle );
+    if ( status != ABT_SUCCESS ) {
+        KMP_SYSFAIL( "ABT_thread_create", status );
+    }; // if
+
+    th->th.th_info.ds.ds_thread = handle;
+
+    status = ABT_thread_attr_free( & thread_attr );
+    if ( status ) {
+        __kmp_msg(kmp_ms_warning, KMP_MSG( CantDestroyThreadAttrs ), KMP_ERR( status ), __kmp_msg_null);
+    }; // if
+
+    KMP_MB();       /* Flush all pending memory write invalidates.  */
+
+    KA_TRACE( 10, ("__kmp_create_worker: done creating thread (%d)\n", gtid ) );
+
+} // __kmp_create_worker
+
+///void
+///__kmp_exit_thread( int exit_status )
+///{
+///    ABT_thread_exit();
+///} // __kmp_exit_thread
+
+void
+__kmp_reap_worker( kmp_info_t *th )
+{
+    int          status;
+    void        *exit_val;
+
+    KMP_MB();       /* Flush all pending memory write invalidates.  */
+
+    KA_TRACE( 10, ("__kmp_reap_worker: try to reap T#%d\n", th->th.th_info.ds.ds_gtid ) );
+
+    KA_TRACE( 10, ("__kmp_reap_worker: try to join with worker T#%d\n", th->th.th_info.ds.ds_gtid ) );
+    ABT_thread ds_thread = th->th.th_info.ds.ds_thread;
+    status = ABT_thread_free( &ds_thread );
+#ifdef KMP_DEBUG
+    /* Don't expose these to the user until we understand when they trigger */
+    if ( status != ABT_SUCCESS ) {
+        __kmp_msg(kmp_ms_fatal, KMP_MSG( ReapWorkerError ), KMP_ERR( status ), __kmp_msg_null);
+    }
+#endif /* KMP_DEBUG */
+
+    KA_TRACE( 10, ("__kmp_reap_worker: done reaping T#%d\n", th->th.th_info.ds.ds_gtid ) );
+
+    KMP_MB();       /* Flush all pending memory write invalidates.  */
+}
+
+int  __kmp_barrier( /* enum barrier_type bt,*/ int gtid, int is_split,
+                    size_t reduce_size, void *reduce_data, void (*reduce)(void *, void *) )
+{
+    assert(0);
+    return 0;
+}
+
+void __kmp_end_split_barrier ( int gtid )
+{
+    assert(0);
+}
+
+void __kmp_fork_barrier(int gtid, int tid)
+{
+    assert(0);
+}
+
+void __kmp_join_barrier(int gtid)
+{
+    assert(0);
 }
 
 /* ------------------------------------------------------------------------ */
@@ -826,270 +1066,6 @@ __kmp_test_then_and64( volatile kmp_int64 *p, kmp_int64 d )
 }
 
 #endif /* (KMP_ARCH_X86 || KMP_ARCH_X86_64) && (! KMP_ASM_INTRINS) */
-
-/* ------------------------------------------------------------------------ */
-/* ------------------------------------------------------------------------ */
-
-void
-__kmp_terminate_thread( int gtid )
-{
-    int status;
-    kmp_info_t  *th = __kmp_global.threads[ gtid ];
-
-    if ( !th ) return;
-
-    #ifdef KMP_CANCEL_THREADS
-        KA_TRACE( 10, ("__kmp_terminate_thread: kill (%d)\n", gtid ) );
-        status = ABT_thread_cancel( th->th.th_info.ds.ds_thread );
-        if ( status != ABT_SUCCESS && status != ABT_ERR_FEATURE_NA ) {
-            __kmp_msg(
-                kmp_ms_fatal,
-                KMP_MSG( CantTerminateWorkerThread ),
-                KMP_ERR( status ),
-                __kmp_msg_null
-            );
-        }; // if
-    #endif
-    __kmp_yield( TRUE );
-} //
-
-/*
- * Set thread stack info according to values returned by
- * ABT_thread_get_attr().
- * If values are unreasonable, assume call failed and use
- * incremental stack refinement method instead.
- * Returns TRUE if the stack parameters could be determined exactly,
- * FALSE if incremental refinement is necessary.
- */
-static kmp_int32
-__kmp_set_stack_info( int gtid, kmp_info_t *th )
-{
-    int             stack_data;
-    ABT_thread_attr attr;
-    int             status;
-    size_t          size = 0;
-    void *          addr = 0;
-
-    /* Always do incremental stack refinement for ubermaster threads since the initial
-       thread stack range can be reduced by sibling thread creation so ABT_thread_attr_get_stack
-       may cause thread gtid aliasing */
-    if ( ! KMP_UBER_GTID(gtid) ) {
-
-        /* Fetch the real thread attributes */
-        ABT_thread self;
-        status = ABT_thread_self( &self );
-        KMP_CHECK_SYSFAIL( "ABT_thread_self", status );
-
-        status = ABT_thread_get_attr( self, &attr );
-        KMP_CHECK_SYSFAIL( "ABT_thread_get_attr", status );
-
-        status = ABT_thread_attr_get_stack( attr, &addr, &size );
-        KMP_CHECK_SYSFAIL( "ABT_thread_attr_get_stack", status );
-        KA_TRACE( 60, ( "__kmp_set_stack_info: T#%d ABT_thread_attr_get_stack returned size: %lu, "
-                        "low addr: %p\n",
-                        gtid, size, addr ));
-
-        status = ABT_thread_attr_free( &attr );
-        KMP_CHECK_SYSFAIL( "ABT_thread_attr_free", status );
-    }
-
-    if ( size != 0 && addr != 0 ) {     /* was stack parameter determination successful? */
-        /* Store the correct base and size */
-        TCW_PTR(th->th.th_info.ds.ds_stackbase, (((char *)addr) + size));
-        TCW_PTR(th->th.th_info.ds.ds_stacksize, size);
-        TCW_4(th->th.th_info.ds.ds_stackgrow, FALSE);
-        return TRUE;
-    }
-
-    /* Use incremental refinement starting from initial conservative estimate */
-    TCW_PTR(th->th.th_info.ds.ds_stacksize, 0);
-    TCW_PTR(th -> th.th_info.ds.ds_stackbase, &stack_data);
-    TCW_4(th->th.th_info.ds.ds_stackgrow, TRUE);
-    return FALSE;
-}
-
-static void
-__kmp_launch_worker( void *thr )
-{
-    int status, old_type, old_state;
-    int gtid;
-
-    gtid = ((kmp_info_t*)thr) -> th.th_info.ds.ds_gtid;
-    __kmp_gtid_set_specific( gtid );
-
-///#if KMP_AFFINITY_SUPPORTED
-///    __kmp_affinity_set_init_mask( gtid, FALSE );
-///#endif
-
-#ifdef KMP_CANCEL_THREADS
-    //status = pthread_setcanceltype( PTHREAD_CANCEL_ASYNCHRONOUS, & old_type );
-    //KMP_CHECK_SYSFAIL( "pthread_setcanceltype", status );
-    /* josh todo: isn't PTHREAD_CANCEL_ENABLE default for newly-created threads? */
-    //status = pthread_setcancelstate( PTHREAD_CANCEL_ENABLE, & old_state );
-    //KMP_CHECK_SYSFAIL( "pthread_setcancelstate", status );
-#endif
-
-#if KMP_ARCH_X86 || KMP_ARCH_X86_64
-    //
-    // Set the FP control regs to be a copy of
-    // the parallel initialization thread's.
-    //
-    __kmp_clear_x87_fpu_status_word();
-    __kmp_load_x87_fpu_control_word( &__kmp_global.init_x87_fpu_control_word );
-    __kmp_load_mxcsr( &__kmp_global.init_mxcsr );
-#endif /* KMP_ARCH_X86 || KMP_ARCH_X86_64 */
-
-    KMP_MB();
-    __kmp_set_stack_info( gtid, (kmp_info_t*)thr );
-
-    __kmp_launch_thread( (kmp_info_t *) thr );
-}
-
-void
-__kmp_create_worker( int gtid, kmp_info_t *th, size_t stack_size )
-{
-    ABT_thread      handle;
-    ABT_thread_attr thread_attr;
-    int             status;
-
-    th->th.th_info.ds.ds_gtid = gtid;
-
-    if ( KMP_UBER_GTID(gtid) ) {
-        KA_TRACE( 10, ("__kmp_create_worker: uber thread (%d)\n", gtid ) );
-        ABT_thread_self( &th -> th.th_info.ds.ds_thread );
-        __kmp_set_stack_info( gtid, th );
-        return;
-    }; // if
-
-    KA_TRACE( 10, ("__kmp_create_worker: try to create thread (%d)\n", gtid ) );
-
-    KMP_MB();       /* Flush all pending memory write invalidates.  */
-
-#ifdef KMP_THREAD_ATTR
-    status = ABT_thread_attr_create( &thread_attr );
-    if ( status != ABT_SUCCESS ) {
-        __kmp_msg(kmp_ms_fatal, KMP_MSG( CantInitThreadAttrs ), KMP_ERR( status ), __kmp_msg_null);
-    }; // if
-
-    /* Set stack size for this thread now. 
-     * The multiple of 2 is there because on some machines, requesting an unusual stacksize
-     * causes the thread to have an offset before the dummy alloca() takes place to create the
-     * offset.  Since we want the user to have a sufficient stacksize AND support a stack offset, we 
-     * alloca() twice the offset so that the upcoming alloca() does not eliminate any premade
-     * offset, and also gives the user the stack space they requested for all threads */
-    stack_size += gtid * __kmp_global.stkoffset * 2;
-
-    KA_TRACE( 10, ( "__kmp_create_worker: T#%d, default stacksize = %lu bytes, "
-                    "__kmp_global.stksize = %lu bytes, final stacksize = %lu bytes\n",
-                    gtid, KMP_DEFAULT_STKSIZE, __kmp_global.stksize, stack_size ) );
-
-    status = ABT_thread_attr_set_stacksize( thread_attr, stack_size );
-#  ifdef KMP_BACKUP_STKSIZE
-    if ( status != 0 ) {
-        if ( ! __kmp_global.env_stksize ) {
-            stack_size = KMP_BACKUP_STKSIZE + gtid * __kmp_global.stkoffset;
-            __kmp_global.stksize = KMP_BACKUP_STKSIZE;
-            KA_TRACE( 10, ("__kmp_create_worker: T#%d, default stacksize = %lu bytes, "
-                           "__kmp_global.stksize = %lu bytes, (backup) final stacksize = %lu "
-                           "bytes\n",
-                           gtid, KMP_DEFAULT_STKSIZE, __kmp_global.stksize, stack_size )
-                      );
-            status = ABT_thread_attr_set_stacksize( thread_attr, stack_size );
-        }; // if
-    }; // if
-#  endif /* KMP_BACKUP_STKSIZE */
-    if ( status != 0 ) {
-        __kmp_msg(kmp_ms_fatal, KMP_MSG( CantSetWorkerStackSize, stack_size ), KMP_ERR( status ),
-                  KMP_HNT( ChangeWorkerStackSize  ), __kmp_msg_null);
-    }; // if
-
-#endif /* KMP_THREAD_ATTR */
-
-    ABT_pool tar_pool;
-    if (th->th.th_team->t.t_level > 0) {
-        tar_pool = __kmp_abt_get_my_pool(gtid);
-    } else {
-        tar_pool = __kmp_abt_get_pool(gtid);
-    }
-    status = ABT_thread_create( tar_pool, __kmp_launch_worker, (void *) th, thread_attr, & handle );
-    if ( status != ABT_SUCCESS ) {
-        KMP_SYSFAIL( "ABT_thread_create", status );
-    }; // if
-
-    th->th.th_info.ds.ds_thread = handle;
-
-#ifdef KMP_THREAD_ATTR
-    status = ABT_thread_attr_free( & thread_attr );
-    if ( status ) {
-        __kmp_msg(kmp_ms_warning, KMP_MSG( CantDestroyThreadAttrs ), KMP_ERR( status ), __kmp_msg_null);
-    }; // if
-#endif /* KMP_THREAD_ATTR */
-
-    KMP_MB();       /* Flush all pending memory write invalidates.  */
-
-    KA_TRACE( 10, ("__kmp_create_worker: done creating thread (%d)\n", gtid ) );
-
-} // __kmp_create_worker
-
-void
-__kmp_exit_thread( int exit_status )
-{
-    ABT_thread_exit();
-} // __kmp_exit_thread
-
-void
-__kmp_reap_worker( kmp_info_t *th )
-{
-    int          status;
-    void        *exit_val;
-
-    KMP_MB();       /* Flush all pending memory write invalidates.  */
-
-    KA_TRACE( 10, ("__kmp_reap_worker: try to reap T#%d\n", th->th.th_info.ds.ds_gtid ) );
-
-    /* First, check to see whether the worker thread exists.  This could prevent a hang,
-       but if the worker dies after the ABT_thread_cancel call and before the ABT_thread_join
-       call, it will still hang. */
-
-    status = ABT_thread_cancel( th->th.th_info.ds.ds_thread );
-    if (status == ABT_SUCCESS) {
-        KA_TRACE( 10, ("__kmp_reap_worker: try to join with worker T#%d\n", th->th.th_info.ds.ds_gtid ) );
-        ABT_thread ds_thread = th->th.th_info.ds.ds_thread;
-        status = ABT_thread_free( &ds_thread );
-#ifdef KMP_DEBUG
-        /* Don't expose these to the user until we understand when they trigger */
-        if ( status != ABT_SUCCESS ) {
-            __kmp_msg(kmp_ms_fatal, KMP_MSG( ReapWorkerError ), KMP_ERR( status ), __kmp_msg_null);
-        }
-#endif /* KMP_DEBUG */
-    }
-
-    KA_TRACE( 10, ("__kmp_reap_worker: done reaping T#%d\n", th->th.th_info.ds.ds_gtid ) );
-
-    KMP_MB();       /* Flush all pending memory write invalidates.  */
-}
-
-int  __kmp_barrier( /* enum barrier_type bt,*/ int gtid, int is_split,
-                    size_t reduce_size, void *reduce_data, void (*reduce)(void *, void *) )
-{
-    assert(0);
-    return 0;
-}
-
-void __kmp_end_split_barrier ( int gtid )
-{
-    assert(0);
-}
-
-void __kmp_fork_barrier(int gtid, int tid)
-{
-    assert(0);
-}
-
-void __kmp_join_barrier(int gtid)
-{
-    assert(0);
-}
 
 /* ------------------------------------------------------------------------ */
 /* ------------------------------------------------------------------------ */
@@ -1689,14 +1665,8 @@ int
 __kmp_invoke_microtask( microtask_t pkfn,
                         int gtid, int tid,
                         int argc, void *p_argv[] 
-#if OMPT_SUPPORT
-                        , void **exit_frame_ptr
-#endif
 ) 
 {
-#if OMPT_SUPPORT
-  *exit_frame_ptr = __builtin_frame_address(0);
-#endif
 
   switch (argc) {
   default:
@@ -1766,10 +1736,6 @@ __kmp_invoke_microtask( microtask_t pkfn,
             p_argv[11], p_argv[12], p_argv[13], p_argv[14]);
     break;
   }
-
-#if OMPT_SUPPORT
-  *exit_frame_ptr = 0;
-#endif
 
   return 1;
 }
