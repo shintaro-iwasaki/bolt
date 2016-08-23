@@ -146,14 +146,13 @@ if(LIBOMP_USE_ARGOBOTS_NEW)
   if(${LIBOMP_OMP_VERSION} GREATER 40 OR ${LIBOMP_OMP_VERSION} EQUAL 40)
     libomp_append(LIBOMP_CXXFILES abt/kmp_abt_taskdeps.cpp)
   endif()
-endif()
+
 # Files common to stubs and normal library
 libomp_append(LIBOMP_CFILES abt/kmp_abt_ftn_cdecl.c)
 libomp_append(LIBOMP_CFILES abt/kmp_abt_ftn_extra.c)
 libomp_append(LIBOMP_CFILES abt/kmp_abt_version.c)
-
-
 #      abt/kmp_abt_omp.c
+endif()
 
 set(LIBOMP_SOURCE_FILES ${LIBOMP_CFILES} ${LIBOMP_CXXFILES} ${LIBOMP_ASMFILES})
 # For Windows, there is a resource file (.rc -> .res) that is also compiled

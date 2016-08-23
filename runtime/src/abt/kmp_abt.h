@@ -2120,8 +2120,8 @@ typedef struct KMP_ALIGN_CACHE kmp_base_info {
     /* at the start of a barrier, and the values stored in the team are used */
     /* at points in the code where the team struct is no longer guaranteed   */
     /* to exist (from the POV of worker threads).                            */
-    int               th_team_bt_intervals;
-    int               th_team_bt_set;
+    //int               th_team_bt_intervals;
+    //int               th_team_bt_set;
 
 
 ///#if KMP_AFFINITY_SUPPORTED
@@ -2835,8 +2835,10 @@ extern double __kmp_read_cpu_time( void );
 
 extern int  __kmp_read_system_info( struct kmp_sys_info *info );
 
-extern void *__kmp_launch_thread( kmp_info_t *thr );
+//extern void *__kmp_launch_thread( kmp_info_t *thr );
 extern void __kmp_create_worker( int gtid, kmp_info_t *th, size_t stack_size );
+extern void __kmp_revive_worker( kmp_info_t *th );
+extern void __kmp_join_worker( kmp_info_t *th );
 extern void __kmp_reap_worker( kmp_info_t *th );
 
 extern void __kmp_elapsed( double * );
@@ -2886,8 +2888,8 @@ KMP_EXPORT void  kmpc_free( void *ptr );
 extern int  __kmp_barrier( /* enum barrier_type bt,*/ int gtid, int is_split,
                            size_t reduce_size, void *reduce_data, void (*reduce)(void *, void *) );
 extern void __kmp_end_split_barrier ( int gtid );
-extern void __kmp_fork_barrier(int gtid, int tid);
-extern void __kmp_join_barrier(int gtid);
+//extern void __kmp_fork_barrier(int gtid, int tid);
+//extern void __kmp_join_barrier(int gtid);
 
 /*!
  * Tell the fork call which compiler generated the fork call, and therefore how to deal with the call.

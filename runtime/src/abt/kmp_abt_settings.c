@@ -840,21 +840,21 @@ __kmp_stg_print_settings( kmp_str_buf_t * buffer, char const * name, void * data
 // KMP_STACKPAD
 // -------------------------------------------------------------------------------------------------
 
-static void
-__kmp_stg_parse_stackpad( char const * name, char const * value, void * data ) {
-    __kmp_stg_parse_int(
-        name,                             // Env var name
-        value,                            // Env var value
-        KMP_MIN_STKPADDING,               // Min value
-        KMP_MAX_STKPADDING,               // Max value
-        & __kmp_global.stkpadding                // Var to initialize
-    );
-} // __kmp_stg_parse_stackpad
-
-static void
-__kmp_stg_print_stackpad( kmp_str_buf_t * buffer, char const * name, void * data ) {
-    __kmp_stg_print_int( buffer, name, __kmp_global.stkpadding );
-} // __kmp_stg_print_stackpad
+///static void
+///__kmp_stg_parse_stackpad( char const * name, char const * value, void * data ) {
+///    __kmp_stg_parse_int(
+///        name,                             // Env var name
+///        value,                            // Env var value
+///        KMP_MIN_STKPADDING,               // Min value
+///        KMP_MAX_STKPADDING,               // Max value
+///        & __kmp_global.stkpadding                // Var to initialize
+///    );
+///} // __kmp_stg_parse_stackpad
+///
+///static void
+///__kmp_stg_print_stackpad( kmp_str_buf_t * buffer, char const * name, void * data ) {
+///    __kmp_stg_print_int( buffer, name, __kmp_global.stkpadding );
+///} // __kmp_stg_print_stackpad
 
 // -------------------------------------------------------------------------------------------------
 // KMP_STACKOFFSET
@@ -4269,7 +4269,7 @@ static kmp_setting_t __kmp_stg_table[] = {
     { "KMP_SETTINGS",                      __kmp_stg_parse_settings,           __kmp_stg_print_settings,           NULL, 0, 0 },
     { "KMP_STACKOFFSET",                   __kmp_stg_parse_stackoffset,        __kmp_stg_print_stackoffset,        NULL, 0, 0 },
     { "KMP_STACKSIZE",                     __kmp_stg_parse_stacksize,          __kmp_stg_print_stacksize,          NULL, 0, 0 },
-    { "KMP_STACKPAD",                      __kmp_stg_parse_stackpad,           __kmp_stg_print_stackpad,           NULL, 0, 0 },
+///    { "KMP_STACKPAD",                      __kmp_stg_parse_stackpad,           __kmp_stg_print_stackpad,           NULL, 0, 0 },
     { "KMP_VERSION",                       __kmp_stg_parse_version,            __kmp_stg_print_version,            NULL, 0, 0 },
     { "KMP_WARNINGS",                      __kmp_stg_parse_warnings,           __kmp_stg_print_warnings,           NULL, 0, 0 },
 

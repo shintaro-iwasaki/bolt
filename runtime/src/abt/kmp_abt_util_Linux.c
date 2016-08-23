@@ -661,7 +661,8 @@ __kmp_gtid_get_specific()
 //    }
 //    KA_TRACE( 50, ("__kmp_gtid_get_specific: key:%d gtid:%d\n",
 //               __kmp_global.gtid_threadprivate_key, gtid ));
-//    return gtid;
+
+    return gtid;
 }
 
 /* ------------------------------------------------------------------------ */
@@ -753,7 +754,7 @@ __kmp_launch_worker( void *thr )
     //__kmp_launch_thread( (kmp_info_t *) thr );
     pteam = (kmp_team_t *(*))(& this_thr->th.th_team);
     if ( TCR_SYNC_PTR(*pteam) && !TCR_4(__kmp_global.g.g_done) ) {
-        /* we were just woken up, so run our new task */
+        /* run our new task */
         if ( TCR_SYNC_PTR((*pteam)->t.t_pkfn) != NULL ) {
             int rc;
             KA_TRACE(20, ("__kmp_launch_worker: T#%d(%d:%d) invoke microtask = %p\n",
@@ -779,7 +780,7 @@ __kmp_launch_worker( void *thr )
     /* run the destructors for the threadprivate data for this thread */
     //__kmp_common_destroy_gtid( gtid );
 
-    KA_TRACE( 10, ("__kmp_launch_worker: T#%d done\n", gtid ) );
+    KA_TRACE( 10, ("__kmp_launch_worker: T#%d done\n", gtid) );
 }
 
 void
@@ -789,10 +790,11 @@ __kmp_create_worker( int gtid, kmp_info_t *th, size_t stack_size )
     ABT_thread_attr thread_attr;
     int             status;
 
-    th->th.th_info.ds.ds_gtid = gtid;
+    // [SM] th->th.th_info.ds.ds_gtid is setup in __kmp_allocate_thread
+    KMP_DEBUG_ASSERT( th->th.th_info.ds.ds_gtid == gtid );
 
     if ( KMP_UBER_GTID(gtid) ) {
-        KA_TRACE( 10, ("__kmp_create_worker: uber thread (%d)\n", gtid ) );
+        KA_TRACE( 10, ("__kmp_create_worker: uber T#%d\n", gtid) );
         ABT_thread_self( &handle );
         ABT_thread_set_arg(handle, (void *)th);
         th -> th.th_info.ds.ds_thread = handle;
@@ -800,7 +802,7 @@ __kmp_create_worker( int gtid, kmp_info_t *th, size_t stack_size )
         return;
     }; // if
 
-    KA_TRACE( 10, ("__kmp_create_worker: try to create thread (%d)\n", gtid ) );
+    KA_TRACE( 10, ("__kmp_create_worker: try to create T#%d\n", gtid) );
 
     KMP_MB();       /* Flush all pending memory write invalidates.  */
 
@@ -819,12 +821,16 @@ __kmp_create_worker( int gtid, kmp_info_t *th, size_t stack_size )
                   KMP_HNT( ChangeWorkerStackSize  ), __kmp_msg_null);
     }; // if
 
+    // If this new thread is for nested parallel region, the new thread is
+    // added to the shared pool of ES where the caller thread is running on.
     ABT_pool tar_pool;
-    if (th->th.th_team->t.t_level > 0) {
+    if (th->th.th_team->t.t_level > 1) {
         tar_pool = __kmp_abt_get_my_pool(gtid);
     } else {
         tar_pool = __kmp_abt_get_pool(gtid);
     }
+    KA_TRACE( 10, ("__kmp_create_worker: T#%d, nesting level=%d, target pool=%p\n",
+                   gtid, th->th.th_team->t.t_level, tar_pool) );
     status = ABT_thread_create( tar_pool, __kmp_launch_worker, (void *)th, thread_attr, &handle );
     if ( status != ABT_SUCCESS ) {
         KMP_SYSFAIL( "ABT_thread_create", status );
@@ -839,15 +845,62 @@ __kmp_create_worker( int gtid, kmp_info_t *th, size_t stack_size )
 
     KMP_MB();       /* Flush all pending memory write invalidates.  */
 
-    KA_TRACE( 10, ("__kmp_create_worker: done creating thread (%d)\n", gtid ) );
+    KA_TRACE( 10, ("__kmp_create_worker: done creating T#%d\n", gtid) );
 
 } // __kmp_create_worker
+
+void
+__kmp_revive_worker( kmp_info_t *th )
+{
+    int status;
+    int gtid;
+    ABT_pool tar_pool;
+
+    gtid = th->th.th_info.ds.ds_gtid;
+
+    if (th->th.th_team->t.t_level > 1) {
+        tar_pool = __kmp_abt_get_my_pool(gtid);
+    } else {
+        tar_pool = __kmp_abt_get_pool(gtid);
+    }
+
+    KA_TRACE( 10, ("__kmp_revive_worker: recreate T#%d\n", gtid) );
+    status = ABT_thread_revive( tar_pool, __kmp_launch_worker, (void *)th,
+                                &th->th.th_info.ds.ds_thread );
+    if ( status != ABT_SUCCESS ) {
+        KMP_SYSFAIL( "ABT_thread_revive", status );
+    }
+
+    KMP_MB();       /* Flush all pending memory write invalidates.  */
+
+    KA_TRACE( 10, ("__kmp_revive_worker: done recreating T#%d\n", gtid) );
+}
 
 ///void
 ///__kmp_exit_thread( int exit_status )
 ///{
 ///    ABT_thread_exit();
 ///} // __kmp_exit_thread
+
+void
+__kmp_join_worker( kmp_info_t *th )
+{
+    int status;
+
+    KMP_MB();       /* Flush all pending memory write invalidates.  */
+
+    KA_TRACE( 10, ("__kmp_join_worker: try to join worker T#%d\n", th->th.th_info.ds.ds_gtid) );
+
+    ABT_thread ds_thread = th->th.th_info.ds.ds_thread;
+    status = ABT_thread_join(ds_thread);
+    if ( status != ABT_SUCCESS ) {
+        KMP_SYSFAIL( "ABT_thread_join", status );
+    }
+
+    KA_TRACE( 10, ("__kmp_join_worker: done joining worker T#%d\n", th->th.th_info.ds.ds_gtid) );
+
+    KMP_MB();       /* Flush all pending memory write invalidates.  */
+} // __kmp_join_worker
 
 void
 __kmp_reap_worker( kmp_info_t *th )
@@ -857,9 +910,8 @@ __kmp_reap_worker( kmp_info_t *th )
 
     KMP_MB();       /* Flush all pending memory write invalidates.  */
 
-    KA_TRACE( 10, ("__kmp_reap_worker: try to reap T#%d\n", th->th.th_info.ds.ds_gtid ) );
+    KA_TRACE( 10, ("__kmp_reap_worker: try to free worker T#%d\n", th->th.th_info.ds.ds_gtid ) );
 
-    KA_TRACE( 10, ("__kmp_reap_worker: try to join with worker T#%d\n", th->th.th_info.ds.ds_gtid ) );
     ABT_thread ds_thread = th->th.th_info.ds.ds_thread;
     status = ABT_thread_free( &ds_thread );
 #ifdef KMP_DEBUG
@@ -874,8 +926,9 @@ __kmp_reap_worker( kmp_info_t *th )
     KMP_MB();       /* Flush all pending memory write invalidates.  */
 }
 
-int  __kmp_barrier( /* enum barrier_type bt,*/ int gtid, int is_split,
-                    size_t reduce_size, void *reduce_data, void (*reduce)(void *, void *) )
+int
+__kmp_barrier( /* enum barrier_type bt,*/ int gtid, int is_split,
+               size_t reduce_size, void *reduce_data, void (*reduce)(void *, void *) )
 {
     assert(0);
     return 0;
@@ -886,15 +939,15 @@ void __kmp_end_split_barrier ( int gtid )
     assert(0);
 }
 
-void __kmp_fork_barrier(int gtid, int tid)
-{
-    assert(0);
-}
+//void __kmp_fork_barrier(int gtid, int tid)
+//{
+//    assert(0);
+//}
 
-void __kmp_join_barrier(int gtid)
-{
-    assert(0);
-}
+//void __kmp_join_barrier(int gtid)
+//{
+//    assert(0);
+//}
 
 /* ------------------------------------------------------------------------ */
 /* ------------------------------------------------------------------------ */
