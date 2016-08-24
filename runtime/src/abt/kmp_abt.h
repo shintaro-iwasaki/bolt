@@ -2158,8 +2158,8 @@ typedef struct KMP_ALIGN_CACHE kmp_base_info {
 /* The following are also read by the master during reinit */
     struct common_table    *th_pri_common;
 
-    volatile kmp_uint32     th_spin_here;   /* thread-local location for spinning */
-                                            /* while awaiting queuing lock acquire */
+///    volatile kmp_uint32     th_spin_here;   /* thread-local location for spinning */
+///                                            /* while awaiting queuing lock acquire */
 
     volatile void          *th_sleep_loc;   // this points at a kmp_flag<T>
 

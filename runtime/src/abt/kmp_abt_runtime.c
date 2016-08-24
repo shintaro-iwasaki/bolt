@@ -550,7 +550,6 @@ __kmp_initialize_info( kmp_info_t *this_thr, kmp_team_t *team, int tid, int gtid
 
     TCW_SYNC_PTR(this_thr->th.th_team, team);
 
-    this_thr->th.th_info.ds.ds_thread = ABT_THREAD_NULL;
     this_thr->th.th_info.ds.ds_tid  = tid;
     this_thr->th.th_set_nproc       = 0;
 #if OMP_40_ENABLED
@@ -643,7 +642,7 @@ __kmp_initialize_info( kmp_info_t *this_thr, kmp_team_t *team, int tid, int gtid
             this_thr->th.th_task_state_memo_stack[i] = 0;
     }
 
-    KMP_DEBUG_ASSERT( !this_thr->th.th_spin_here );
+///    KMP_DEBUG_ASSERT( !this_thr->th.th_spin_here );
 
     KMP_MB();
 }
@@ -4380,7 +4379,7 @@ __kmp_allocate_thread( kmp_root_t *root, kmp_team_t *team, int new_tid )
     KA_TRACE( 20, ("__kmp_allocate_thread: T#%d init\n",
                     __kmp_get_gtid() ));
 
-    new_thr->th.th_spin_here = FALSE;
+///    new_thr->th.th_spin_here = FALSE;
 
 ///#if OMP_40_ENABLED && KMP_AFFINITY_SUPPORTED
 ///    new_thr->th.th_current_place = KMP_PLACE_UNDEFINED;
@@ -4398,6 +4397,7 @@ __kmp_allocate_thread( kmp_root_t *root, kmp_team_t *team, int new_tid )
     __kmp_global.nth ++;
 
     // [SM] we don't fork the new work thread (will do it later) but set gtid.
+    new_thr->th.th_info.ds.ds_thread = ABT_THREAD_NULL;
     new_thr->th.th_info.ds.ds_gtid = new_gtid;
 ///    /* actually fork it and create the new worker thread */
 ///    KF_TRACE( 10, ("__kmp_allocate_thread: before __kmp_create_worker: %p\n", new_thr ));
