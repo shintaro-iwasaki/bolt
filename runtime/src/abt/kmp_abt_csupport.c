@@ -623,7 +623,7 @@ __kmpc_barrier(ident_t *loc, kmp_int32 global_tid)
     // 2) set to 0 when a new team is created
     // 4) no sync is required
 
-    __kmp_barrier( global_tid, FALSE, 0, NULL, NULL );
+    __kmp_barrier( global_tid );
 }
 
 /* The BARRIER for a MASTER section is always explicit   */
@@ -893,7 +893,7 @@ __kmpc_barrier_master(ident_t *loc, kmp_int32 global_tid)
     if ( __kmp_global.env_consistency_check )
         __kmp_check_barrier( global_tid, ct_barrier, loc );
 
-    status = __kmp_barrier( global_tid, TRUE, 0, NULL, NULL );
+    status = __kmp_barrier( global_tid );
 
     return (status != 0) ? 0 : 1;
 }
@@ -942,7 +942,7 @@ __kmpc_barrier_master_nowait( ident_t * loc, kmp_int32 global_tid )
         __kmp_check_barrier( global_tid, ct_barrier, loc );
     }
 
-    __kmp_barrier( global_tid, FALSE, 0, NULL, NULL );
+    __kmp_barrier( global_tid );
 
     ret = __kmpc_master (loc, global_tid);
 
@@ -1233,14 +1233,14 @@ __kmpc_copyprivate( ident_t *loc, kmp_int32 gtid, size_t cpy_size, void *cpy_dat
     if (didit) *data_ptr = cpy_data;
 
     /* This barrier is not a barrier region boundary */
-    __kmp_barrier( gtid, FALSE , 0, NULL, NULL );
+    __kmp_barrier( gtid );
 
     if (! didit) (*cpy_func)( cpy_data, *data_ptr );
 
     /* Consider next barrier the user-visible barrier for barrier region boundaries */
     /* Nesting checks are already handled by the single construct checks */
 
-    __kmp_barrier( gtid, FALSE , 0, NULL, NULL );
+    __kmp_barrier( gtid );
 }
 
 /* -------------------------------------------------------------------------- */

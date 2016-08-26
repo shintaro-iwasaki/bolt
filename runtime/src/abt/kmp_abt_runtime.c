@@ -5071,6 +5071,9 @@ __kmp_allocate_team( kmp_root_t *root, int new_nproc, int max_nproc,
         }
 #endif /* OMP_40_ENABLED */
 
+        /* reinit the barreir */
+        ABT_barrier_reinit( team->t.t_bar, new_nproc );
+
         /* reallocate space for arguments if necessary */
         __kmp_alloc_argv_entries( argc, team, TRUE );
         team->t.t_argc     = argc;
@@ -5114,8 +5117,10 @@ __kmp_allocate_team( kmp_root_t *root, int new_nproc, int max_nproc,
             __kmp_alloc_argv_entries( argc, team, TRUE );
             team->t.t_argc     = argc;
 
-            KA_TRACE( 20, ("__kmp_allocate_team: team %d init arrived\n",
-                            team->t.t_id ));
+            KA_TRACE( 20, ("__kmp_allocate_team: team %d init arrived\n", team->t.t_id ));
+
+            /* reinit the barreir */
+            ABT_barrier_reinit( team->t.t_bar, new_nproc );
 
 #if OMP_40_ENABLED
             team->t.t_proc_bind = new_proc_bind;
@@ -5164,6 +5169,8 @@ __kmp_allocate_team( kmp_root_t *root, int new_nproc, int max_nproc,
 
     KA_TRACE( 20, ("__kmp_allocate_team: team %d init arrived\n",
                     team->t.t_id ));
+    /* initialize the team barrier */
+    ABT_barrier_create( new_nproc, &team->t.t_bar );
 
 #if OMP_40_ENABLED
     team->t.t_proc_bind = new_proc_bind;
@@ -5277,6 +5284,7 @@ __kmp_reap_team( kmp_team_t *team )
 
     /* free stuff */
 
+    ABT_barrier_free( &team->t.t_bar );
     __kmp_free_team_arrays( team );
     if ( team->t.t_argv != &team->t.t_inline_argv[0] )
         __kmp_free( (void*) team->t.t_argv );

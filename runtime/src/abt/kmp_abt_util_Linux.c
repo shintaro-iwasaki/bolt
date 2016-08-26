@@ -926,15 +926,85 @@ __kmp_reap_worker( kmp_info_t *th )
     KMP_MB();       /* Flush all pending memory write invalidates.  */
 }
 
+//int
+//__kmp_barrier( /* enum barrier_type bt,*/ int gtid, int is_split,
+//               size_t reduce_size, void *reduce_data, void (*reduce)(void *, void *) )
 int
-__kmp_barrier( /* enum barrier_type bt,*/ int gtid, int is_split,
-               size_t reduce_size, void *reduce_data, void (*reduce)(void *, void *) )
+__kmp_barrier( int gtid )
+{
+    register int tid = __kmp_tid_from_gtid(gtid);
+    register kmp_info_t *this_thr = __kmp_global.threads[gtid];
+    register kmp_team_t *team = this_thr->th.th_team;
+    register int status = 0;
+    ident_t *loc = this_thr->th.th_ident;
+    int ret;
+
+    KA_TRACE(15, ("__kmp_barrier: T#%d(%d:%d) has arrived\n",
+                  gtid, __kmp_team_from_gtid(gtid)->t.t_id, __kmp_tid_from_gtid(gtid)));
+
+    if (! team->t.t_serialized) {
+///        if (__kmp_tasking_mode == tskm_extra_barrier) {
+///            __kmp_tasking_barrier(team, this_thr, gtid);
+///            KA_TRACE(15, ("__kmp_barrier: T#%d(%d:%d) past tasking barrier\n",
+///                          gtid, __kmp_team_from_gtid(gtid)->t.t_id, __kmp_tid_from_gtid(gtid)));
+///        }
+
+///        if (KMP_MASTER_TID(tid) && __kmp_tasking_mode != tskm_immediate_exec)
+///            __kmp_task_team_setup(this_thr, team, 0); // use 0 to only setup the current team if nthreads > 1
+
+
+        KMP_MB();
+
+        if (KMP_MASTER_TID(tid)) {
+            status = 0;
+///            if (__kmp_tasking_mode != tskm_immediate_exec) {
+///                __kmp_task_team_wait(this_thr, team
+///                                     USE_ITT_BUILD_ARG(itt_sync_obj) );
+///            }
+            ret = ABT_barrier_wait( team->t.t_bar );
+            KMP_DEBUG_ASSERT( ret == ABT_SUCCESS );
+
+        } else {
+            status = 1;
+            ret = ABT_barrier_wait( team->t.t_bar );
+            KMP_DEBUG_ASSERT( ret == ABT_SUCCESS );
+        }
+
+    } else { // Team is serialized.
+        status = 0;
+///        if (__kmp_tasking_mode != tskm_immediate_exec) {
+///#if OMP_41_ENABLED
+///            if ( this_thr->th.th_task_team != NULL ) {
+///                void *itt_sync_obj = NULL;
+///
+///                KMP_DEBUG_ASSERT(this_thr->th.th_task_team->tt.tt_found_proxy_tasks == TRUE);
+///                __kmp_task_team_wait(this_thr, team
+///                                               USE_ITT_BUILD_ARG(itt_sync_obj));
+///                __kmp_task_team_setup(this_thr, team, 0);
+///
+///            }
+///#else
+///            // The task team should be NULL for serialized code (tasks will be executed immediately)
+///            KMP_DEBUG_ASSERT(team->t.t_task_team[this_thr->th.th_task_state] == NULL);
+///            KMP_DEBUG_ASSERT(this_thr->th.th_task_team == NULL);
+///#endif
+///        }
+    }
+    KA_TRACE(15, ("__kmp_barrier: T#%d(%d:%d) is leaving with return value %d\n",
+                  gtid, __kmp_team_from_gtid(gtid)->t.t_id, __kmp_tid_from_gtid(gtid), status));
+
+    return status;
+}
+
+int
+__kmp_begin_split_barrier( int gtid )
 {
     assert(0);
     return 0;
 }
 
-void __kmp_end_split_barrier ( int gtid )
+void
+__kmp_end_split_barrier( int gtid )
 {
     assert(0);
 }

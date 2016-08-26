@@ -2255,6 +2255,7 @@ typedef struct KMP_ALIGN_CACHE kmp_base_team {
 ///    kmp_balign_team_t        t_bar[ bs_last_barrier ];
     volatile int             t_construct;    // count of single directive encountered by team
     kmp_lock_t               t_single_lock;  // team specific lock
+    kmp_barrier_t            t_bar;          // team barrier
 
     // Master only -----------------------------------------------------------------------------------------
     KMP_ALIGN_CACHE int      t_master_tid;   // tid of master in parent team
@@ -2885,8 +2886,8 @@ KMP_EXPORT void  kmpc_free( void *ptr );
 /* ------------------------------------------------------------------------ */
 /* declarations for internal use */
 
-extern int  __kmp_barrier( /* enum barrier_type bt,*/ int gtid, int is_split,
-                           size_t reduce_size, void *reduce_data, void (*reduce)(void *, void *) );
+extern int  __kmp_barrier( int gtid );
+extern int __kmp_begin_split_barrier( int gtid );
 extern void __kmp_end_split_barrier ( int gtid );
 //extern void __kmp_fork_barrier(int gtid, int tid);
 //extern void __kmp_join_barrier(int gtid);

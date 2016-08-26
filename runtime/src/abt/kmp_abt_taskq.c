@@ -1365,7 +1365,7 @@ __kmpc_taskq( ident_t *loc, kmp_int32 global_tid, kmpc_task_t taskq_task,
         if (in_parallel) {
             /* This shouldn't be a barrier region boundary, it will confuse the user. */
             /* Need the boundary to be at the end taskq instead. */
-            if ( __kmp_barrier( global_tid, TRUE, 0, NULL, NULL )) {
+            if ( __kmp_begin_split_barrier( global_tid ) ) {
                 /* Creating the active root queue, and we are not the master thread. */
                 /* The master thread below created the queue and tasks have been     */
                 /* enqueued, and the master thread released this barrier.  This      */
@@ -1702,7 +1702,7 @@ __kmpc_end_taskq(ident_t *loc, kmp_int32 global_tid, kmpc_thunk_t *taskq_thunk)
         /* Need this barrier to prevent destruction of queue before threads have all executed above code */
         /* This may need to be done earlier when NOWAIT is implemented for the outermost level */
 
-        if ( !__kmp_barrier( global_tid, TRUE, 0, NULL, NULL )) {
+        if ( !__kmp_begin_split_barrier( global_tid ) ) {
             /* the queue->tq_flags & TQF_IS_NOWAIT case is not yet handled here;   */
             /* for right now, everybody waits, and the master thread destroys the  */
             /* remaining queues.                                                   */
