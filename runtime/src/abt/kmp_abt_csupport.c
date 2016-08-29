@@ -893,7 +893,7 @@ __kmpc_barrier_master(ident_t *loc, kmp_int32 global_tid)
     if ( __kmp_global.env_consistency_check )
         __kmp_check_barrier( global_tid, ct_barrier, loc );
 
-    status = __kmp_barrier( global_tid );
+    status = __kmp_begin_split_barrier( global_tid );
 
     return (status != 0) ? 0 : 1;
 }
