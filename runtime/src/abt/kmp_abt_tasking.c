@@ -1886,7 +1886,7 @@ __kmp_enable_tasking( kmp_task_team_t *task_team, kmp_info_t *this_thr )
     threads_data = (kmp_thread_data_t *)TCR_PTR(task_team -> tt.tt_threads_data);
     KMP_DEBUG_ASSERT( threads_data != NULL );
 
-    if ( ( __kmp_global.tasking_mode == tskm_task_teams ) ) //&&
+    if ( __kmp_global.tasking_mode == tskm_task_teams ) //&&
          //( __kmp_dflt_blocktime != KMP_MAX_BLOCKTIME ) )
     {
         // Release any threads sleeping at the barrier, so that they can steal

@@ -23,6 +23,13 @@
 #include <sys/resource.h>
 #include <sys/syscall.h>
 
+#if KMP_OS_LINUX && !KMP_OS_CNK
+# include <sys/sysinfo.h>
+#elif KMP_OS_DARWIN
+# include <sys/sysctl.h>
+# include <mach/mach.h>
+#endif
+
 /* TODO: Do we need to include pthread.h? */
 # include <pthread.h>
 
@@ -468,7 +475,7 @@ void __kmp_abt_print_thread( kmp_info_t *th, const char *msg )
     ABT_pool_get_size(pool, &pool_size);
     ABT_pool_get_total_size(pool, &pool_total_size);
 
-    printf("%s: T#%d - U%u (%p) on ES%d (%p) from P%d (%p,%u,%u)\n",
+    printf("%s: T#%d - U%u (%p) on ES%d (%p) from P%d (%p,%lu,%lu)\n",
            msg, gtid, (unsigned)thread_id, self,
            es_rank, xstream,
            pool_id, pool, pool_size, pool_total_size);
