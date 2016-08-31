@@ -1623,52 +1623,18 @@ __kmpc_test_nest_lock( ident_t *loc, kmp_int32 gtid, void **user_lock )
 static __forceinline void
 __kmp_enter_critical_section_reduce_block( ident_t * loc, kmp_int32 global_tid, kmp_critical_name * crit ) {
 
-///    // this lock was visible to a customer and to the threading profile tool as a serial overhead span
-///    //            (although it's used for an internal purpose only)
-///    //            why was it visible in previous implementation?
-///    //            should we keep it visible in new reduce block?
-///    kmp_user_lock_p lck;
-///
-///    // We know that the fast reduction code is only emitted by Intel compilers
-///    // with 32 byte critical sections. If there isn't enough space, then we
-///    // have to use a pointer.
-///    if ( __kmp_base_user_lock_size <= INTEL_CRITICAL_SIZE ) {
-///        lck = (kmp_user_lock_p)crit;
-///    }
-///    else {
-///        lck = __kmp_get_critical_section_ptr( crit, loc, global_tid );
-///    }
-///    KMP_DEBUG_ASSERT( lck != NULL );
-///
-///    if ( __kmp_global.env_consistency_check )
-///        __kmp_push_sync( global_tid, ct_critical, loc, lck );
-///
-///    __kmp_acquire_user_lock_with_checks( lck, global_tid );
+    kmp_team_t *team = __kmp_team_from_gtid( global_tid );
+    __kmp_acquire_lock( &team->t.t_single_lock, global_tid );
 
-    assert(0);
 }
 
 // used in a critical section reduce block
 static __forceinline void
 __kmp_end_critical_section_reduce_block( ident_t * loc, kmp_int32 global_tid, kmp_critical_name * crit ) {
 
-///    kmp_user_lock_p lck;
-///
-///    // We know that the fast reduction code is only emitted by Intel compilers with 32 byte critical
-///    // sections. If there isn't enough space, then we have to use a pointer.
-///    if ( __kmp_base_user_lock_size > 32 ) {
-///        lck = *( (kmp_user_lock_p *) crit );
-///        KMP_ASSERT( lck != NULL );
-///    } else {
-///        lck = (kmp_user_lock_p) crit;
-///    }
-///
-///    if ( __kmp_global.env_consistency_check )
-///        __kmp_pop_sync( global_tid, ct_critical, loc );
-///
-///    __kmp_release_user_lock_with_checks( lck, global_tid );
+    kmp_team_t *team = __kmp_team_from_gtid( global_tid );
+    __kmp_release_lock( &team->t.t_single_lock, global_tid );
 
-    assert(0);
 } // __kmp_end_critical_section_reduce_block
 
 
@@ -1692,124 +1658,100 @@ __kmpc_reduce_nowait(
     kmp_int32 num_vars, size_t reduce_size, void *reduce_data, void (*reduce_func)(void *lhs_data, void *rhs_data),
     kmp_critical_name *lck ) {
 
-///    KMP_COUNT_BLOCK(REDUCE_nowait);
-///    int retval = 0;
-///    PACKED_REDUCTION_METHOD_T packed_reduction_method;
-///#if OMP_40_ENABLED
-///    kmp_team_t *team;
-///    kmp_info_t *th;
-///    int teams_swapped = 0, task_state;
-///#endif
-///    KA_TRACE( 10, ( "__kmpc_reduce_nowait() enter: called T#%d\n", global_tid ) );
-///
-///    // why do we need this initialization here at all?
-///    // Reduction clause can not be used as a stand-alone directive.
-///
-///    // do not call __kmp_serial_initialize(), it will be called by __kmp_parallel_initialize() if needed
-///    // possible detection of false-positive race by the threadchecker ???
-///    if( ! TCR_4( __kmp_global.init_parallel ) )
-///        __kmp_parallel_initialize();
-///
-///    // check correctness of reduce block nesting
-///    if ( __kmp_global.env_consistency_check )
-///        __kmp_push_sync( global_tid, ct_reduce, loc, NULL );
-///
-///#if OMP_40_ENABLED
-///    th = __kmp_thread_from_gtid(global_tid);
-///    if( th->th.th_teams_microtask ) {   // AC: check if we are inside the teams construct?
-///        team = th->th.th_team;
-///        if( team->t.t_level == th->th.th_teams_level ) {
-///            // this is reduction at teams construct
-///            KMP_DEBUG_ASSERT(!th->th.th_info.ds.ds_tid);  // AC: check that tid == 0
-///            // Let's swap teams temporarily for the reduction barrier
-///            teams_swapped = 1;
-///            th->th.th_info.ds.ds_tid = team->t.t_master_tid;
-///            th->th.th_team = team->t.t_parent;
-///            th->th.th_team_nproc = th->th.th_team->t.t_nproc;
-///            th->th.th_task_team = th->th.th_team->t.t_task_team[0];
-///            task_state = th->th.th_task_state;
-///            th->th.th_task_state = 0;
-///        }
-///    }
-///#endif // OMP_40_ENABLED
-///
-///    // packed_reduction_method value will be reused by __kmp_end_reduce* function, the value should be kept in a variable
-///    // the variable should be either a construct-specific or thread-specific property, not a team specific property
-///    //     (a thread can reach the next reduce block on the next construct, reduce method may differ on the next construct)
-///    // an ident_t "loc" parameter could be used as a construct-specific property (what if loc == 0?)
-///    //     (if both construct-specific and team-specific variables were shared, then unness extra syncs should be needed)
-///    // a thread-specific variable is better regarding two issues above (next construct and extra syncs)
-///    // a thread-specific "th_local.reduction_method" variable is used currently
-///    // each thread executes 'determine' and 'set' lines (no need to execute by one thread, to avoid unness extra syncs)
-///
-///    packed_reduction_method = __kmp_determine_reduction_method( loc, global_tid, num_vars, reduce_size, reduce_data, reduce_func, lck );
-///    __KMP_SET_REDUCTION_METHOD( global_tid, packed_reduction_method );
-///
-///    if( packed_reduction_method == critical_reduce_block ) {
-///
-///        __kmp_enter_critical_section_reduce_block( loc, global_tid, lck );
-///        retval = 1;
-///
-///    } else if( packed_reduction_method == empty_reduce_block ) {
-///
-///        // usage: if team size == 1, no synchronization is required ( Intel platforms only )
-///        retval = 1;
-///
-///    } else if( packed_reduction_method == atomic_reduce_block ) {
-///
-///        retval = 2;
-///
-///        // all threads should do this pop here (because __kmpc_end_reduce_nowait() won't be called by the code gen)
-///        //     (it's not quite good, because the checking block has been closed by this 'pop',
-///        //      but atomic operation has not been executed yet, will be executed slightly later, literally on next instruction)
-///        if ( __kmp_global.env_consistency_check )
-///            __kmp_pop_sync( global_tid, ct_reduce, loc );
-///
-///    } else if( TEST_REDUCTION_METHOD( packed_reduction_method, tree_reduce_block ) ) {
-///
-///        //AT: performance issue: a real barrier here
-///        //AT:     (if master goes slow, other threads are blocked here waiting for the master to come and release them)
-///        //AT:     (it's not what a customer might expect specifying NOWAIT clause)
-///        //AT:     (specifying NOWAIT won't result in improvement of performance, it'll be confusing to a customer)
-///        //AT: another implementation of *barrier_gather*nowait() (or some other design) might go faster
-///        //        and be more in line with sense of NOWAIT
-///        //AT: TO DO: do epcc test and compare times
-///
-///        // this barrier should be invisible to a customer and to the threading profile tool
-///        //              (it's neither a terminating barrier nor customer's code, it's used for an internal purpose)
-///        retval = __kmp_barrier( global_tid, FALSE, reduce_size, reduce_data, reduce_func );
-///        retval = ( retval != 0 ) ? ( 0 ) : ( 1 );
-///
-///        // all other workers except master should do this pop here
-///        //     ( none of other workers will get to __kmpc_end_reduce_nowait() )
-///        if ( __kmp_global.env_consistency_check ) {
-///            if( retval == 0 ) {
-///                __kmp_pop_sync( global_tid, ct_reduce, loc );
-///            }
-///        }
-///
-///    } else {
-///
-///        // should never reach this block
-///        KMP_ASSERT( 0 ); // "unexpected method"
-///
-///    }
-///#if OMP_40_ENABLED
-///    if( teams_swapped ) {
-///        // Restore thread structure
-///        th->th.th_info.ds.ds_tid = 0;
-///        th->th.th_team = team;
-///        th->th.th_team_nproc = team->t.t_nproc;
-///        th->th.th_task_team = team->t.t_task_team[task_state];
-///        th->th.th_task_state = task_state;
-///    }
-///#endif
-///    KA_TRACE( 10, ( "__kmpc_reduce_nowait() exit: called T#%d: method %08x, returns %08x\n", global_tid, packed_reduction_method, retval ) );
-///
-///    return retval;
+    KMP_COUNT_BLOCK(REDUCE_nowait);
+    int retval = 0;
+    PACKED_REDUCTION_METHOD_T packed_reduction_method;
+#if OMP_40_ENABLED
+    kmp_team_t *team;
+    kmp_info_t *th;
+    int teams_swapped = 0, task_state;
+#endif
+    KA_TRACE( 10, ( "__kmpc_reduce_nowait() enter: called T#%d\n", global_tid ) );
 
-    assert(0);
-    return 0;
+    // why do we need this initialization here at all?
+    // Reduction clause can not be used as a stand-alone directive.
+
+    // do not call __kmp_serial_initialize(), it will be called by __kmp_parallel_initialize() if needed
+    // possible detection of false-positive race by the threadchecker ???
+    if( ! TCR_4( __kmp_global.init_parallel ) )
+        __kmp_parallel_initialize();
+
+    // check correctness of reduce block nesting
+    if ( __kmp_global.env_consistency_check )
+        __kmp_push_sync( global_tid, ct_reduce, loc, NULL );
+
+#if OMP_40_ENABLED
+    th = __kmp_thread_from_gtid(global_tid);
+    if( th->th.th_teams_microtask ) {   // AC: check if we are inside the teams construct?
+        team = th->th.th_team;
+        if( team->t.t_level == th->th.th_teams_level ) {
+            // this is reduction at teams construct
+            KMP_DEBUG_ASSERT(!th->th.th_info.ds.ds_tid);  // AC: check that tid == 0
+            // Let's swap teams temporarily for the reduction barrier
+            teams_swapped = 1;
+            th->th.th_info.ds.ds_tid = team->t.t_master_tid;
+            th->th.th_team = team->t.t_parent;
+            th->th.th_team_nproc = th->th.th_team->t.t_nproc;
+            th->th.th_task_team = th->th.th_team->t.t_task_team[0];
+            task_state = th->th.th_task_state;
+            th->th.th_task_state = 0;
+        }
+    }
+#endif // OMP_40_ENABLED
+
+    // packed_reduction_method value will be reused by __kmp_end_reduce* function, the value should be kept in a variable
+    // the variable should be either a construct-specific or thread-specific property, not a team specific property
+    //     (a thread can reach the next reduce block on the next construct, reduce method may differ on the next construct)
+    // an ident_t "loc" parameter could be used as a construct-specific property (what if loc == 0?)
+    //     (if both construct-specific and team-specific variables were shared, then unness extra syncs should be needed)
+    // a thread-specific variable is better regarding two issues above (next construct and extra syncs)
+    // a thread-specific "th_local.reduction_method" variable is used currently
+    // each thread executes 'determine' and 'set' lines (no need to execute by one thread, to avoid unness extra syncs)
+
+    packed_reduction_method = __kmp_determine_reduction_method( loc, global_tid, num_vars, reduce_size, reduce_data, reduce_func, lck );
+    __KMP_SET_REDUCTION_METHOD( global_tid, packed_reduction_method );
+
+    /* [SM] TODO: supporting tree reduction? */
+
+    if( packed_reduction_method == critical_reduce_block ) {
+
+        __kmp_enter_critical_section_reduce_block( loc, global_tid, lck );
+        retval = 1;
+
+    } else if( packed_reduction_method == empty_reduce_block ) {
+
+        // usage: if team size == 1, no synchronization is required ( Intel platforms only )
+        retval = 1;
+
+    } else if( packed_reduction_method == atomic_reduce_block ) {
+
+        retval = 2;
+
+        // all threads should do this pop here (because __kmpc_end_reduce_nowait() won't be called by the code gen)
+        //     (it's not quite good, because the checking block has been closed by this 'pop',
+        //      but atomic operation has not been executed yet, will be executed slightly later, literally on next instruction)
+        if ( __kmp_global.env_consistency_check )
+            __kmp_pop_sync( global_tid, ct_reduce, loc );
+
+    } else {
+
+        // should never reach this block
+        KMP_ASSERT( 0 ); // "unexpected method"
+
+    }
+#if OMP_40_ENABLED
+    if( teams_swapped ) {
+        // Restore thread structure
+        th->th.th_info.ds.ds_tid = 0;
+        th->th.th_team = team;
+        th->th.th_team_nproc = team->t.t_nproc;
+        th->th.th_task_team = team->t.t_task_team[task_state];
+        th->th.th_task_state = task_state;
+    }
+#endif
+    KA_TRACE( 10, ( "__kmpc_reduce_nowait() exit: called T#%d: method %08x, returns %08x\n", global_tid, packed_reduction_method, retval ) );
+
+    return retval;
 }
 
 /*!
@@ -1823,46 +1765,40 @@ Finish the execution of a reduce nowait.
 void
 __kmpc_end_reduce_nowait( ident_t *loc, kmp_int32 global_tid, kmp_critical_name *lck ) {
 
-///    PACKED_REDUCTION_METHOD_T packed_reduction_method;
-///
-///    KA_TRACE( 10, ( "__kmpc_end_reduce_nowait() enter: called T#%d\n", global_tid ) );
-///
-///    packed_reduction_method = __KMP_GET_REDUCTION_METHOD( global_tid );
-///
-///    if( packed_reduction_method == critical_reduce_block ) {
-///
-///        __kmp_end_critical_section_reduce_block( loc, global_tid, lck );
-///
-///    } else if( packed_reduction_method == empty_reduce_block ) {
-///
-///        // usage: if team size == 1, no synchronization is required ( on Intel platforms only )
-///
-///    } else if( packed_reduction_method == atomic_reduce_block ) {
-///
-///        // neither master nor other workers should get here
-///        //     (code gen does not generate this call in case 2: atomic reduce block)
-///        // actually it's better to remove this elseif at all;
-///        // after removal this value will checked by the 'else' and will assert
-///
-///    } else if( TEST_REDUCTION_METHOD( packed_reduction_method, tree_reduce_block ) ) {
-///
-///        // only master gets here
-///
-///    } else {
-///
-///        // should never reach this block
-///        KMP_ASSERT( 0 ); // "unexpected method"
-///
-///    }
-///
-///    if ( __kmp_global.env_consistency_check )
-///        __kmp_pop_sync( global_tid, ct_reduce, loc );
-///
-///    KA_TRACE( 10, ( "__kmpc_end_reduce_nowait() exit: called T#%d: method %08x\n", global_tid, packed_reduction_method ) );
-///
-///    return;
+    PACKED_REDUCTION_METHOD_T packed_reduction_method;
 
-    assert(0);
+    KA_TRACE( 10, ( "__kmpc_end_reduce_nowait() enter: called T#%d\n", global_tid ) );
+
+    packed_reduction_method = __KMP_GET_REDUCTION_METHOD( global_tid );
+
+    if( packed_reduction_method == critical_reduce_block ) {
+
+        __kmp_end_critical_section_reduce_block( loc, global_tid, lck );
+
+    } else if( packed_reduction_method == empty_reduce_block ) {
+
+        // usage: if team size == 1, no synchronization is required ( on Intel platforms only )
+
+    } else if( packed_reduction_method == atomic_reduce_block ) {
+
+        // neither master nor other workers should get here
+        //     (code gen does not generate this call in case 2: atomic reduce block)
+        // actually it's better to remove this elseif at all;
+        // after removal this value will checked by the 'else' and will assert
+
+    } else {
+
+        // should never reach this block
+        KMP_ASSERT( 0 ); // "unexpected method"
+
+    }
+
+    if ( __kmp_global.env_consistency_check )
+        __kmp_pop_sync( global_tid, ct_reduce, loc );
+
+    KA_TRACE( 10, ( "__kmpc_end_reduce_nowait() exit: called T#%d: method %08x\n", global_tid, packed_reduction_method ) );
+
+    return;
 }
 
 /* 2.a.ii. Reduce Block with a terminating barrier */
@@ -1887,70 +1823,53 @@ __kmpc_reduce(
     void (*reduce_func)(void *lhs_data, void *rhs_data),
     kmp_critical_name *lck )
 {
-///    KMP_COUNT_BLOCK(REDUCE_wait);
-///    int retval = 0;
-///    PACKED_REDUCTION_METHOD_T packed_reduction_method;
-///
-///    KA_TRACE( 10, ( "__kmpc_reduce() enter: called T#%d\n", global_tid ) );
-///
-///    // why do we need this initialization here at all?
-///    // Reduction clause can not be a stand-alone directive.
-///
-///    // do not call __kmp_serial_initialize(), it will be called by __kmp_parallel_initialize() if needed
-///    // possible detection of false-positive race by the threadchecker ???
-///    if( ! TCR_4( __kmp_global.init_parallel ) )
-///        __kmp_parallel_initialize();
-///
-///    // check correctness of reduce block nesting
-///    if ( __kmp_global.env_consistency_check )
-///        __kmp_push_sync( global_tid, ct_reduce, loc, NULL );
-///
-///    packed_reduction_method = __kmp_determine_reduction_method( loc, global_tid, num_vars, reduce_size, reduce_data, reduce_func, lck );
-///    __KMP_SET_REDUCTION_METHOD( global_tid, packed_reduction_method );
-///
-///    if( packed_reduction_method == critical_reduce_block ) {
-///
-///        __kmp_enter_critical_section_reduce_block( loc, global_tid, lck );
-///        retval = 1;
-///
-///    } else if( packed_reduction_method == empty_reduce_block ) {
-///
-///        // usage: if team size == 1, no synchronization is required ( Intel platforms only )
-///        retval = 1;
-///
-///    } else if( packed_reduction_method == atomic_reduce_block ) {
-///
-///        retval = 2;
-///
-///    } else if( TEST_REDUCTION_METHOD( packed_reduction_method, tree_reduce_block ) ) {
-///
-///        //case tree_reduce_block:
-///        // this barrier should be visible to a customer and to the threading profile tool
-///        //              (it's a terminating barrier on constructs if NOWAIT not specified)
-///        retval = __kmp_barrier( global_tid, TRUE, reduce_size, reduce_data, reduce_func );
-///        retval = ( retval != 0 ) ? ( 0 ) : ( 1 );
-///
-///        // all other workers except master should do this pop here
-///        //     ( none of other workers except master will enter __kmpc_end_reduce() )
-///        if ( __kmp_global.env_consistency_check ) {
-///            if( retval == 0 ) { // 0: all other workers; 1: master
-///                __kmp_pop_sync( global_tid, ct_reduce, loc );
-///            }
-///        }
-///
-///    } else {
-///
-///        // should never reach this block
-///        KMP_ASSERT( 0 ); // "unexpected method"
-///
-///    }
-///
-///    KA_TRACE( 10, ( "__kmpc_reduce() exit: called T#%d: method %08x, returns %08x\n", global_tid, packed_reduction_method, retval ) );
-///
-///    return retval;
+    KMP_COUNT_BLOCK(REDUCE_wait);
+    int retval = 0;
+    PACKED_REDUCTION_METHOD_T packed_reduction_method;
 
-    assert(0);
-    return 0;
+    KA_TRACE( 10, ( "__kmpc_reduce() enter: called T#%d\n", global_tid ) );
+
+    // why do we need this initialization here at all?
+    // Reduction clause can not be a stand-alone directive.
+
+    // do not call __kmp_serial_initialize(), it will be called by __kmp_parallel_initialize() if needed
+    // possible detection of false-positive race by the threadchecker ???
+    if( ! TCR_4( __kmp_global.init_parallel ) )
+        __kmp_parallel_initialize();
+
+    // check correctness of reduce block nesting
+    if ( __kmp_global.env_consistency_check )
+        __kmp_push_sync( global_tid, ct_reduce, loc, NULL );
+
+    packed_reduction_method = __kmp_determine_reduction_method( loc, global_tid, num_vars, reduce_size, reduce_data, reduce_func, lck );
+    __KMP_SET_REDUCTION_METHOD( global_tid, packed_reduction_method );
+
+    /* [SM] TODO: supporting tree reduction? */
+
+    if( packed_reduction_method == critical_reduce_block ) {
+
+        __kmp_enter_critical_section_reduce_block( loc, global_tid, lck );
+        retval = 1;
+
+    } else if( packed_reduction_method == empty_reduce_block ) {
+
+        // usage: if team size == 1, no synchronization is required ( Intel platforms only )
+        retval = 1;
+
+    } else if( packed_reduction_method == atomic_reduce_block ) {
+
+        retval = 2;
+
+    } else {
+
+        // should never reach this block
+        KMP_ASSERT( 0 ); // "unexpected method"
+
+    }
+
+    KA_TRACE( 10, ( "__kmpc_reduce() exit: called T#%d: method %08x, returns %08x\n", global_tid, packed_reduction_method, retval ) );
+
+    return retval;
 }
 
 /*!
@@ -1965,54 +1884,47 @@ The <tt>lck</tt> pointer must be the same as that used in the corresponding star
 void
 __kmpc_end_reduce( ident_t *loc, kmp_int32 global_tid, kmp_critical_name *lck ) {
 
-///    PACKED_REDUCTION_METHOD_T packed_reduction_method;
-///
-///    KA_TRACE( 10, ( "__kmpc_end_reduce() enter: called T#%d\n", global_tid ) );
-///
-///    packed_reduction_method = __KMP_GET_REDUCTION_METHOD( global_tid );
-///
-///    // this barrier should be visible to a customer and to the threading profile tool
-///    //              (it's a terminating barrier on constructs if NOWAIT not specified)
-///
-///    if( packed_reduction_method == critical_reduce_block ) {
-///
-///        __kmp_end_critical_section_reduce_block( loc, global_tid, lck );
-///
-///        // TODO: implicit barrier: should be exposed
-///        __kmp_barrier( global_tid, FALSE, 0, NULL, NULL );
-///
-///    } else if( packed_reduction_method == empty_reduce_block ) {
-///
-///        // usage: if team size == 1, no synchronization is required ( Intel platforms only )
-///
-///        // TODO: implicit barrier: should be exposed
-///        __kmp_barrier( global_tid, FALSE, 0, NULL, NULL );
-///
-///    } else if( packed_reduction_method == atomic_reduce_block ) {
-///
-///        // TODO: implicit barrier: should be exposed
-///        __kmp_barrier( global_tid, FALSE, 0, NULL, NULL );
-///
-///    } else if( TEST_REDUCTION_METHOD( packed_reduction_method, tree_reduce_block ) ) {
-///
-///        // only master executes here (master releases all other workers)
-///        __kmp_end_split_barrier( global_tid );
-///
-///    } else {
-///
-///        // should never reach this block
-///        KMP_ASSERT( 0 ); // "unexpected method"
-///
-///    }
-///
-///    if ( __kmp_global.env_consistency_check )
-///        __kmp_pop_sync( global_tid, ct_reduce, loc );
-///
-///    KA_TRACE( 10, ( "__kmpc_end_reduce() exit: called T#%d: method %08x\n", global_tid, packed_reduction_method ) );
-///
-///    return;
+    PACKED_REDUCTION_METHOD_T packed_reduction_method;
 
-    assert(0);
+    KA_TRACE( 10, ( "__kmpc_end_reduce() enter: called T#%d\n", global_tid ) );
+
+    packed_reduction_method = __KMP_GET_REDUCTION_METHOD( global_tid );
+
+    // this barrier should be visible to a customer and to the threading profile tool
+    //              (it's a terminating barrier on constructs if NOWAIT not specified)
+
+    if( packed_reduction_method == critical_reduce_block ) {
+
+        __kmp_end_critical_section_reduce_block( loc, global_tid, lck );
+
+        // TODO: implicit barrier: should be exposed
+        __kmp_barrier( global_tid );
+
+    } else if( packed_reduction_method == empty_reduce_block ) {
+
+        // usage: if team size == 1, no synchronization is required ( Intel platforms only )
+
+        // TODO: implicit barrier: should be exposed
+        __kmp_barrier( global_tid );
+
+    } else if( packed_reduction_method == atomic_reduce_block ) {
+
+        // TODO: implicit barrier: should be exposed
+        __kmp_barrier( global_tid );
+
+    } else {
+
+        // should never reach this block
+        KMP_ASSERT( 0 ); // "unexpected method"
+
+    }
+
+    if ( __kmp_global.env_consistency_check )
+        __kmp_pop_sync( global_tid, ct_reduce, loc );
+
+    KA_TRACE( 10, ( "__kmpc_end_reduce() exit: called T#%d: method %08x\n", global_tid, packed_reduction_method ) );
+
+    return;
 }
 
 #undef __KMP_GET_REDUCTION_METHOD
