@@ -4477,7 +4477,6 @@ __kmp_initialize_team(
 #endif /* KMP_ARCH_X86 || KMP_ARCH_X86_64 */
 
     team->t.t_construct   = 0;
-    //__kmp_init_lock( & team->t.t_single_lock );
 
     team->t.t_ordered .dt.t_value = 0;
     team->t.t_master_active = FALSE;
@@ -5144,7 +5143,9 @@ __kmp_allocate_team( kmp_root_t *root, int new_nproc, int max_nproc,
     KMP_MB();
     team = (kmp_team_t*) __kmp_allocate( sizeof( kmp_team_t ) );
 
-    __kmp_init_lock( &team->t.t_single_lock );
+    for( f = 0; f < KMP_TEAM_NUM_LOCKS; f++ ) {
+        __kmp_init_lock( &team->t.t_lock[f] );
+    }
 
     /* and set it up */
     team->t.t_max_nproc   = max_nproc;
@@ -5274,6 +5275,7 @@ __kmp_free_team( kmp_root_t *root, kmp_team_t *team  USE_NESTED_HOT_ARG(kmp_info
 kmp_team_t *
 __kmp_reap_team( kmp_team_t *team )
 {
+    int i;
     kmp_team_t *next_pool = team->t.t_next_pool;
 
     KMP_DEBUG_ASSERT( team );
@@ -5286,7 +5288,9 @@ __kmp_reap_team( kmp_team_t *team )
 
     /* free stuff */
 
-    __kmp_destroy_lock( &team->t.t_single_lock );
+    for( i = 0; i < KMP_TEAM_NUM_LOCKS; i++) {
+        __kmp_destroy_lock( &team->t.t_lock[i] );
+    }
     ABT_barrier_free( &team->t.t_bar );
     __kmp_free_team_arrays( team );
     if ( team->t.t_argv != &team->t.t_inline_argv[0] )

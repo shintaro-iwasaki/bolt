@@ -589,6 +589,62 @@ __kmpc_flush(ident_t *loc)
 /* -------------------------------------------------------------------------- */
 
 /* -------------------------------------------------------------------------- */
+static __forceinline int
+__kmp_global_get_crit_lock_id( kmp_critical_name *crit ) {
+    unsigned id = *(unsigned *)crit;
+    return ((id & (id >> 16)) % KMP_NUM_CRIT_LOCKS);
+}
+
+static __forceinline void
+__kmp_global_enter_critical_section( kmp_int32 global_tid, kmp_critical_name * crit ) {
+
+    int lock_id = __kmp_global_get_crit_lock_id( crit );
+    __kmp_acquire_lock( &__kmp_global.crit_lock[lock_id], global_tid );
+    KA_TRACE( 20, ( "__kmp_global_enter_critical_section(): T#%d: acquired lock#%d\n",
+                    global_tid, lock_id ) );
+
+}
+
+static __forceinline void
+__kmp_global_end_critical_section( kmp_int32 global_tid, kmp_critical_name * crit ) {
+
+    int lock_id = __kmp_global_get_crit_lock_id( crit );
+    __kmp_release_lock( &__kmp_global.crit_lock[lock_id], global_tid );
+    KA_TRACE( 20, ( "__kmp_global_end_critical_section(): T#%d: released lock#%d\n",
+                    global_tid, lock_id ) );
+
+}
+
+static __forceinline int
+__kmp_team_get_lock_id( kmp_critical_name *crit ) {
+    unsigned id = *(unsigned *)crit;
+    return ((id & (id >> 16)) % KMP_TEAM_NUM_LOCKS);
+}
+
+static __forceinline void
+__kmp_team_enter_critical_section( kmp_int32 global_tid, kmp_critical_name * crit ) {
+
+    int lock_id = __kmp_team_get_lock_id( crit );
+    kmp_team_t *team = __kmp_team_from_gtid( global_tid );
+    __kmp_acquire_lock( &team->t.t_lock[lock_id], global_tid );
+    KA_TRACE( 20, ( "__kmp_team_enter_critical_section(): team %d (T#%d): acquired lock#%d\n",
+                    team->t.t_id, global_tid, lock_id ) );
+
+}
+
+static __forceinline void
+__kmp_team_end_critical_section( kmp_int32 global_tid, kmp_critical_name * crit ) {
+
+    int lock_id = __kmp_team_get_lock_id( crit );
+    kmp_team_t *team = __kmp_team_from_gtid( global_tid );
+    __kmp_release_lock( &team->t.t_lock[lock_id], global_tid );
+    KA_TRACE( 20, ( "__kmp_team_end_critical_section(): team %d (T#%d): released lock#%d\n",
+                    team->t.t_id, global_tid, lock_id ) );
+
+}
+/* -------------------------------------------------------------------------- */
+
+/* -------------------------------------------------------------------------- */
 
 /*!
 @ingroup SYNCHRONIZATION
@@ -734,46 +790,6 @@ __kmpc_end_ordered( ident_t * loc, kmp_int32 gtid )
         __kmp_parallel_dxo( & gtid, & cid, loc );
 }
 
-static kmp_user_lock_p
-__kmp_get_critical_section_ptr( kmp_critical_name * crit, ident_t const * loc, kmp_int32 gtid )
-{
-    kmp_user_lock_p *lck_pp = (kmp_user_lock_p *)crit;
-
-    //
-    // Because of the double-check, the following load
-    // doesn't need to be volatile.
-    //
-    kmp_user_lock_p lck = (kmp_user_lock_p)TCR_PTR( *lck_pp );
-
-///    if ( lck == NULL ) {
-///        void * idx;
-///
-///        // Allocate & initialize the lock.
-///        // Remember allocated locks in table in order to free them in __kmp_cleanup()
-///        lck = __kmp_user_lock_allocate( &idx, gtid, kmp_lf_critical_section );
-///        __kmp_init_user_lock_with_checks( lck );
-///        __kmp_set_user_lock_location( lck, loc );
-///
-///        //
-///        // Use a cmpxchg instruction to slam the start of the critical
-///        // section with the lock pointer.  If another thread beat us
-///        // to it, deallocate the lock, and use the lock that the other
-///        // thread allocated.
-///        //
-///        int status = KMP_COMPARE_AND_STORE_PTR( lck_pp, 0, lck );
-///
-///        if ( status == 0 ) {
-///            // Deallocate the lock and reload the value.
-///            __kmp_destroy_user_lock_with_checks( lck );
-///            __kmp_user_lock_free( &idx, gtid, lck );
-///            lck = (kmp_user_lock_p)TCR_PTR( *lck_pp );
-///            KMP_DEBUG_ASSERT( lck != NULL );
-///        }
-///    }
-    assert(0);
-    return lck;
-}
-
 
 /*!
 @ingroup WORK_SHARING
@@ -788,44 +804,20 @@ This function blocks until the executing thread can enter the critical section.
 void
 __kmpc_critical( ident_t * loc, kmp_int32 global_tid, kmp_critical_name * crit )
 {
-///    KMP_COUNT_BLOCK(OMP_CRITICAL);
-///    kmp_user_lock_p lck;
-///
-///    KC_TRACE( 10, ("__kmpc_critical: called T#%d\n", global_tid ) );
-///
-///    //TODO: add THR_OVHD_STATE
-///
-///    KMP_CHECK_USER_LOCK_INIT();
-///
-///    if ( ( __kmp_user_lock_kind == lk_tas )
-///      && ( sizeof( lck->tas.lk.poll ) <= OMP_CRITICAL_SIZE ) ) {
-///        lck = (kmp_user_lock_p)crit;
-///    }
-///#if KMP_OS_LINUX && (KMP_ARCH_X86 || KMP_ARCH_X86_64 || KMP_ARCH_ARM || KMP_ARCH_AARCH64)
-///    else if ( ( __kmp_user_lock_kind == lk_futex )
-///      && ( sizeof( lck->futex.lk.poll ) <= OMP_CRITICAL_SIZE ) ) {
-///        lck = (kmp_user_lock_p)crit;
-///    }
-///#endif
-///    else { // ticket, queuing or drdpa
-///        lck = __kmp_get_critical_section_ptr( crit, loc, global_tid );
-///    }
-///
-///    if ( __kmp_global.env_consistency_check )
-///        __kmp_push_sync( global_tid, ct_critical, loc, lck );
-///
-///    /* since the critical directive binds to all threads, not just
-///     * the current team we have to check this even if we are in a
-///     * serialized team */
-///    /* also, even if we are the uber thread, we still have to conduct the lock,
-///     * as we have to contend with sibling threads */
-///
-///    // Value of 'crit' should be good for using as a critical_id of the critical section directive.
-///    __kmp_acquire_user_lock_with_checks( lck, global_tid );
-///
-///    KA_TRACE( 15, ("__kmpc_critical: done T#%d\n", global_tid ));
+    KMP_COUNT_BLOCK(OMP_CRITICAL);
 
-    assert(0);
+    KC_TRACE( 10, ("__kmpc_critical: called T#%d\n", global_tid ) );
+
+    /* since the critical directive binds to all threads, not just
+     * the current team we have to check this even if we are in a
+     * serialized team */
+    /* also, even if we are the uber thread, we still have to conduct the lock,
+     * as we have to contend with sibling threads */
+
+    // Value of 'crit' should be good for using as a critical_id of the critical section directive.
+    __kmp_global_enter_critical_section( global_tid, crit );
+
+    KA_TRACE( 15, ("__kmpc_critical: done T#%d\n", global_tid ));
 }
 
 
@@ -841,35 +833,12 @@ Leave a critical section, releasing any lock that was held during its execution.
 void
 __kmpc_end_critical(ident_t *loc, kmp_int32 global_tid, kmp_critical_name *crit)
 {
-///    kmp_user_lock_p lck;
-///
-///    KC_TRACE( 10, ("__kmpc_end_critical: called T#%d\n", global_tid ));
-///
-///    if ( ( __kmp_user_lock_kind == lk_tas )
-///      && ( sizeof( lck->tas.lk.poll ) <= OMP_CRITICAL_SIZE ) ) {
-///        lck = (kmp_user_lock_p)crit;
-///    }
-///#if KMP_OS_LINUX && (KMP_ARCH_X86 || KMP_ARCH_X86_64 || KMP_ARCH_ARM || KMP_ARCH_AARCH64)
-///    else if ( ( __kmp_user_lock_kind == lk_futex )
-///      && ( sizeof( lck->futex.lk.poll ) <= OMP_CRITICAL_SIZE ) ) {
-///        lck = (kmp_user_lock_p)crit;
-///    }
-///#endif
-///    else { // ticket, queuing or drdpa
-///        lck = (kmp_user_lock_p) TCR_PTR(*((kmp_user_lock_p *)crit));
-///    }
-///
-///    KMP_ASSERT(lck != NULL);
-///
-///    if ( __kmp_global.env_consistency_check )
-///        __kmp_pop_sync( global_tid, ct_critical, loc );
-///
-///    // Value of 'crit' should be good for using as a critical_id of the critical section directive.
-///    __kmp_release_user_lock_with_checks( lck, global_tid );
-///
-///    KA_TRACE( 15, ("__kmpc_end_critical: done T#%d\n", global_tid ));
+    KC_TRACE( 10, ("__kmpc_end_critical: called T#%d\n", global_tid ));
 
-    assert(0);
+    // Value of 'crit' should be good for using as a critical_id of the critical section directive.
+    __kmp_global_end_critical_section( global_tid, crit );
+
+    KA_TRACE( 15, ("__kmpc_end_critical: done T#%d\n", global_tid ));
 }
 
 /*!
@@ -1258,7 +1227,6 @@ __kmpc_copyprivate( ident_t *loc, kmp_int32 gtid, size_t cpy_size, void *cpy_dat
 #define DESTROY_LOCK              __kmp_destroy_user_lock_with_checks
 #define DESTROY_NESTED_LOCK       __kmp_destroy_nested_user_lock_with_checks
 
-
 /*
  * TODO: Make check abort messages use location info & pass it
  * into with_checks routines
@@ -1619,25 +1587,6 @@ __kmpc_test_nest_lock( ident_t *loc, kmp_int32 gtid, void **user_lock )
 // description of the packed_reduction_method variable: look at the macros in kmp.h
 
 
-// used in a critical section reduce block
-static __forceinline void
-__kmp_enter_critical_section_reduce_block( ident_t * loc, kmp_int32 global_tid, kmp_critical_name * crit ) {
-
-    kmp_team_t *team = __kmp_team_from_gtid( global_tid );
-    __kmp_acquire_lock( &team->t.t_single_lock, global_tid );
-
-}
-
-// used in a critical section reduce block
-static __forceinline void
-__kmp_end_critical_section_reduce_block( ident_t * loc, kmp_int32 global_tid, kmp_critical_name * crit ) {
-
-    kmp_team_t *team = __kmp_team_from_gtid( global_tid );
-    __kmp_release_lock( &team->t.t_single_lock, global_tid );
-
-} // __kmp_end_critical_section_reduce_block
-
-
 /* 2.a.i. Reduce Block without a terminating barrier */
 /*!
 @ingroup SYNCHRONIZATION
@@ -1715,7 +1664,7 @@ __kmpc_reduce_nowait(
 
     if( packed_reduction_method == critical_reduce_block ) {
 
-        __kmp_enter_critical_section_reduce_block( loc, global_tid, lck );
+        __kmp_team_enter_critical_section( global_tid, lck );
         retval = 1;
 
     } else if( packed_reduction_method == empty_reduce_block ) {
@@ -1773,7 +1722,7 @@ __kmpc_end_reduce_nowait( ident_t *loc, kmp_int32 global_tid, kmp_critical_name 
 
     if( packed_reduction_method == critical_reduce_block ) {
 
-        __kmp_end_critical_section_reduce_block( loc, global_tid, lck );
+        __kmp_team_end_critical_section( global_tid, lck );
 
     } else if( packed_reduction_method == empty_reduce_block ) {
 
@@ -1848,7 +1797,7 @@ __kmpc_reduce(
 
     if( packed_reduction_method == critical_reduce_block ) {
 
-        __kmp_enter_critical_section_reduce_block( loc, global_tid, lck );
+        __kmp_team_enter_critical_section( global_tid, lck );
         retval = 1;
 
     } else if( packed_reduction_method == empty_reduce_block ) {
@@ -1895,7 +1844,7 @@ __kmpc_end_reduce( ident_t *loc, kmp_int32 global_tid, kmp_critical_name *lck ) 
 
     if( packed_reduction_method == critical_reduce_block ) {
 
-        __kmp_end_critical_section_reduce_block( loc, global_tid, lck );
+        __kmp_team_end_critical_section( global_tid, lck );
 
         // TODO: implicit barrier: should be exposed
         __kmp_barrier( global_tid );

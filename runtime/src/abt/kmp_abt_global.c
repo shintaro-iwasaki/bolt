@@ -64,6 +64,7 @@ volatile kmp_uint32 __kmp_task_counter  = 0;
 void
 __kmp_global_initialize(void)
 {
+    int i;
     int status;
 
     /* Initialize Argobots before other initializations. */
@@ -130,6 +131,9 @@ __kmp_global_initialize(void)
     ABT_mutex_create(&__kmp_global.cat_lock);
     ABT_mutex_create(&__kmp_global.initz_lock);
     ABT_mutex_create(&__kmp_global.task_team_lock);
+    for (i = 0; i < KMP_NUM_CRIT_LOCKS; i++) {
+        ABT_mutex_create(&__kmp_global.crit_lock[i]);
+    }
 
     __kmp_global.library = library_none;
     __kmp_global.sched = kmp_sch_default;  /* scheduling method for runtime scheduling */
@@ -239,10 +243,15 @@ __kmp_global_initialize(void)
 void
 __kmp_global_destroy(void)
 {
+    int i;
+
     ABT_mutex_free(&__kmp_global.stdio_lock);
     ABT_mutex_free(&__kmp_global.cat_lock);
     ABT_mutex_free(&__kmp_global.initz_lock);
     ABT_mutex_free(&__kmp_global.task_team_lock);
+    for (i = 0; i < KMP_NUM_CRIT_LOCKS; i++) {
+        ABT_mutex_free(&__kmp_global.crit_lock[i]);
+    }
 
     ABT_finalize();
     __kmp_init_global = FALSE;

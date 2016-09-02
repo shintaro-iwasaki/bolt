@@ -2249,12 +2249,15 @@ typedef int     (*launch_t)( int gtid );
 #endif
 #define KMP_INLINE_ARGV_ENTRIES        (int)( KMP_INLINE_ARGV_BYTES / KMP_PTR_SKIP )
 
+#define KMP_TEAM_NUM_LOCKS              2       /* # of general-purpose locks per team */
+#define KMP_NUM_CRIT_LOCKS              4       /* # of global locks for critical */
+
 typedef struct KMP_ALIGN_CACHE kmp_base_team {
     // Synchronization Data ---------------------------------------------------------------------------------
     KMP_ALIGN_CACHE kmp_ordered_team_t t_ordered;
 ///    kmp_balign_team_t        t_bar[ bs_last_barrier ];
     volatile int             t_construct;    // count of single directive encountered by team
-    kmp_lock_t               t_single_lock;  // team specific lock
+    kmp_lock_t               t_lock[KMP_TEAM_NUM_LOCKS];  // team specific locks
     kmp_barrier_t            t_bar;          // team barrier
 
     // Master only -----------------------------------------------------------------------------------------
@@ -2470,6 +2473,7 @@ typedef struct KMP_ALIGN_CACHE kmp_global {
     kmp_queuing_lock_t   dispatch_lock;  /* control dispatch access  */
     kmp_lock_t           debug_lock;     /* control I/O access for KMP_DEBUG */
     kmp_bootstrap_lock_t task_team_lock;
+    kmp_lock_t crit_lock[KMP_NUM_CRIT_LOCKS];   /* for critical constructs */
 
     enum library_type library;
 
