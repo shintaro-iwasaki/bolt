@@ -22,7 +22,7 @@ kmp_global_t __kmp_global = { 0, };
 int     __kmp_generate_warnings = kmp_warnings_low;
 
 #ifdef KMP_DEBUG
-int     kmp_a_debug = 1000;
+int     kmp_a_debug = 0;
 int     kmp_b_debug = 0;
 int     kmp_c_debug = 0;
 int     kmp_d_debug = 0;
