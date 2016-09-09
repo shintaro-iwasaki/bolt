@@ -151,7 +151,6 @@ if(LIBOMP_USE_ARGOBOTS_NEW)
 libomp_append(LIBOMP_CFILES abt/kmp_abt_ftn_cdecl.c)
 libomp_append(LIBOMP_CFILES abt/kmp_abt_ftn_extra.c)
 libomp_append(LIBOMP_CFILES abt/kmp_abt_version.c)
-#      abt/kmp_abt_omp.c
 endif()
 
 set(LIBOMP_SOURCE_FILES ${LIBOMP_CFILES} ${LIBOMP_CXXFILES} ${LIBOMP_ASMFILES})
