@@ -19,8 +19,6 @@
 #include "kmp_abt_error.h"
 #include "kmp_abt_stats.h"
 
-#include <assert.h>
-
 #define MAX_MESSAGE 512
 
 /* ------------------------------------------------------------------------ */
@@ -1214,19 +1212,6 @@ __kmpc_copyprivate( ident_t *loc, kmp_int32 gtid, size_t cpy_size, void *cpy_dat
 
 /* -------------------------------------------------------------------------- */
 
-#define INIT_LOCK                 __kmp_init_user_lock_with_checks
-#define INIT_NESTED_LOCK          __kmp_init_nested_user_lock_with_checks
-#define ACQUIRE_LOCK              __kmp_acquire_user_lock_with_checks
-#define ACQUIRE_LOCK_TIMED        __kmp_acquire_user_lock_with_checks_timed
-#define ACQUIRE_NESTED_LOCK       __kmp_acquire_nested_user_lock_with_checks
-#define ACQUIRE_NESTED_LOCK_TIMED __kmp_acquire_nested_user_lock_with_checks_timed
-#define RELEASE_LOCK              __kmp_release_user_lock_with_checks
-#define RELEASE_NESTED_LOCK       __kmp_release_nested_user_lock_with_checks
-#define TEST_LOCK                 __kmp_test_user_lock_with_checks
-#define TEST_NESTED_LOCK          __kmp_test_nested_user_lock_with_checks
-#define DESTROY_LOCK              __kmp_destroy_user_lock_with_checks
-#define DESTROY_NESTED_LOCK       __kmp_destroy_nested_user_lock_with_checks
-
 /*
  * TODO: Make check abort messages use location info & pass it
  * into with_checks routines
@@ -1236,34 +1221,18 @@ __kmpc_copyprivate( ident_t *loc, kmp_int32 gtid, size_t cpy_size, void *cpy_dat
 void
 __kmpc_init_lock( ident_t * loc, kmp_int32 gtid,  void ** user_lock ) {
 
-///    static char const * const func = "omp_init_lock";
-///    kmp_user_lock_p lck;
-///    KMP_DEBUG_ASSERT( __kmp_global.init_serial );
-///
-///    if ( __kmp_global.env_consistency_check ) {
-///        if ( user_lock == NULL ) {
-///            KMP_FATAL( LockIsUninitialized, func );
-///        }
-///    }
-///
-///    KMP_CHECK_USER_LOCK_INIT();
-///
-///    if ( ( __kmp_user_lock_kind == lk_tas )
-///      && ( sizeof( lck->tas.lk.poll ) <= OMP_LOCK_T_SIZE ) ) {
-///        lck = (kmp_user_lock_p)user_lock;
-///    }
-///#if KMP_OS_LINUX && (KMP_ARCH_X86 || KMP_ARCH_X86_64 || KMP_ARCH_ARM || KMP_ARCH_AARCH64)
-///    else if ( ( __kmp_user_lock_kind == lk_futex )
-///      && ( sizeof( lck->futex.lk.poll ) <= OMP_LOCK_T_SIZE ) ) {
-///        lck = (kmp_user_lock_p)user_lock;
-///    }
-///#endif
-///    else {
-///        lck = __kmp_user_lock_allocate( user_lock, gtid, 0 );
-///    }
-///    INIT_LOCK( lck );
-///    __kmp_set_user_lock_location( lck, loc );
-    assert(0);
+    static char const * const func = "omp_init_lock";
+    kmp_lock_t lck;
+    KMP_DEBUG_ASSERT( __kmp_global.init_serial );
+
+    if ( __kmp_global.env_consistency_check ) {
+        if ( user_lock == NULL ) {
+            KMP_FATAL( LockIsUninitialized, func );
+        }
+    }
+
+    __kmp_init_lock( &lck );
+    *(kmp_lock_t *)user_lock = lck;
 
 } // __kmpc_init_lock
 
@@ -1271,301 +1240,88 @@ __kmpc_init_lock( ident_t * loc, kmp_int32 gtid,  void ** user_lock ) {
 void
 __kmpc_init_nest_lock( ident_t * loc, kmp_int32 gtid, void ** user_lock ) {
 
-///    static char const * const func = "omp_init_nest_lock";
-///    kmp_user_lock_p lck;
-///    KMP_DEBUG_ASSERT( __kmp_global.init_serial );
-///
-///    if ( __kmp_global.env_consistency_check ) {
-///        if ( user_lock == NULL ) {
-///            KMP_FATAL( LockIsUninitialized, func );
-///        }
-///    }
-///
-///    KMP_CHECK_USER_LOCK_INIT();
-///
-///    if ( ( __kmp_user_lock_kind == lk_tas ) && ( sizeof( lck->tas.lk.poll )
-///      + sizeof( lck->tas.lk.depth_locked ) <= OMP_NEST_LOCK_T_SIZE ) ) {
-///        lck = (kmp_user_lock_p)user_lock;
-///    }
-///#if KMP_OS_LINUX && (KMP_ARCH_X86 || KMP_ARCH_X86_64 || KMP_ARCH_ARM || KMP_ARCH_AARCH64)
-///    else if ( ( __kmp_user_lock_kind == lk_futex )
-///     && ( sizeof( lck->futex.lk.poll ) + sizeof( lck->futex.lk.depth_locked )
-///     <= OMP_NEST_LOCK_T_SIZE ) ) {
-///        lck = (kmp_user_lock_p)user_lock;
-///    }
-///#endif
-///    else {
-///        lck = __kmp_user_lock_allocate( user_lock, gtid, 0 );
-///    }
-///
-///    INIT_NESTED_LOCK( lck );
-///    __kmp_set_user_lock_location( lck, loc );
+    static char const * const func = "omp_init_nest_lock";
+    kmp_lock_t lck;
+    KMP_DEBUG_ASSERT( __kmp_global.init_serial );
 
-    assert(0);
+    if ( __kmp_global.env_consistency_check ) {
+        if ( user_lock == NULL ) {
+            KMP_FATAL( LockIsUninitialized, func );
+        }
+    }
+
+    __kmp_init_nest_lock( &lck );
+    *(kmp_lock_t *)user_lock = lck;
 
 } // __kmpc_init_nest_lock
 
 void
 __kmpc_destroy_lock( ident_t * loc, kmp_int32 gtid, void ** user_lock ) {
-///    kmp_user_lock_p lck;
-///
-///    if ( ( __kmp_user_lock_kind == lk_tas )
-///      && ( sizeof( lck->tas.lk.poll ) <= OMP_LOCK_T_SIZE ) ) {
-///        lck = (kmp_user_lock_p)user_lock;
-///    }
-///#if KMP_OS_LINUX && (KMP_ARCH_X86 || KMP_ARCH_X86_64 || KMP_ARCH_ARM || KMP_ARCH_AARCH64)
-///    else if ( ( __kmp_user_lock_kind == lk_futex )
-///      && ( sizeof( lck->futex.lk.poll ) <= OMP_LOCK_T_SIZE ) ) {
-///        lck = (kmp_user_lock_p)user_lock;
-///    }
-///#endif
-///    else {
-///        lck = __kmp_lookup_user_lock( user_lock, "omp_destroy_lock" );
-///    }
-///
-///    DESTROY_LOCK( lck );
-///
-///    if ( ( __kmp_user_lock_kind == lk_tas )
-///      && ( sizeof( lck->tas.lk.poll ) <= OMP_LOCK_T_SIZE ) ) {
-///        ;
-///    }
-///#if KMP_OS_LINUX && (KMP_ARCH_X86 || KMP_ARCH_X86_64 || KMP_ARCH_ARM || KMP_ARCH_AARCH64)
-///    else if ( ( __kmp_user_lock_kind == lk_futex )
-///      && ( sizeof( lck->futex.lk.poll ) <= OMP_LOCK_T_SIZE ) ) {
-///        ;
-///    }
-///#endif
-///    else {
-///        __kmp_user_lock_free( user_lock, gtid, lck );
-///    }
 
-    assert(0);
+    kmp_lock_t lck = *(kmp_lock_t *)user_lock;
+    __kmp_destroy_lock( &lck );
+
 } // __kmpc_destroy_lock
 
 /* destroy the lock */
 void
 __kmpc_destroy_nest_lock( ident_t * loc, kmp_int32 gtid, void ** user_lock ) {
-///    kmp_user_lock_p lck;
-///
-///    if ( ( __kmp_user_lock_kind == lk_tas ) && ( sizeof( lck->tas.lk.poll )
-///      + sizeof( lck->tas.lk.depth_locked ) <= OMP_NEST_LOCK_T_SIZE ) ) {
-///        lck = (kmp_user_lock_p)user_lock;
-///    }
-///#if KMP_OS_LINUX && (KMP_ARCH_X86 || KMP_ARCH_X86_64 || KMP_ARCH_ARM || KMP_ARCH_AARCH64)
-///    else if ( ( __kmp_user_lock_kind == lk_futex )
-///     && ( sizeof( lck->futex.lk.poll ) + sizeof( lck->futex.lk.depth_locked )
-///     <= OMP_NEST_LOCK_T_SIZE ) ) {
-///        lck = (kmp_user_lock_p)user_lock;
-///    }
-///#endif
-///    else {
-///        lck = __kmp_lookup_user_lock( user_lock, "omp_destroy_nest_lock" );
-///    }
-///
-///    DESTROY_NESTED_LOCK( lck );
-///
-///    if ( ( __kmp_user_lock_kind == lk_tas ) && ( sizeof( lck->tas.lk.poll )
-///     + sizeof( lck->tas.lk.depth_locked ) <= OMP_NEST_LOCK_T_SIZE ) ) {
-///        ;
-///    }
-///#if KMP_OS_LINUX && (KMP_ARCH_X86 || KMP_ARCH_X86_64 || KMP_ARCH_ARM || KMP_ARCH_AARCH64)
-///    else if ( ( __kmp_user_lock_kind == lk_futex )
-///     && ( sizeof( lck->futex.lk.poll ) + sizeof( lck->futex.lk.depth_locked )
-///     <= OMP_NEST_LOCK_T_SIZE ) ) {
-///        ;
-///    }
-///#endif
-///    else {
-///        __kmp_user_lock_free( user_lock, gtid, lck );
-///    }
 
-    assert(0);
+    kmp_lock_t lck = *(kmp_lock_t *)user_lock;
+    __kmp_destroy_lock( &lck );
+
 } // __kmpc_destroy_nest_lock
 
 void
-__kmpc_set_lock( ident_t * loc, kmp_int32 gtid, void ** user_lock ) {
-///    KMP_COUNT_BLOCK(OMP_set_lock);
-///
-///    kmp_user_lock_p lck;
-///
-///    if ( ( __kmp_user_lock_kind == lk_tas )
-///      && ( sizeof( lck->tas.lk.poll ) <= OMP_LOCK_T_SIZE ) ) {
-///        lck = (kmp_user_lock_p)user_lock;
-///    }
-///#if KMP_OS_LINUX && (KMP_ARCH_X86 || KMP_ARCH_X86_64 || KMP_ARCH_ARM || KMP_ARCH_AARCH64)
-///    else if ( ( __kmp_user_lock_kind == lk_futex )
-///      && ( sizeof( lck->futex.lk.poll ) <= OMP_LOCK_T_SIZE ) ) {
-///        lck = (kmp_user_lock_p)user_lock;
-///    }
-///#endif
-///    else {
-///        lck = __kmp_lookup_user_lock( user_lock, "omp_set_lock" );
-///    }
-///
-///    ACQUIRE_LOCK( lck, gtid );
-
-    assert(0);
+__kmpc_set_lock( ident_t * loc, kmp_int32 gtid, void ** user_lock )
+{
+    KMP_COUNT_BLOCK(OMP_set_lock);
+    kmp_lock_t lck = *(kmp_lock_t *)user_lock;
+    __kmp_acquire_lock( &lck, gtid );
 }
 
 void
-__kmpc_set_nest_lock( ident_t * loc, kmp_int32 gtid, void ** user_lock ) {
-///    int acquire_status;
-///    kmp_user_lock_p lck;
-///
-///    if ( ( __kmp_user_lock_kind == lk_tas ) && ( sizeof( lck->tas.lk.poll )
-///      + sizeof( lck->tas.lk.depth_locked ) <= OMP_NEST_LOCK_T_SIZE ) ) {
-///        lck = (kmp_user_lock_p)user_lock;
-///    }
-///#if KMP_OS_LINUX && (KMP_ARCH_X86 || KMP_ARCH_X86_64 || KMP_ARCH_ARM || KMP_ARCH_AARCH64)
-///    else if ( ( __kmp_user_lock_kind == lk_futex )
-///     && ( sizeof( lck->futex.lk.poll ) + sizeof( lck->futex.lk.depth_locked )
-///     <= OMP_NEST_LOCK_T_SIZE ) ) {
-///        lck = (kmp_user_lock_p)user_lock;
-///    }
-///#endif
-///    else {
-///        lck = __kmp_lookup_user_lock( user_lock, "omp_set_nest_lock" );
-///    }
-///
-///    ACQUIRE_NESTED_LOCK( lck, gtid, &acquire_status );
-
-    assert(0);
+__kmpc_set_nest_lock( ident_t * loc, kmp_int32 gtid, void ** user_lock )
+{
+    kmp_lock_t lck = *(kmp_lock_t *)user_lock;
+    __kmp_acquire_lock( &lck, gtid );
 }
 
 void
 __kmpc_unset_lock( ident_t *loc, kmp_int32 gtid, void **user_lock )
 {
-///    kmp_user_lock_p lck;
-///
-///    /* Can't use serial interval since not block structured */
-///    /* release the lock */
-///
-///    if ( ( __kmp_user_lock_kind == lk_tas )
-///      && ( sizeof( lck->tas.lk.poll ) <= OMP_LOCK_T_SIZE ) ) {
-///#if KMP_OS_LINUX && (KMP_ARCH_X86 || KMP_ARCH_X86_64 || KMP_ARCH_ARM || KMP_ARCH_AARCH64)
-///        // "fast" path implemented to fix customer performance issue
-///        TCW_4(((kmp_user_lock_p)user_lock)->tas.lk.poll, 0);
-///        KMP_MB();
-///        return;
-///#else
-///        lck = (kmp_user_lock_p)user_lock;
-///#endif
-///    }
-///#if KMP_OS_LINUX && (KMP_ARCH_X86 || KMP_ARCH_X86_64 || KMP_ARCH_ARM || KMP_ARCH_AARCH64)
-///    else if ( ( __kmp_user_lock_kind == lk_futex )
-///      && ( sizeof( lck->futex.lk.poll ) <= OMP_LOCK_T_SIZE ) ) {
-///        lck = (kmp_user_lock_p)user_lock;
-///    }
-///#endif
-///    else {
-///        lck = __kmp_lookup_user_lock( user_lock, "omp_unset_lock" );
-///    }
-///
-///    RELEASE_LOCK( lck, gtid );
-
-    assert(0);
+    kmp_lock_t lck = *(kmp_lock_t *)user_lock;
+    __kmp_release_lock( &lck, gtid );
 }
 
 /* release the lock */
 void
 __kmpc_unset_nest_lock( ident_t *loc, kmp_int32 gtid, void **user_lock )
 {
-///    kmp_user_lock_p lck;
-///
-///    /* Can't use serial interval since not block structured */
-///
-///    if ( ( __kmp_user_lock_kind == lk_tas ) && ( sizeof( lck->tas.lk.poll )
-///      + sizeof( lck->tas.lk.depth_locked ) <= OMP_NEST_LOCK_T_SIZE ) ) {
-///#if KMP_OS_LINUX && (KMP_ARCH_X86 || KMP_ARCH_X86_64 || KMP_ARCH_ARM || KMP_ARCH_AARCH64)
-///        // "fast" path implemented to fix customer performance issue
-///        kmp_tas_lock_t *tl = (kmp_tas_lock_t*)user_lock;
-///        if ( --(tl->lk.depth_locked) == 0 ) {
-///            TCW_4(tl->lk.poll, 0);
-///        }
-///        KMP_MB();
-///        return;
-///#else
-///        lck = (kmp_user_lock_p)user_lock;
-///#endif
-///    }
-///#if KMP_OS_LINUX && (KMP_ARCH_X86 || KMP_ARCH_X86_64 || KMP_ARCH_ARM || KMP_ARCH_AARCH64)
-///    else if ( ( __kmp_user_lock_kind == lk_futex )
-///     && ( sizeof( lck->futex.lk.poll ) + sizeof( lck->futex.lk.depth_locked )
-///     <= OMP_NEST_LOCK_T_SIZE ) ) {
-///        lck = (kmp_user_lock_p)user_lock;
-///    }
-///#endif
-///    else {
-///        lck = __kmp_lookup_user_lock( user_lock, "omp_unset_nest_lock" );
-///    }
-///
-///    int release_status;
-///    release_status = RELEASE_NESTED_LOCK( lck, gtid );
-
-    assert(0);
+    kmp_lock_t lck = *(kmp_lock_t *)user_lock;
+    __kmp_release_lock( &lck, gtid );
 }
 
 /* try to acquire the lock */
 int
 __kmpc_test_lock( ident_t *loc, kmp_int32 gtid, void **user_lock )
 {
-///    KMP_COUNT_BLOCK(OMP_test_lock);
-///
-///    kmp_user_lock_p lck;
-///    int          rc;
-///
-///    if ( ( __kmp_user_lock_kind == lk_tas )
-///      && ( sizeof( lck->tas.lk.poll ) <= OMP_LOCK_T_SIZE ) ) {
-///        lck = (kmp_user_lock_p)user_lock;
-///    }
-///#if KMP_OS_LINUX && (KMP_ARCH_X86 || KMP_ARCH_X86_64 || KMP_ARCH_ARM || KMP_ARCH_AARCH64)
-///    else if ( ( __kmp_user_lock_kind == lk_futex )
-///      && ( sizeof( lck->futex.lk.poll ) <= OMP_LOCK_T_SIZE ) ) {
-///        lck = (kmp_user_lock_p)user_lock;
-///    }
-///#endif
-///    else {
-///        lck = __kmp_lookup_user_lock( user_lock, "omp_test_lock" );
-///    }
-///
-///    rc = TEST_LOCK( lck, gtid );
-///    return ( rc ? FTN_TRUE : FTN_FALSE );
-///
-///    /* Can't use serial interval since not block structured */
+    KMP_COUNT_BLOCK(OMP_test_lock);
 
-    assert(0);
-    return FTN_FALSE;
+    int rc;
+    kmp_lock_t lck = *(kmp_lock_t *)user_lock;
+    rc = __kmp_test_lock( &lck, gtid );
+    return ( rc == ABT_SUCCESS ? FTN_TRUE : FTN_FALSE );
 }
 
 /* try to acquire the lock */
 int
 __kmpc_test_nest_lock( ident_t *loc, kmp_int32 gtid, void **user_lock )
 {
-///    kmp_user_lock_p lck;
-///    int          rc;
-///
-///    if ( ( __kmp_user_lock_kind == lk_tas ) && ( sizeof( lck->tas.lk.poll )
-///      + sizeof( lck->tas.lk.depth_locked ) <= OMP_NEST_LOCK_T_SIZE ) ) {
-///        lck = (kmp_user_lock_p)user_lock;
-///    }
-///#if KMP_OS_LINUX && (KMP_ARCH_X86 || KMP_ARCH_X86_64 || KMP_ARCH_ARM || KMP_ARCH_AARCH64)
-///    else if ( ( __kmp_user_lock_kind == lk_futex )
-///     && ( sizeof( lck->futex.lk.poll ) + sizeof( lck->futex.lk.depth_locked )
-///     <= OMP_NEST_LOCK_T_SIZE ) ) {
-///        lck = (kmp_user_lock_p)user_lock;
-///    }
-///#endif
-///    else {
-///        lck = __kmp_lookup_user_lock( user_lock, "omp_test_nest_lock" );
-///    }
-///
-///    rc = TEST_NESTED_LOCK( lck, gtid );
-///    return rc;
-///
-///    /* Can't use serial interval since not block structured */
-
-    assert(0);
-    return FTN_FALSE;
+    int rc;
+    kmp_lock_t lck = *(kmp_lock_t *)user_lock;
+    rc = __kmp_test_lock( &lck, gtid );
+    return ( rc == ABT_SUCCESS ? FTN_TRUE : FTN_FALSE );
 }
 
 

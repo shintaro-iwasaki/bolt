@@ -2895,6 +2895,7 @@ extern int __kmp_begin_split_barrier( int gtid );
 extern void __kmp_end_split_barrier ( int gtid );
 //extern void __kmp_fork_barrier(int gtid, int tid);
 //extern void __kmp_join_barrier(int gtid);
+extern void __kmp_init_nest_lock( kmp_lock_t *lck );
 
 /*!
  * Tell the fork call which compiler generated the fork call, and therefore how to deal with the call.

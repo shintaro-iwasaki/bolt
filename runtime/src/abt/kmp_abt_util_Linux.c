@@ -1061,6 +1061,18 @@ __kmp_end_split_barrier( int gtid )
 //    assert(0);
 //}
 
+void
+__kmp_init_nest_lock( kmp_lock_t *lck )
+{
+    ABT_mutex_attr mattr;
+
+    ABT_mutex_attr_create( &mattr );
+    ABT_mutex_attr_set_recursive( mattr, ABT_TRUE );
+    ABT_mutex_create_with_attr( mattr, lck );
+    ABT_mutex_attr_free( &mattr );
+}
+
+
 /* ------------------------------------------------------------------------ */
 /* ------------------------------------------------------------------------ */
 
