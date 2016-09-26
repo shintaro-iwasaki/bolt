@@ -6001,7 +6001,17 @@ __kmp_internal_join( ident_t *id, int gtid, kmp_team_t *team )
         KA_TRACE( 20, ("__kmp_internal_join: after __kmp_join_worker: T#%d joined T#%d\n",
                       gtid, __kmp_gtid_from_tid(f,team)) );
     }
+    /* [AC] here, the master thread checks the task queue and execute the remaining tasks*/
+    int t;        
+    int end = this_thr->th.tasks_in_the_queue;
+    KA_TRACE( 10, ("__kmp_launch_worker: T#%d freing %d tasks\n", gtid, end) );
 
+    for(t=0;t<end;t++){
+        ABT_thread_free(&this_thr->th.th_task_queue[t]);
+    }
+    this_thr->th.tasks_in_the_queue = 0;
+    
+    KA_TRACE( 10, ("__kmp_launch_worker: T#%d freing %d tasks done, now we have %d tasks\n", gtid, end, this_thr->th.tasks_in_the_queue) );
     KMP_MB();       /* Flush all pending memory write invalidates.  */
     KMP_ASSERT( this_thr->th.th_team  ==  team );
 }

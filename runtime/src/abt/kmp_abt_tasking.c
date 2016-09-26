@@ -18,7 +18,6 @@
 ///#include "kmp_itt.h"
 ///#include "kmp_wait_release.h"
 #include "kmp_abt_stats.h"
-
 # define USE_ITT_BUILD_ARG(x)
 
 /* ------------------------------------------------------------------------ */
@@ -29,7 +28,7 @@
 static void __kmp_enable_tasking( kmp_task_team_t *task_team, kmp_info_t *this_thr );
 static void __kmp_alloc_task_deque( kmp_info_t *thread, kmp_thread_data_t *thread_data );
 static int  __kmp_realloc_task_threads_data( kmp_info_t *thread, kmp_task_team_t *task_team );
-
+static void __kmp_invoke_task( kmp_int32 gtid, kmp_task_t *task, kmp_taskdata_t * current_task );
 #ifdef OMP_41_ENABLED
 static void __kmp_bottom_half_finish_proxy( kmp_int32 gtid, kmp_task_t * ptask );
 #endif
@@ -272,6 +271,23 @@ __kmp_pop_task_stack( kmp_int32 gtid, kmp_info_t *thread, kmp_taskdata_t *ending
 //---------------------------------------------------
 //  __kmp_push_task: Add a task to the thread's deque
 
+void execution_task(void * arg){
+int gtid;
+ABT_xstream_self_rank(&gtid);
+kmp_task_t * task = (kmp_task_t *)arg;
+KA_TRACE(20, ("execution_task: T#%d a ejecutar task.\n", gtid ) );
+kmp_taskdata_t * current_task = __kmp_global.threads[ gtid ] -> th.th_current_task;
+__kmp_invoke_task( gtid, task, current_task );
+
+//(*(aux->routine))(gtid, aux);
+//  (*(task->routine))(gtid, task);
+
+KA_TRACE(20, ("execution_task: T#%d ejecutada task.\n", gtid ) );
+
+
+}
+
+
 static kmp_int32
 __kmp_push_task(kmp_int32 gtid, kmp_task_t * task )
 {
@@ -280,16 +296,18 @@ __kmp_push_task(kmp_int32 gtid, kmp_task_t * task )
     kmp_task_team_t *   task_team = thread->th.th_task_team;
     kmp_int32           tid = __kmp_tid_from_gtid( gtid );
     kmp_thread_data_t * thread_data;
-
+    
     KA_TRACE(20, ("__kmp_push_task: T#%d trying to push task %p.\n", gtid, taskdata ) );
 
     // The first check avoids building task_team thread data if serialized
-    if ( taskdata->td_flags.task_serial ) {
+ /*   if ( taskdata->td_flags.task_serial ) {
         KA_TRACE(20, ( "__kmp_push_task: T#%d team serialized; returning TASK_NOT_PUSHED for task %p\n",
                        gtid, taskdata ) );
         return TASK_NOT_PUSHED;
-    }
-
+    }*/
+    /* [AC] due to the ABT_tasks are going to be pushed to our internal pools, 
+     al those mechanisms may be avoided and directly push the task */
+    /*
     // Now that serialized tasks have returned, we can assume that we are not in immediate exec mode
     KMP_DEBUG_ASSERT( __kmp_global.tasking_mode != tskm_immediate_exec );
     if ( ! KMP_TASKING_ENABLED(task_team) ) {
@@ -337,10 +355,20 @@ __kmp_push_task(kmp_int32 gtid, kmp_task_t * task )
     TCW_4(thread_data -> td.td_deque_ntasks, TCR_4(thread_data -> td.td_deque_ntasks) + 1);             // Adjust task count
 
     __kmp_release_bootstrap_lock( & thread_data -> td.td_deque_lock );
+*/ /*[AC]*/
+    //ABT_pool dest = __kmp_abt_get_pool(gtid);
+    ABT_xstream aux;
+    ABT_xstream_self (&aux);
+    int a; ABT_xstream_self_rank(&a);
+        KA_TRACE(20, ("__kmp_push_task: T#%d (ES %d) trying to push task %p.\n", gtid, a,taskdata ) );
 
+    ABT_thread_create_on_xstream (aux, execution_task, (void *)task, ABT_THREAD_ATTR_NULL , &thread->th.th_task_queue[thread->th.tasks_in_the_queue++]);
+    //ABT_task_create(dest, execution_task, (void *)task, &thread->th.th_task_queue[pos++]);
     KA_TRACE(20, ("__kmp_push_task: T#%d returning TASK_SUCCESSFULLY_PUSHED: "
-                  "task=%p ntasks=%d head=%u tail=%u\n",
-                  gtid, taskdata, thread_data->td.td_deque_ntasks,
+                  "task=%p ntasks=%d head=%u tail=%u en xstream %d\n",
+                  //gtid, taskdata, thread_data->td.td_deque_ntasks,
+                  //thread_data->td.td_deque_tail, thread_data->td.td_deque_head) );
+                  gtid, thread->th.th_task_queue[thread->th.tasks_in_the_queue-1], thread->th.tasks_in_the_queue,
                   thread_data->td.td_deque_tail, thread_data->td.td_deque_head) );
 
     return TASK_SUCCESSFULLY_PUSHED;

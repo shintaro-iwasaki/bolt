@@ -458,6 +458,8 @@ typedef ABT_mutex           kmp_mutex_t;
 typedef ABT_cond            kmp_cond_t;
 typedef ABT_mutex           kmp_lock_t;
 typedef ABT_mutex           kmp_bootstrap_lock_t;
+// [AC]
+typedef ABT_thread            kmp_abt_task_t;
 #else
 typedef pthread_t           kmp_thread_t;
 typedef pthread_key_t       kmp_key_t;
@@ -2104,7 +2106,8 @@ typedef struct KMP_ALIGN_CACHE kmp_base_info {
     kmp_info_p       *th_next_pool;  /* next available thread in the pool */
     kmp_disp_t       *th_dispatch;   /* thread's dispatch data */
     int               th_in_pool;    /* in thread pool (32 bits for TCR/TCW) */
-
+    kmp_abt_task_t   th_task_queue[256]; /* [AC] It is the per thread task queue pointer*/
+    int tasks_in_the_queue = 0;
     /* The following are cached from the team info structure */
     /* TODO use these in more places as determined to be needed via profiling */
     int               th_team_nproc;      /* number of threads in a team */

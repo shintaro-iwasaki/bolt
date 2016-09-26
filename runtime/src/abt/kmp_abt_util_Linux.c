@@ -788,6 +788,17 @@ __kmp_launch_worker( void *thr )
     //__kmp_common_destroy_gtid( gtid );
 
     KA_TRACE( 10, ("__kmp_launch_worker: T#%d done\n", gtid) );
+    /* [AC]*/
+    int t;        
+    int end = this_thr->th.tasks_in_the_queue;
+    KA_TRACE( 10, ("__kmp_launch_worker: T#%d freing %d tasks\n", gtid, end) );
+
+    for(t=0;t<end;t++){
+        ABT_thread_free(&this_thr->th.th_task_queue[t]);
+    }
+    this_thr->th.tasks_in_the_queue = 0;
+    KA_TRACE( 10, ("__kmp_launch_worker: T#%d freing %d tasks done, now we have %d tasks\n", gtid, end, this_thr->th.tasks_in_the_queue) );
+
 }
 
 void
