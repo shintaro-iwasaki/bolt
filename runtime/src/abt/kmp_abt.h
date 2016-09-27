@@ -2848,6 +2848,8 @@ extern void __kmp_create_worker( int gtid, kmp_info_t *th, size_t stack_size );
 extern void __kmp_revive_worker( kmp_info_t *th );
 extern void __kmp_join_worker( kmp_info_t *th );
 extern void __kmp_reap_worker( kmp_info_t *th );
+/* [AC] */
+extern void __kmp_create_task(kmp_int32 gtid, kmp_task_t * task, kmp_info_t * thread);
 
 extern void __kmp_elapsed( double * );
 extern void __kmp_elapsed_tick( double * );
@@ -3016,6 +3018,7 @@ extern int __kmp_invoke_microtask( microtask_t pkfn, int gtid, int npr, int argc
 );
 
 
+
 /* ------------------------------------------------------------------------ */
 // Memory allocation API
 /* ------------------------------------------------------------------------ */
@@ -3142,6 +3145,8 @@ __kmpc_omp_taskwait( ident_t *loc_ref, kmp_int32 gtid );
 KMP_EXPORT kmp_int32
 __kmpc_omp_taskyield( ident_t *loc_ref, kmp_int32 gtid, int end_part );
 
+
+
 #if TASK_UNUSED
 void __kmpc_omp_task_begin( ident_t *loc_ref, kmp_int32 gtid, kmp_task_t * task );
 void __kmpc_omp_task_complete( ident_t *loc_ref, kmp_int32 gtid, kmp_task_t *task );
@@ -3163,6 +3168,8 @@ extern void __kmp_release_deps ( kmp_int32 gtid, kmp_taskdata_t *task );
 
 extern kmp_int32 __kmp_omp_task( kmp_int32 gtid, kmp_task_t * new_task, bool serialize_immediate );
 
+
+
 KMP_EXPORT kmp_int32 __kmpc_cancel(ident_t* loc_ref, kmp_int32 gtid, kmp_int32 cncl_kind);
 KMP_EXPORT kmp_int32 __kmpc_cancellationpoint(ident_t* loc_ref, kmp_int32 gtid, kmp_int32 cncl_kind);
 KMP_EXPORT kmp_int32 __kmpc_cancel_barrier(ident_t* loc_ref, kmp_int32 gtid);
@@ -3175,6 +3182,7 @@ KMP_EXPORT void __kmpc_proxy_task_completed_ooo ( kmp_task_t *ptask );
 KMP_EXPORT void __kmpc_taskloop(ident_t *loc, kmp_int32 gtid, kmp_task_t *task, kmp_int32 if_val,
                 kmp_uint64 *lb, kmp_uint64 *ub, kmp_int64 st,
                 kmp_int32 nogroup, kmp_int32 sched, kmp_uint64 grainsize, void * task_dup );
+
 #endif
 
 #endif

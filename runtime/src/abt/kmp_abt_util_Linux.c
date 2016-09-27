@@ -69,6 +69,7 @@ static void __kmp_abt_sched_run_es0(ABT_sched sched);
 static void __kmp_abt_sched_run(ABT_sched sched);
 static int __kmp_abt_sched_free(ABT_sched sched);
 
+
 typedef struct kmp_abt {
     ABT_xstream *xstream;
     ABT_sched *sched;
@@ -671,6 +672,39 @@ __kmp_gtid_get_specific()
 
     return gtid;
 }
+
+/* ------------------------------------------------------------------------ */
+/* ------------------------------------------------------------------------ */
+
+
+void __kmp_task_execution(void * arg){
+int gtid;
+ABT_xstream_self_rank(&gtid);
+kmp_task_t * task = (kmp_task_t *)arg;
+KA_TRACE(20, ("__kmp_task_execution: T#%d before executing task %p.\n", gtid, task ) );
+kmp_taskdata_t * current_task = __kmp_global.threads[ gtid ] -> th.th_current_task;
+/* [AC] Right now, we don't need to go throw OpenMP task management so we can 
+ just execute the task, don't we?*/ 
+//__kmp_invoke_task( gtid, task, current_task );
+(*(task->routine))(gtid, task);
+KA_TRACE(20, ("__kmp_task_execution: T#%d after executing task %p.\n", gtid, task ) );
+}
+
+
+
+void __kmp_create_task(kmp_int32 gtid, kmp_task_t * task, kmp_info_t *thread)
+{
+    ABT_pool dest = __kmp_abt_get_my_pool(gtid);
+    KA_TRACE(20, ("__kmp_create_task: T#%d before creating task %p into the pool %p.\n", gtid, task, dest ) );
+   
+    ABT_thread_create(dest,__kmp_task_execution, (void *)task, 
+                        ABT_THREAD_ATTR_NULL , 
+                        &thread->th.th_task_queue[thread->th.tasks_in_the_queue++]);
+    KA_TRACE(20, ("__kmp_create_task: T#%d after creating task %p into the pool %p.\n", gtid, task, dest ) );
+
+}
+
+
 
 /* ------------------------------------------------------------------------ */
 /* ------------------------------------------------------------------------ */
