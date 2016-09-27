@@ -300,11 +300,11 @@ __kmp_push_task(kmp_int32 gtid, kmp_task_t * task )
     KA_TRACE(20, ("__kmp_push_task: T#%d trying to push task %p.\n", gtid, taskdata ) );
 
     // The first check avoids building task_team thread data if serialized
- /*   if ( taskdata->td_flags.task_serial ) {
+    if ( taskdata->td_flags.task_serial ) {
         KA_TRACE(20, ( "__kmp_push_task: T#%d team serialized; returning TASK_NOT_PUSHED for task %p\n",
                        gtid, taskdata ) );
         return TASK_NOT_PUSHED;
-    }*/
+    }
     /* [AC] due to the ABT_tasks are going to be pushed to our internal pools, 
      al those mechanisms may be avoided and directly push the task */
     /*
