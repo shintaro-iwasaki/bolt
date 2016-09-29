@@ -1295,7 +1295,7 @@ __kmpc_omp_taskyield( ident_t *loc_ref, kmp_int32 gtid, int end_part )
     int thread_finished = FALSE;
 
     KMP_COUNT_BLOCK(OMP_TASKYIELD);
-
+/*
     KA_TRACE(10, ("__kmpc_omp_taskyield(enter): T#%d loc=%p end_part = %d\n",
                   gtid, loc_ref, end_part) );
 
@@ -1323,7 +1323,9 @@ __kmpc_omp_taskyield( ident_t *loc_ref, kmp_int32 gtid, int end_part )
         // GEH TODO: shouldn't we have some sort of OMPRAP API calls here to mark end of wait?
         taskdata->td_taskwait_thread = - taskdata->td_taskwait_thread;
     }
-
+*/
+    //[AC] In a taskyield directive we just do it... yield
+    __kmp_yield(1);
     KA_TRACE(10, ("__kmpc_omp_taskyield(exit): T#%d task %p resuming, "
                   "returning TASK_CURRENT_NOT_QUEUED\n", gtid, taskdata) );
 
