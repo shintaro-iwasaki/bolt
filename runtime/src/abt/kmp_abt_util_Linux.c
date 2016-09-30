@@ -694,7 +694,7 @@ KA_TRACE(20, ("__kmp_task_execution: T#%d after executing task %p.\n", gtid, tas
 
 void __kmp_create_task(kmp_int32 gtid, kmp_task_t * task, kmp_info_t *thread)
 {
-    ABT_pool dest = __kmp_abt_get_my_pool(gtid);
+    ABT_pool dest = __kmp_abt_get_pool(gtid);
     KA_TRACE(20, ("__kmp_create_task: T#%d before creating task %p into the pool %p.\n", gtid, task, dest ) );
    
     ABT_thread_create(dest,__kmp_task_execution, (void *)task, 
@@ -706,13 +706,13 @@ void __kmp_create_task(kmp_int32 gtid, kmp_task_t * task, kmp_info_t *thread)
 
 void __kmp_task_wait(kmp_int32 gtid, kmp_info_t * thread)
 {
-        KA_TRACE(20, ("**********__kmp_task_wait (enter): T#%d before checking.\n", gtid) );
+        KA_TRACE(20, ("__kmp_task_wait (enter): T#%d before checking.\n", gtid) );
 
     int ntasks = thread->th.tasks_in_the_queue;
     int current = 0;
     int equal, i ,first;
     ABT_thread current_task;
-        KA_TRACE(20, ("**********__kmp_task_wait: T#%d checks %d tasks.\n", gtid, ntasks) );
+        KA_TRACE(20, ("__kmp_task_wait: T#%d checks %d tasks.\n", gtid, ntasks) );
 
     ABT_thread_self(&current_task);
     ABT_thread_equal(current_task, thread->th.th_task_queue[current] , &equal);
@@ -731,7 +731,7 @@ void __kmp_task_wait(kmp_int32 gtid, kmp_info_t * thread)
         ABT_thread_join(thread->th.th_task_queue[i]);
         //thread->th.tasks_in_the_queue--;
     }
-    KA_TRACE(20, ("**********__kmp_task_wait (exit): T#%d.\n", gtid) );
+    KA_TRACE(20, ("__kmp_task_wait (exit): T#%d.\n", gtid) );
 
 }
 
