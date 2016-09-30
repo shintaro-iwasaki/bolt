@@ -1031,6 +1031,8 @@ __kmpc_omp_task_alloc( ident_t *loc_ref, kmp_int32 gtid, kmp_int32 flags,
     input_flags->native = FALSE;
     // __kmp_task_alloc() sets up all other runtime flags
 
+    ABT_xstream_self_rank(&gtid);
+
 #if OMP_41_ENABLED
     KA_TRACE(10, ("__kmpc_omp_task_alloc(enter): T#%d loc=%p, flags=(%s %s) "
                   "sizeof_task=%ld sizeof_shared=%ld entry=%p\n",
@@ -1222,6 +1224,7 @@ kmp_int32
 __kmpc_omp_task( ident_t *loc_ref, kmp_int32 gtid, kmp_task_t * new_task)
 {
     kmp_int32 res;
+    ABT_xstream_self_rank(&gtid);
 
 #if KMP_DEBUG
     kmp_taskdata_t * new_taskdata = KMP_TASK_TO_TASKDATA(new_task);
@@ -1246,13 +1249,23 @@ __kmpc_omp_taskwait( ident_t *loc_ref, kmp_int32 gtid )
     kmp_info_t * thread;
     int thread_finished = FALSE;
 
+    /* [AC] We need to use a fake id because we are inside a task and then the 
+     * gtid value is always 0. As we want to know which thread is calling the 
+     * function we use the ES id. It will just works well if there is not 
+     * oversubscription.
+     *  once we fix the thread gtid inside tasks, it should work with the given 
+     * gtid */
+    ABT_xstream_self_rank(&gtid);
+
     KA_TRACE(10, ("__kmpc_omp_taskwait(enter): T#%d loc=%p\n", gtid, loc_ref) );
 
-    if ( __kmp_global.tasking_mode != tskm_immediate_exec ) {
+    //if ( __kmp_global.tasking_mode != tskm_immediate_exec ) {
         // GEH TODO: shouldn't we have some sort of OMPRAP API calls here to mark begin wait?
 
         thread = __kmp_global.threads[ gtid ];
-        taskdata = thread -> th.th_current_task;
+        __kmp_task_wait(gtid,thread);
+        /* [AC] we call the taskwait just for check the pending tasks in the queue*/
+       /* taskdata = thread -> th.th_current_task;
 
         taskdata->td_taskwait_counter += 1;
         taskdata->td_taskwait_ident    = loc_ref;
@@ -1276,7 +1289,7 @@ __kmpc_omp_taskwait( ident_t *loc_ref, kmp_int32 gtid )
         // GEH TODO: shouldn't we have some sort of OMPRAP API calls here to mark end of wait?
         taskdata->td_taskwait_thread = - taskdata->td_taskwait_thread;
     }
-
+*/
     KA_TRACE(10, ("__kmpc_omp_taskwait(exit): T#%d task %p finished waiting, "
                   "returning TASK_CURRENT_NOT_QUEUED\n", gtid, taskdata) );
 
