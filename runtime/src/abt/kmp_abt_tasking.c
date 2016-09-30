@@ -1224,6 +1224,14 @@ kmp_int32
 __kmpc_omp_task( ident_t *loc_ref, kmp_int32 gtid, kmp_task_t * new_task)
 {
     kmp_int32 res;
+    
+    /* [AC] We need to use a fake id in nested task parallelism 
+     * because we are inside a task and then the gtid value is always 0. 
+     * As we want to know which thread is calling the 
+     * function we use the ES id. It will just works well if there is not 
+     * oversubscription.
+     *  once we fix the thread gtid inside tasks, it should work with the given 
+     * gtid */
     ABT_xstream_self_rank(&gtid);
 
 #if KMP_DEBUG
