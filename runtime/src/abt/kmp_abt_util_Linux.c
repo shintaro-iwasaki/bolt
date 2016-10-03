@@ -44,6 +44,9 @@
 /* ------------------------------------------------------------------------ */
 /* ------------------------------------------------------------------------ */
 
+
+
+
 struct kmp_sys_timer {
     struct timespec     start;
 };
@@ -677,6 +680,32 @@ __kmp_gtid_get_specific()
 /* ------------------------------------------------------------------------ */
 
 
+static void
+__kmp_abt_free_task( kmp_int32 gtid, kmp_taskdata_t * taskdata, kmp_info_t * thread )
+{
+    KA_TRACE(30, ("__kmp_free_task: T#%d freeing data from task %p\n",
+                  gtid, taskdata) );
+
+    // Check to make sure all flags and counters have the correct values
+    //KMP_DEBUG_ASSERT( taskdata->td_flags.tasktype == TASK_EXPLICIT );
+    //KMP_DEBUG_ASSERT( taskdata->td_flags.executing == 0 );
+    //KMP_DEBUG_ASSERT( taskdata->td_flags.complete == 1 );
+    //KMP_DEBUG_ASSERT( taskdata->td_flags.freed == 0 );
+    //KMP_DEBUG_ASSERT( TCR_4(taskdata->td_allocated_child_tasks) == 0  || taskdata->td_flags.task_serial == 1);
+    //KMP_DEBUG_ASSERT( TCR_4(taskdata->td_incomplete_child_tasks) == 0 );
+
+    taskdata->td_flags.freed = 1;
+    // deallocate the taskdata and shared variable blocks associated with this task
+    #if USE_FAST_MEMORY
+        __kmp_fast_free( thread, taskdata );
+    #else /* ! USE_FAST_MEMORY */
+        __kmp_thread_free( thread, taskdata );
+    #endif
+
+    KA_TRACE(20, ("__kmp_free_task: T#%d freed task %p\n",
+                  gtid, taskdata) );
+}
+
 void __kmp_task_execution(void * arg){
     int i, i_start, i_end;
     int gtid;
@@ -744,7 +773,7 @@ void __kmp_task_execution(void * arg){
     //kmp_taskdata_t * current_task = __kmp_global.threads[ gtid ] -> th.th_current_task;
     //__kmp_invoke_task( gtid, task, current_task );
     (*(task->routine))(gtid, task);
-
+    __kmp_abt_free_task(gtid, taskdata, th);
     KA_TRACE(20, ("__kmp_task_execution: T#%d after executing task %p.\n", gtid, task ) );
 }
 
