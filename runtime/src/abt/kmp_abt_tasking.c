@@ -1014,8 +1014,6 @@ __kmpc_omp_task_alloc( ident_t *loc_ref, kmp_int32 gtid, kmp_int32 flags,
     input_flags->native = FALSE;
     // __kmp_task_alloc() sets up all other runtime flags
 
-    ABT_xstream_self_rank(&gtid);
-
 #if OMP_41_ENABLED
     KA_TRACE(10, ("__kmpc_omp_task_alloc(enter): T#%d loc=%p, flags=(%s %s) "
                   "sizeof_task=%ld sizeof_shared=%ld entry=%p\n",
@@ -1207,15 +1205,6 @@ kmp_int32
 __kmpc_omp_task( ident_t *loc_ref, kmp_int32 gtid, kmp_task_t * new_task)
 {
     kmp_int32 res;
-    
-    /* [AC] We need to use a fake id in nested task parallelism 
-     * because we are inside a task and then the gtid value is always 0. 
-     * As we want to know which thread is calling the 
-     * function we use the ES id. It will just works well if there is not 
-     * oversubscription.
-     *  once we fix the thread gtid inside tasks, it should work with the given 
-     * gtid */
-    ABT_xstream_self_rank(&gtid);
 
 #if KMP_DEBUG
     kmp_taskdata_t * new_taskdata = KMP_TASK_TO_TASKDATA(new_task);
@@ -1239,14 +1228,6 @@ __kmpc_omp_taskwait( ident_t *loc_ref, kmp_int32 gtid )
     kmp_taskdata_t * taskdata;
     kmp_info_t * thread;
     int thread_finished = FALSE;
-
-    /* [AC] We need to use a fake id because we are inside a task and then the 
-     * gtid value is always 0. As we want to know which thread is calling the 
-     * function we use the ES id. It will just works well if there is not 
-     * oversubscription.
-     *  once we fix the thread gtid inside tasks, it should work with the given 
-     * gtid */
-    ABT_xstream_self_rank(&gtid);
 
     KA_TRACE(10, ("__kmpc_omp_taskwait(enter): T#%d loc=%p\n", gtid, loc_ref) );
 
