@@ -271,23 +271,6 @@ __kmp_pop_task_stack( kmp_int32 gtid, kmp_info_t *thread, kmp_taskdata_t *ending
 //---------------------------------------------------
 //  __kmp_push_task: Add a task to the thread's deque
 
-void execution_task(void * arg){
-int gtid;
-ABT_xstream_self_rank(&gtid);
-kmp_task_t * task = (kmp_task_t *)arg;
-KA_TRACE(20, ("execution_task: T#%d a ejecutar task.\n", gtid ) );
-kmp_taskdata_t * current_task = __kmp_global.threads[ gtid ] -> th.th_current_task;
-__kmp_invoke_task( gtid, task, current_task );
-
-//(*(aux->routine))(gtid, aux);
-//  (*(task->routine))(gtid, task);
-
-KA_TRACE(20, ("execution_task: T#%d ejecutada task.\n", gtid ) );
-
-
-}
-
-
 static kmp_int32
 __kmp_push_task(kmp_int32 gtid, kmp_task_t * task )
 {
