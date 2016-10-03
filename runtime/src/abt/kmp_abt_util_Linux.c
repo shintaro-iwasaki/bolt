@@ -678,16 +678,74 @@ __kmp_gtid_get_specific()
 
 
 void __kmp_task_execution(void * arg){
-int gtid;
-ABT_xstream_self_rank(&gtid);
-kmp_task_t * task = (kmp_task_t *)arg;
-KA_TRACE(20, ("__kmp_task_execution: T#%d before executing task %p.\n", gtid, task ) );
-kmp_taskdata_t * current_task = __kmp_global.threads[ gtid ] -> th.th_current_task;
-/* [AC] Right now, we don't need to go throw OpenMP task management so we can 
- just execute the task, don't we?*/ 
-//__kmp_invoke_task( gtid, task, current_task );
-(*(task->routine))(gtid, task);
-KA_TRACE(20, ("__kmp_task_execution: T#%d after executing task %p.\n", gtid, task ) );
+    int i, i_start, i_end;
+    int gtid;
+
+    kmp_task_t * task = (kmp_task_t *)arg;
+    kmp_taskdata_t *taskdata = KMP_TASK_TO_TASKDATA(task);
+    kmp_info_t *th = NULL;
+
+    /* To handle gtid in the task code, we look for a suspended (blocked)
+     * thread in the team and use its info to execute this task.
+     * NOTE: The blocked thread may continue its execution while the task is
+     * running.  Would it be okay to execute two work units that share the same
+     * thread_info?  */
+    kmp_team_t *team = taskdata->td_team;
+    if (team->t.t_level <= 1) {
+        /* outermost team - we try to assign the thread that was executed on
+         * the same ES first and then check other threads in the team.  */
+        int rank;
+        ABT_xstream_self_rank(&rank);
+        if (rank < team->t.t_nproc) {
+            /* [SM] I think this condition should alwasy be true, but just in
+             * case I miss something we check this condition. */
+            i_start = rank;
+            i_end = team->t.t_nproc + rank;
+        } else {
+            i_start = 0;
+            i_end = team->t.t_nproc;
+        }
+
+    } else {
+        /* nested team - we ignore the ES info since threads in the nested team
+         * may be executed by any ES. */
+        i_start = 0;
+        i_end = team->t.t_nproc;
+    }
+
+    /* TODO: This is a linear search. We can do better? */
+    for (i = i_start; i < i_end; i++) {
+        i = (i < team->t.t_nproc) ? i : i % team->t.t_nproc;
+        th = team->t.t_threads[i];
+        ABT_thread ult = th->th.th_info.ds.ds_thread;
+
+        ABT_thread_state state;
+        int status = ABT_thread_get_state(ult, &state);
+        KMP_ASSERT(status == ABT_SUCCESS);
+        if (state == ABT_THREAD_STATE_BLOCKED) {
+            break;
+        }
+    }
+
+    if (th == NULL) {
+        /* We couldn't find any blocked threads, so we choose the master
+         * thread. */
+        th = team->t.t_threads[0];
+    }
+
+    /* Deceicve this task as if it is executed by 'th'. */
+    __kmp_set_self_info(th);
+    gtid = th->th.th_info.ds.ds_gtid;
+
+    KA_TRACE(20, ("__kmp_task_execution: T#%d before executing task %p.\n", gtid, task ) );
+
+    /* [AC] Right now, we don't need to go throw OpenMP task management so we can
+       just execute the task, don't we?*/
+    //kmp_taskdata_t * current_task = __kmp_global.threads[ gtid ] -> th.th_current_task;
+    //__kmp_invoke_task( gtid, task, current_task );
+    (*(task->routine))(gtid, task);
+
+    KA_TRACE(20, ("__kmp_task_execution: T#%d after executing task %p.\n", gtid, task ) );
 }
 
 
