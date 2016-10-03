@@ -752,7 +752,7 @@ void __kmp_task_execution(void * arg){
 
 void __kmp_create_task(kmp_int32 gtid, kmp_task_t * task, kmp_info_t *thread)
 {
-    ABT_pool dest = __kmp_abt_get_pool(gtid);
+    ABT_pool dest = __kmp_abt_get_my_pool(gtid);
     KA_TRACE(20, ("__kmp_create_task: T#%d before creating task %p into the pool %p.\n", gtid, task, dest ) );
    
     ABT_thread_create(dest,__kmp_task_execution, (void *)task, 
