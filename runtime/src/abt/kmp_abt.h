@@ -2093,6 +2093,8 @@ typedef struct kmp_teams_size {
 // OpenMP thread data structures
 //
 
+#define MAX_ABT_TASKS 2048
+
 typedef struct KMP_ALIGN_CACHE kmp_base_info {
 /*
  * Start with the readonly data which is cache aligned and padded.
@@ -2106,7 +2108,7 @@ typedef struct KMP_ALIGN_CACHE kmp_base_info {
     kmp_info_p       *th_next_pool;  /* next available thread in the pool */
     kmp_disp_t       *th_dispatch;   /* thread's dispatch data */
     int               th_in_pool;    /* in thread pool (32 bits for TCR/TCW) */
-    kmp_abt_task_t   th_task_queue[256]; /* [AC] It is the per thread task queue pointer*/
+    kmp_abt_task_t   th_task_queue[MAX_ABT_TASKS]; /* [AC] It is the per thread task queue pointer*/
     int tasks_in_the_queue = 0;
     /* The following are cached from the team info structure */
     /* TODO use these in more places as determined to be needed via profiling */

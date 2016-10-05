@@ -340,6 +340,9 @@ __kmp_push_task(kmp_int32 gtid, kmp_task_t * task )
     __kmp_release_bootstrap_lock( & thread_data -> td.td_deque_lock );
 */ /*[AC]*/
     //ABT_pool dest = __kmp_abt_get_pool(gtid);
+    if(thread->th.tasks_in_the_queue >= MAX_ABT_TASKS)
+        return TASK_NOT_PUSHED;
+
     __kmp_create_task(gtid, task, thread);
     /*ABT_xstream aux;
     ABT_xstream_self (&aux);
