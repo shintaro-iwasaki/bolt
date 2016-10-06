@@ -748,11 +748,17 @@ void __kmp_task_execution(void * arg){
         th = team->t.t_threads[i];
         ABT_thread ult = th->th.th_info.ds.ds_thread;
 
-        ABT_thread_state state;
-        int status = ABT_thread_get_state(ult, &state);
-        KMP_ASSERT(status == ABT_SUCCESS);
-        if (state == ABT_THREAD_STATE_BLOCKED) {
+        if (ult == ABT_THREAD_NULL) {
+            /* th's ULT hasn't started yet, so let's use it */
             break;
+        } else {
+            ABT_thread_state state;
+            int status = ABT_thread_get_state(ult, &state);
+            KMP_ASSERT(status == ABT_SUCCESS);
+            if (state == ABT_THREAD_STATE_BLOCKED ||
+                state == ABT_THREAD_STATE_TERMINATED) {
+                break;
+            }
         }
     }
 
