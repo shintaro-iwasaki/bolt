@@ -796,28 +796,29 @@ void __kmp_task_wait(kmp_int32 gtid, kmp_info_t * thread)
         KA_TRACE(20, ("__kmp_task_wait (enter): T#%d before checking.\n", gtid) );
 
     int ntasks = thread->th.tasks_in_the_queue;
-    int current = 0;
-    int equal, i ,first;
+    int current = ntasks-1;
+    int equal, i ,first, status;
     ABT_thread current_task;
-        KA_TRACE(20, ("__kmp_task_wait: T#%d checks %d tasks.\n", gtid, ntasks) );
+    ABT_thread_state state;
+      
+    KA_TRACE(20, ("__kmp_task_wait: T#%d checks %d tasks.\n", gtid, ntasks) );
 
     ABT_thread_self(&current_task);
     ABT_thread_equal(current_task, thread->th.th_task_queue[current] , &equal);
-
-    while(!equal && current < ntasks)
-    {
-        current++;
+    while(!equal && current >= 0){
+        KA_TRACE(20, ("__kmp_task_wait (before joining): T#%d joins task %d .\n", gtid, current) );
+        
+        status = ABT_thread_get_state(thread->th.th_task_queue[current], &state);
+        KMP_ASSERT(status == ABT_SUCCESS);
+        
+        if (state != ABT_THREAD_STATE_TERMINATED) 
+            ABT_thread_join(thread->th.th_task_queue[current]);
+        
+        KA_TRACE(20, ("__kmp_task_wait (after joining): T#%d joins task %d .\n", gtid, current) );
+        current--;
         ABT_thread_equal(current_task, thread->th.th_task_queue[current] , &equal);
     }
     
-    first = current+1;
-
-    /* [AC] we just join the task because we don't want to free any 
-     intermediate task */
-    for(i=first;i<ntasks;i++){
-        ABT_thread_join(thread->th.th_task_queue[i]);
-        //thread->th.tasks_in_the_queue--;
-    }
     KA_TRACE(20, ("__kmp_task_wait (exit): T#%d.\n", gtid) );
 
 }
