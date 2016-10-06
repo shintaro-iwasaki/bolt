@@ -805,6 +805,7 @@ void __kmp_task_wait(kmp_int32 gtid, kmp_info_t * thread)
 
     ABT_thread_self(&current_task);
     ABT_thread_equal(current_task, thread->th.th_task_queue[current] , &equal);
+    
     while(!equal && current >= 0){
         KA_TRACE(20, ("__kmp_task_wait (before joining): T#%d joins task %d .\n", gtid, current) );
         
