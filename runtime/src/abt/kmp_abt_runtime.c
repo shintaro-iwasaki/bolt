@@ -5334,6 +5334,25 @@ __kmp_free_thread( kmp_info_t *this_th )
     int gtid;
     kmp_info_t **scan;
 
+    /*[AC] This is the last chance to check the pending tasks (if any) it can occur
+     if the application ends as soon as the task region ends*/
+    
+     int t;
+    int old_size = 0;
+    int current_size = this_th->th.tasks_in_the_queue;
+    //KA_TRACE( 10, ("__kmp_launch_worker: T#%d freing %d tasks\n", gtid, end) );
+    while(old_size != current_size){
+        KA_TRACE( 20, ("__kmp_free_thread: T#%d freing %d tasks\n", gtid, current_size-old_size));
+        for(t=old_size;t<current_size;t++){
+            ABT_thread_join(this_th->th.th_task_queue[t]);
+        }
+        old_size = current_size;
+        current_size = this_th->th.tasks_in_the_queue;
+    }
+    
+    
+    this_th->th.tasks_in_the_queue = 0;
+    
     KA_TRACE( 20, ("__kmp_free_thread: T#%d putting T#%d back on free pool.\n",
                 __kmp_get_gtid(), this_th->th.th_info.ds.ds_gtid ));
 
@@ -5994,6 +6013,29 @@ __kmp_internal_join( ident_t *id, int gtid, kmp_team_t *team )
                      __kmp_global.threads[gtid]->th.th_team_nproc == team->t.t_nproc );
 #endif /* KMP_DEBUG */
 
+        /* [AC] here, the master thread checks the task queue and execute the remaining tasks*/
+    int t;
+    int old_size = 0;
+    int current_size = this_thr->th.tasks_in_the_queue;
+    //KA_TRACE( 10, ("__kmp_launch_worker: T#%d freing %d tasks\n", gtid, end) );
+    while(old_size != current_size){
+        KA_TRACE( 10, ("__kmp_internal_join: T#%d freing %d tasks\n", gtid, current_size-old_size) );
+        for(t=old_size;t<current_size;t++){
+            ABT_thread_free(&this_thr->th.th_task_queue[t]);
+        }
+        old_size = current_size;
+        current_size = this_thr->th.tasks_in_the_queue;
+    }
+    /*
+    for(t=0;t<end;t++){
+        ABT_thread_free(&this_thr->th.th_task_queue[t]);
+    }*/
+    this_thr->th.tasks_in_the_queue = 0;
+    
+    KA_TRACE( 10, ("__kmp_internal_join: T#%d freing %d tasks done, now we have %d tasks\n", gtid, current_size, this_thr->th.tasks_in_the_queue) );
+    
+    
+    
     //__kmp_join_barrier( gtid );  /* wait for everyone */
     /* [SM] join Argobots ULTs here */
     for (f = 1; f < team->t.t_nproc; f++) {
@@ -6001,17 +6043,7 @@ __kmp_internal_join( ident_t *id, int gtid, kmp_team_t *team )
         KA_TRACE( 20, ("__kmp_internal_join: after __kmp_join_worker: T#%d joined T#%d\n",
                       gtid, __kmp_gtid_from_tid(f,team)) );
     }
-    /* [AC] here, the master thread checks the task queue and execute the remaining tasks*/
-    int t;
-    int end = this_thr->th.tasks_in_the_queue;
-    KA_TRACE( 10, ("__kmp_launch_worker: T#%d freing %d tasks\n", gtid, end) );
 
-    for(t=0;t<end;t++){
-        ABT_thread_free(&this_thr->th.th_task_queue[t]);
-    }
-    this_thr->th.tasks_in_the_queue = 0;
-    
-    KA_TRACE( 10, ("__kmp_launch_worker: T#%d freing %d tasks done, now we have %d tasks\n", gtid, end, this_thr->th.tasks_in_the_queue) );
     KMP_MB();       /* Flush all pending memory write invalidates.  */
     KMP_ASSERT( this_thr->th.th_team  ==  team );
 }

@@ -947,15 +947,30 @@ __kmp_launch_worker( void *thr )
 
     KA_TRACE( 10, ("__kmp_launch_worker: T#%d done\n", gtid) );
     /* [AC]*/
-    int t;        
+    /*int t;        
     int end = this_thr->th.tasks_in_the_queue;
     KA_TRACE( 10, ("__kmp_launch_worker: T#%d freing %d tasks\n", gtid, end) );
 
     for(t=0;t<end;t++){
         ABT_thread_free(&this_thr->th.th_task_queue[t]);
+    }*/
+    
+    int t;
+    int old_size = 0;
+    int current_size = this_thr->th.tasks_in_the_queue;
+    //KA_TRACE( 10, ("__kmp_launch_worker: T#%d freing %d tasks\n", gtid, end) );
+    while(old_size != current_size){
+        KA_TRACE( 10, ("__kmp_launch_worker: T#%d freing %d tasks\n", gtid, current_size-old_size) );
+        for(t=old_size;t<current_size;t++){
+            ABT_thread_free(&this_thr->th.th_task_queue[t]);
+        }
+        old_size = current_size;
+        current_size = this_thr->th.tasks_in_the_queue;
     }
+    
+    
     this_thr->th.tasks_in_the_queue = 0;
-    KA_TRACE( 10, ("__kmp_launch_worker: T#%d freing %d tasks done, now we have %d tasks\n", gtid, end, this_thr->th.tasks_in_the_queue) );
+    KA_TRACE( 10, ("__kmp_launch_worker: T#%d freing %d tasks done, now we have %d tasks\n", gtid, current_size, this_thr->th.tasks_in_the_queue) );
 
 }
 
