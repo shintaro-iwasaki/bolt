@@ -686,6 +686,12 @@ __kmp_abt_free_task( kmp_int32 gtid, kmp_taskdata_t * taskdata, kmp_info_t * thr
     KA_TRACE(30, ("__kmp_free_task: T#%d freeing data from task %p\n",
                   gtid, taskdata) );
 
+    /* [AC] we need those steps to mark the task as finished so the dependencies
+     *  can be completed */
+    taskdata -> td_flags.complete = 1;   // mark the task as completed
+    __kmp_release_deps(gtid,taskdata);
+    taskdata -> td_flags.executing = 0;  // suspend the finishing task
+
     // Check to make sure all flags and counters have the correct values
     //KMP_DEBUG_ASSERT( taskdata->td_flags.tasktype == TASK_EXPLICIT );
     //KMP_DEBUG_ASSERT( taskdata->td_flags.executing == 0 );
@@ -713,7 +719,12 @@ void __kmp_task_execution(void * arg){
     kmp_task_t * task = (kmp_task_t *)arg;
     kmp_taskdata_t *taskdata = KMP_TASK_TO_TASKDATA(task);
     kmp_info_t *th = NULL;
-
+    
+    /* [AC] we need to set some flags in the task data so the dependencies can 
+     * be checked and fulfilled */
+    taskdata -> td_flags.started = 1;
+    taskdata -> td_flags.executing = 1;
+    
     /* To handle gtid in the task code, we look for a suspended (blocked)
      * thread in the team and use its info to execute this task.
      * NOTE: The blocked thread may continue its execution while the task is
