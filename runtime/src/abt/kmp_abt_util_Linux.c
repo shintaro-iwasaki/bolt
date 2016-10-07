@@ -816,7 +816,7 @@ void __kmp_task_wait(kmp_int32 gtid, kmp_info_t * thread)
         KA_TRACE(20, ("__kmp_task_wait (before joining): T#%d joins task %d .\n", gtid, current) );
         
         status = ABT_thread_get_state(thread->th.th_task_queue[current], &state);
-        KMP_ASSERT(status == ABT_SUCCESS);
+        //KMP_ASSERT(status == ABT_SUCCESS);
         
         if (state != ABT_THREAD_STATE_TERMINATED) 
             ABT_thread_join(thread->th.th_task_queue[current]);

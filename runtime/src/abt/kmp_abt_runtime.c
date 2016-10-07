@@ -6002,7 +6002,7 @@ __kmp_internal_join( ident_t *id, int gtid, kmp_team_t *team )
                       gtid, __kmp_gtid_from_tid(f,team)) );
     }
     /* [AC] here, the master thread checks the task queue and execute the remaining tasks*/
-    int t;        
+    int t;
     int end = this_thr->th.tasks_in_the_queue;
     KA_TRACE( 10, ("__kmp_launch_worker: T#%d freing %d tasks\n", gtid, end) );
 
