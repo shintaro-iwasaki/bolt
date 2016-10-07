@@ -795,8 +795,11 @@ __kmp_init_implicit_task( ident_t *loc_ref, kmp_info_t *this_thr, kmp_team_t *te
 #endif
         __kmp_push_current_task_to_thread( this_thr, team, tid );
     } else {
-        KMP_DEBUG_ASSERT(task->td_incomplete_child_tasks == 0);
-        KMP_DEBUG_ASSERT(task->td_allocated_child_tasks  == 0);
+        /* [AC] we don't need to check it because we now there are not task left */
+        task->td_incomplete_child_tasks = 0;
+        task->td_allocated_child_tasks  = 0; // Not used because do not need to deallocate implicit task
+        //KMP_DEBUG_ASSERT(task->td_incomplete_child_tasks == 0);
+        //KMP_DEBUG_ASSERT(task->td_allocated_child_tasks  == 0);
     }
 
     KF_TRACE(10, ("__kmp_init_implicit_task(exit): T#:%d team=%p task=%p\n",
