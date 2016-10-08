@@ -406,11 +406,15 @@ sub add_log_to_junitfile
 {
     my ($JUNIT, $logfile) = @_;
 
-    open(TLOG, "<$logfile") || die "cannot open $logfile";
-    while ($_ = <TLOG>) {
-        print $JUNIT $_;
+    if (-e $logfile) {
+        open(TLOG, "<$logfile") || die "cannot open $logfile";
+        while ($_ = <TLOG>) {
+            print $JUNIT $_;
+        }
+        close(TLOG);
+    } else {
+        print $JUNIT "$logfile does not exist!\n";
     }
-    close(TLOG);
 }
 
 sub add_result_to_junitfile
