@@ -985,6 +985,44 @@ __kmp_launch_worker( void *thr )
 
 }
 
+static void
+__kmp_launch_tasklet_worker( void *thr )
+{
+    int gtid;
+    kmp_info_t *this_thr = (kmp_info_t *)thr;
+    kmp_team_t *(*volatile pteam);
+
+    gtid = this_thr->th.th_info.ds.ds_gtid;
+    KMP_DEBUG_ASSERT( this_thr == __kmp_global.threads[ gtid ] );
+
+    KMP_MB();
+
+    pteam = (kmp_team_t *(*))(& this_thr->th.th_team);
+    if ( TCR_SYNC_PTR(*pteam) && !TCR_4(__kmp_global.g.g_done) ) {
+        /* run our new task */
+        if ( TCR_SYNC_PTR((*pteam)->t.t_pkfn) != NULL ) {
+            int rc;
+            KA_TRACE(20, ("__kmp_launch_tasklet_worker: T#%d(%d:%d) invoke microtask = %p\n",
+                          gtid, (*pteam)->t.t_id, __kmp_tid_from_gtid(gtid), (*pteam)->t.t_pkfn));
+
+            KMP_STOP_DEVELOPER_EXPLICIT_TIMER(USER_launch_thread_loop);
+            {
+                KMP_TIME_DEVELOPER_BLOCK(USER_worker_invoke);
+                rc = (*pteam)->t.t_invoke( gtid );
+            }
+            KMP_START_DEVELOPER_EXPLICIT_TIMER(USER_launch_thread_loop);
+            KMP_ASSERT( rc );
+
+            KMP_MB();
+            KA_TRACE(20, ("__kmp_launch_tasklet_worker: T#%d(%d:%d) done microtask = %p\n",
+                          gtid, (*pteam)->t.t_id, __kmp_tid_from_gtid(gtid), (*pteam)->t.t_pkfn));
+        }
+    }
+
+    KA_TRACE( 10, ("__kmp_launch_tasklet_worker: T#%d done\n", gtid) );
+}
+
+
 void
 __kmp_create_worker( int gtid, kmp_info_t *th, size_t stack_size )
 {
@@ -1052,6 +1090,37 @@ __kmp_create_worker( int gtid, kmp_info_t *th, size_t stack_size )
 } // __kmp_create_worker
 
 void
+__kmp_create_tasklet_worker( int gtid, kmp_info_t *th )
+{
+    int status;
+
+    // [SM] th->th.th_info.ds.ds_gtid is setup in __kmp_allocate_thread
+    KMP_DEBUG_ASSERT( th->th.th_info.ds.ds_gtid == gtid );
+
+    KA_TRACE( 10, ("__kmp_create_tasklet_worker: try to create T#%d\n", gtid) );
+
+    // If this new tasklet is for nested parallel region, the new tasklet is
+    // added to the shared pool of ES where the caller is running on.
+    ABT_pool tar_pool;
+    if (th->th.th_team->t.t_level > 1) {
+        tar_pool = __kmp_abt_get_my_pool(gtid);
+    } else {
+        tar_pool = __kmp_abt_get_pool(gtid);
+    }
+    KA_TRACE( 10, ("__kmp_create_tasklet_worker: T#%d, nesting level=%d, target pool=%p\n",
+                   gtid, th->th.th_team->t.t_level, tar_pool) );
+
+    KMP_MB();       /* Flush all pending memory write invalidates.  */
+
+    status = ABT_task_create( tar_pool, __kmp_launch_tasklet_worker, (void *)th,
+                              &th->th.th_info.ds.ds_tasklet );
+    KMP_ASSERT( status == ABT_SUCCESS );
+
+    KA_TRACE( 10, ("__kmp_create_tasklet_worker: done creating T#%d\n", gtid) );
+
+} // __kmp_create_tasklet_worker
+
+void
 __kmp_revive_worker( kmp_info_t *th )
 {
     int status;
@@ -1078,6 +1147,32 @@ __kmp_revive_worker( kmp_info_t *th )
     KA_TRACE( 10, ("__kmp_revive_worker: done recreating T#%d\n", gtid) );
 }
 
+void
+__kmp_revive_tasklet_worker( kmp_info_t *th )
+{
+    int status;
+    int gtid;
+    ABT_pool tar_pool;
+
+    gtid = th->th.th_info.ds.ds_gtid;
+
+    if (th->th.th_team->t.t_level > 1) {
+        tar_pool = __kmp_abt_get_my_pool(gtid);
+    } else {
+        tar_pool = __kmp_abt_get_pool(gtid);
+    }
+
+    KA_TRACE( 10, ("__kmp_revive_tasklet_worker: recreate T#%d\n", gtid) );
+
+    KMP_MB();       /* Flush all pending memory write invalidates.  */
+
+    status = ABT_task_revive( tar_pool, __kmp_launch_worker, (void *)th,
+                              &th->th.th_info.ds.ds_tasklet );
+    KMP_ASSERT( status == ABT_SUCCESS );
+
+    KA_TRACE( 10, ("__kmp_revive_tasklet_worker: done recreating T#%d\n", gtid) );
+}
+
 ///void
 ///__kmp_exit_thread( int exit_status )
 ///{
@@ -1093,10 +1188,14 @@ __kmp_join_worker( kmp_info_t *th )
 
     KA_TRACE( 10, ("__kmp_join_worker: try to join worker T#%d\n", th->th.th_info.ds.ds_gtid) );
 
-    ABT_thread ds_thread = th->th.th_info.ds.ds_thread;
-    status = ABT_thread_join(ds_thread);
-    if ( status != ABT_SUCCESS ) {
-        KMP_SYSFAIL( "ABT_thread_join", status );
+    if (get__tasklet(th)) {
+        ABT_task ds_tasklet = th->th.th_info.ds.ds_tasklet;
+        status = ABT_task_join(ds_tasklet);
+        KMP_ASSERT( status == ABT_SUCCESS );
+    } else {
+        ABT_thread ds_thread = th->th.th_info.ds.ds_thread;
+        status = ABT_thread_join(ds_thread);
+        KMP_ASSERT( status == ABT_SUCCESS );
     }
 
     KA_TRACE( 10, ("__kmp_join_worker: done joining worker T#%d\n", th->th.th_info.ds.ds_gtid) );
@@ -1115,13 +1214,16 @@ __kmp_reap_worker( kmp_info_t *th )
     KA_TRACE( 10, ("__kmp_reap_worker: try to free worker T#%d\n", th->th.th_info.ds.ds_gtid ) );
 
     ABT_thread ds_thread = th->th.th_info.ds.ds_thread;
-    status = ABT_thread_free( &ds_thread );
-#ifdef KMP_DEBUG
-    /* Don't expose these to the user until we understand when they trigger */
-    if ( status != ABT_SUCCESS ) {
-        __kmp_msg(kmp_ms_fatal, KMP_MSG( ReapWorkerError ), KMP_ERR( status ), __kmp_msg_null);
+    if (ds_thread != ABT_THREAD_NULL) {
+        status = ABT_thread_free( &ds_thread );
+        KMP_ASSERT(status == ABT_SUCCESS);
     }
-#endif /* KMP_DEBUG */
+
+    ABT_task ds_tasklet = th->th.th_info.ds.ds_tasklet;
+    if (ds_tasklet != ABT_TASK_NULL) {
+        status = ABT_task_free( &ds_tasklet );
+        KMP_ASSERT(status == ABT_SUCCESS);
+    }
 
     KA_TRACE( 10, ("__kmp_reap_worker: done reaping T#%d\n", th->th.th_info.ds.ds_gtid ) );
 

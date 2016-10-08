@@ -452,6 +452,7 @@ extern "C" {
 
 #if KMP_USE_ARGOBOTS
 typedef ABT_thread          kmp_thread_t;
+typedef ABT_task            kmp_tasklet_t;
 typedef ABT_key             kmp_key_t;
 typedef ABT_barrier         kmp_barrier_t;
 typedef ABT_mutex           kmp_mutex_t;
@@ -1729,6 +1730,7 @@ typedef struct kmp_desc_base {
 ///    size_t            ds_stacksize;
 ///    int               ds_stackgrow;
     kmp_thread_t      ds_thread;
+    kmp_tasklet_t     ds_tasklet;
     volatile int      ds_tid;
     int               ds_gtid;
 } kmp_desc_base_t;
@@ -2855,7 +2857,9 @@ extern int  __kmp_read_system_info( struct kmp_sys_info *info );
 
 //extern void *__kmp_launch_thread( kmp_info_t *thr );
 extern void __kmp_create_worker( int gtid, kmp_info_t *th, size_t stack_size );
+extern void __kmp_create_tasklet_worker( int gtid, kmp_info_t *th );
 extern void __kmp_revive_worker( kmp_info_t *th );
+extern void __kmp_revive_tasklet_worker( kmp_info_t *th );
 extern void __kmp_join_worker( kmp_info_t *th );
 extern void __kmp_reap_worker( kmp_info_t *th );
 /* [AC] */

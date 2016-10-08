@@ -4412,6 +4412,7 @@ __kmp_allocate_thread( kmp_root_t *root, kmp_team_t *team, int new_tid )
 
     // [SM] we don't fork the new work thread (will do it later) but set gtid.
     new_thr->th.th_info.ds.ds_thread = ABT_THREAD_NULL;
+    new_thr->th.th_info.ds.ds_tasklet = ABT_TASK_NULL;
     new_thr->th.th_info.ds.ds_gtid = new_gtid;
 ///    /* actually fork it and create the new worker thread */
 ///    KF_TRACE( 10, ("__kmp_allocate_thread: before __kmp_create_worker: %p\n", new_thr ));
@@ -5988,16 +5989,34 @@ __kmp_internal_fork( ident_t *id, int gtid, kmp_team_t *team )
         kmp_info_t *th = team->t.t_threads[f];
         int th_gtid = __kmp_gtid_from_tid(f, team);
 
-        if (th->th.th_info.ds.ds_thread == ABT_THREAD_NULL) {
-            __kmp_create_worker( th_gtid, th, __kmp_global.stksize );
-            KA_TRACE( 20, ("__kmp_internal_fork: after __kmp_create_worker: T#%d created T#%d\n",
-                          __kmp_get_gtid(), th_gtid) );
+        if (get__tasklet(th)) {
+            if (th->th.th_info.ds.ds_tasklet == ABT_TASK_NULL) {
+                __kmp_create_tasklet_worker( th_gtid, th );
+                KA_TRACE( 20, ("__kmp_internal_fork: after __kmp_create_tasklet_worker: "
+                               "T#%d created T#%d\n",
+                              __kmp_get_gtid(), th_gtid) );
+            } else {
+                // case of reusing the tasklet
+                KMP_DEBUG_ASSERT( th_gtid == th->th.th_info.ds.ds_gtid );
+                __kmp_revive_tasklet_worker( th );
+                KA_TRACE( 20, ("__kmp_internal_fork: after __kmp_revive_tasklet_worker: "
+                               "T#%d revived T#%d\n",
+                              __kmp_get_gtid(), th_gtid) );
+            }
         } else {
-            // case of reusing the thread
-            KMP_DEBUG_ASSERT( th_gtid == th->th.th_info.ds.ds_gtid );
-            __kmp_revive_worker( th );
-            KA_TRACE( 20, ("__kmp_internal_fork: after __kmp_revive_worker: T#%d revived T#%d\n",
-                          __kmp_get_gtid(), th_gtid) );
+            if (th->th.th_info.ds.ds_thread == ABT_THREAD_NULL) {
+                __kmp_create_worker( th_gtid, th, __kmp_global.stksize );
+                KA_TRACE( 20, ("__kmp_internal_fork: after __kmp_create_worker: "
+                               "T#%d created T#%d\n",
+                              __kmp_get_gtid(), th_gtid) );
+            } else {
+                // case of reusing the thread
+                KMP_DEBUG_ASSERT( th_gtid == th->th.th_info.ds.ds_gtid );
+                __kmp_revive_worker( th );
+                KA_TRACE( 20, ("__kmp_internal_fork: after __kmp_revive_worker: "
+                               "T#%d revived T#%d\n",
+                              __kmp_get_gtid(), th_gtid) );
+            }
         }
     }
 }
