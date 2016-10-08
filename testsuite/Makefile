@@ -198,7 +198,7 @@ omp_testsuite.h: ompts-c.conf c/*
 
 ctest: omp_my_sleep omp_testsuite
 	./runtest.pl --lang=c testlist-c.txt
-	cd bin/; make -j
+#	cd bin/; make -j
 
 ftest:
 	mkdir -p bin/fortran
@@ -220,7 +220,7 @@ print_compile_options:
 
 
 
-path_to_arch=$(shell ../runtime/tools/check-openmp-test.pl)
+#path_to_arch=$(shell ../runtime/tools/check-openmp-test.pl)
 
 cleansrcs:
 	find bin/ -iname "*.[cf]" -exec rm -rf {} \;
@@ -231,7 +231,7 @@ cleanouts:
 	find bin/ -iname "*.out" -exec rm -rf {} \;
 cleanlogs:
 	find bin/ -iname "*.log" -exec rm -rf {} \;
-	rm -rf ./$(path_to_arch)
+#	rm -rf ./$(path_to_arch)
 
 clean: cleanouts cleanlogs cleanbins cleansrcs
 
@@ -247,8 +247,8 @@ veryclean: distclean
 cleanall: 
 	rm -rf ./bin/c/
 	rm -rf ./bin/fortran/
-	rm -rf ./LLVM-IR/$(path_to_arch)
-	rm -rf ./$(path_to_arch)
+#	rm -rf ./LLVM-IR/$(path_to_arch)
+#	rm -rf ./$(path_to_arch)
 	rm -rf ./*.log
 
 
