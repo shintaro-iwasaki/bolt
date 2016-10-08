@@ -35,6 +35,7 @@
     #define FTN_SET_LIBRARY                      kmp_set_library
     #define FTN_GET_LIBRARY                      kmp_get_library
     #define FTN_SET_DEFAULTS                     kmp_set_defaults
+    #define FTN_SET_TASKLET                      kmp_set_tasklet
     #define FTN_SET_AFFINITY                     kmp_set_affinity
     #define FTN_GET_AFFINITY                     kmp_get_affinity
     #define FTN_GET_AFFINITY_MAX_PROC            kmp_get_affinity_max_proc
@@ -141,6 +142,7 @@
     #define FTN_SET_LIBRARY                      kmp_set_library_
     #define FTN_GET_LIBRARY                      kmp_get_library_
     #define FTN_SET_DEFAULTS                     kmp_set_defaults_
+    #define FTN_SET_TASKLET                      kmp_set_tasklet_
     #define FTN_SET_AFFINITY                     kmp_set_affinity_
     #define FTN_GET_AFFINITY                     kmp_get_affinity_
     #define FTN_GET_AFFINITY_MAX_PROC            kmp_get_affinity_max_proc_

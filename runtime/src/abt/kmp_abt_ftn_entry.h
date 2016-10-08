@@ -1170,6 +1170,16 @@ FTN_SET_DEFAULTS( char const * str
     #endif
 }
 
+void FTN_STDCALL
+FTN_SET_TASKLET( int KMP_DEREF flag )
+{
+    #ifdef KMP_STUB
+        // Nothing.
+    #else
+        __kmp_set_tasklet( KMP_DEREF flag, __kmp_entry_gtid() );
+    #endif
+}
+
 /* ------------------------------------------------------------------------ */
 
 

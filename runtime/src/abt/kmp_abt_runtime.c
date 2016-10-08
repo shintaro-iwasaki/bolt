@@ -1133,6 +1133,7 @@ __kmp_get_global_icvs( void ) {
       0,                            //int serial_nesting_level; //corresponds to the value of the th_team_serialized field
       (kmp_int8)__kmp_global.dflt_nested,            //int nested;               //internal control for nested parallelism (per thread)
       (kmp_int8)__kmp_global.g.g_dynamic,                                 //internal control for dynamic adjustment of threads (per thread)
+      FTN_FALSE,                    // internal control for using tasklet for next parallel region (per thread)
       __kmp_global.dflt_team_nth,          //int nproc;                //internal control for # of threads for next parallel region (per thread)
                                     // (use a max ub on value if __kmp_parallel_initialize not called yet)
       __kmp_global.dflt_max_active_levels, //int max_active_levels;    //internal control for max_active_levels
@@ -3545,6 +3546,19 @@ __kmp_set_num_threads( int new_nth, int gtid )
         // Special flag in case omp_set_num_threads() call
         hot_team->t.t_size_changed = -1;
     }
+}
+
+/* [SM] Mark the next parallel region can be implemented as a tasklet. */
+void
+__kmp_set_tasklet( int flag, int gtid )
+{
+    kmp_info_t *thread;
+
+    KF_TRACE( 1, ("__kmp_set_tasklet: T#%d - %d\n", gtid, flag) );
+
+    thread = __kmp_global.threads[gtid];
+    __kmp_save_internal_controls( thread );
+    set__tasklet( thread, flag );
 }
 
 /* Changes max_active_levels */

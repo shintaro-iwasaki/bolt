@@ -1708,6 +1708,7 @@ typedef struct kmp_internal_control {
     int           serial_nesting_level;  /* corresponds to the value of the th_team_serialized field */
     kmp_int8      nested;                /* internal control for nested parallelism (per thread) */
     kmp_int8      dynamic;               /* internal control for dynamic adjustment of threads (per thread) */
+    kmp_int8      tasklet;               /* internal control for using tasklet for next parallel region (per thread) */
     int           nproc;                 /* internal control for #threads for next parallel region (per thread) */
     int           max_active_levels;     /* internal control for max_active_levels */
     kmp_r_sched_t sched;                 /* internal control for runtime schedule {sched,chunk} pair */
@@ -1788,6 +1789,11 @@ typedef struct kmp_local {
         ( ( (xthread)->th.th_current_task->td_icvs.dynamic ) = (xval) )
 #define get__dynamic( xthread ) \
         ( ( (xthread)->th.th_current_task->td_icvs.dynamic ) ? (FTN_TRUE) : (FTN_FALSE) )
+
+#define set__tasklet( xthread, xval )                            \
+        ( ( (xthread)->th.th_current_task->td_icvs.tasklet ) = (xval) )
+#define get__tasklet( xthread ) \
+        ( ( (xthread)->th.th_current_task->td_icvs.tasklet ) ? (FTN_TRUE) : (FTN_FALSE) )
 
 #define set__nproc( xthread, xval )                            \
         ( ( (xthread)->th.th_current_task->td_icvs.nproc ) = (xval) )
@@ -2729,6 +2735,7 @@ extern void __kmp_abort_process( void );
 extern void __kmp_warn( char const * format, ... );
 
 extern void __kmp_set_num_threads( int new_nth, int gtid );
+extern void __kmp_set_tasklet( int flag, int gtid );
 
 // Returns current thread (pointer to kmp_info_t). Current thread *must* be registered.
 static inline kmp_info_t * __kmp_entry_thread()
