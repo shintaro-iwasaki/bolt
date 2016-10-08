@@ -41,6 +41,19 @@ FC     = gfortran
 FFLAGS = -fopenmp -lm
 FFLAGS = -fopenmp -lm -O3
 
+ifneq ($(strip $(TEST_CC)),)
+CC     = $(TEST_CC)
+endif
+ifneq ($(strip $(TEST_CFLAGS)),)
+CFLAGS = $(TEST_CFLAGS) -lm
+endif
+ifneq ($(strip $(TEST_FC)),)
+FC     = $(TEST_FC)
+endif
+ifneq ($(strip $(TEST_FFLAGS)),)
+FFLAGS = $(TEST_FFLAGS) -lm
+endif
+
 # GNU Compiler
 # CC     = gcc
 # CFLAGS = -fopenmp -lm -O3
