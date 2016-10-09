@@ -145,6 +145,7 @@ if(LIBOMP_USE_ARGOBOTS_NEW)
       z_Linux_asm.s)
   if(${LIBOMP_OMP_VERSION} GREATER 40 OR ${LIBOMP_OMP_VERSION} EQUAL 40)
     libomp_append(LIBOMP_CXXFILES abt/kmp_abt_taskdeps.cpp)
+    libomp_append(LIBOMP_CXXFILES abt/kmp_abt_cancel.cpp)
   endif()
 
 # Files common to stubs and normal library
