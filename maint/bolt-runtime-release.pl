@@ -109,7 +109,7 @@ my $local_git_clone = "${tdir}/bolt-runtime-clone";
 
 # clone git repo
 print("===> Cloning git repo... ");
-run_cmd("git clone ${git_repo} ${local_git_clone}");
+run_cmd("git clone -b ${branch} ${git_repo} ${local_git_clone}");
 print("done\n");
 
 # chdirs to $local_git_clone if valid
