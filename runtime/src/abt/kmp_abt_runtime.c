@@ -339,6 +339,11 @@ __kmp_serial_initialize( void )
     if ( __kmp_global.init_serial ) {
         return;
     }
+
+    if ( !__kmp_init_global ) {
+        __kmp_global_initialize();
+    }
+
     __kmp_acquire_bootstrap_lock( &__kmp_global.initz_lock );
     if ( __kmp_global.init_serial ) {
         __kmp_release_bootstrap_lock( &__kmp_global.initz_lock );
