@@ -102,6 +102,25 @@ $junit_num_failed_tests = 0;
 $junit_num_error_tests = 0;
 $junit_num_skipped_tests = 0;
 
+@junit_xfail_list_c;
+@junit_xfail_list_fortran;
+$xfail_file = "xfaillist-$opt_lang.txt";
+if (-e $xfail_file) {
+    open (XFAIL, "<$xfail_file") or error ("Could not open file '$xfail_file'", 1);
+    if ($opt_lang eq 'c') {
+        while ( <XFAIL> ) {
+            chomp($_);
+            push @junit_xfail_list_c, $_;
+        }
+    } elsif ($opt_lang eq 'fortran') {
+        while ( <XFAIL> ) {
+            chomp($_);
+            push @junit_xfail_list_fortran, $_;
+        }
+    }
+    close (XFAIL);
+}
+
 if ($opt_help)         { print_help_text ();   exit 0; }
 if ($opt_listlanguages){ print_avail_langs (); exit 0; }
 if ($opt_list)     { print_avail_tests ();   exit 0; }
@@ -421,6 +440,16 @@ sub add_result_to_junitfile
 {
     my ($JUNIT, $num, $exec_name, $result) = @_;
 
+    if ($opt_lang eq 'c') {
+        if ( grep(/^$exec_name$/, @junit_xfail_list_c) ) {
+            $result = 'xfail';
+        }
+    } elsif ($opt_lang eq 'fortran') {
+        if ( grep(/^$exec_name$/, @junit_xfail_list_fortran) ) {
+            $result = 'xfail';
+        }
+    }
+
     print $JUNIT "    <testcase name=\"$num - ./$exec_name\">\n";
 	if ($result eq 'ce') {
         print $JUNIT "      <error type=\"TestError\" ";
@@ -432,6 +461,10 @@ sub add_result_to_junitfile
         $junit_num_error_tests++;
     } elsif ($result eq 'skip') {
         print $JUNIT "      <skipped type=\"TestSkipped\" ";
+        print $JUNIT "message=\"test skipped\"></skipped>\n";
+        $junit_num_skipped_tests++;
+    } elsif ($result eq 'xfail') {
+        print $JUNIT "      <skipped type=\"TestXfailed\" ";
         print $JUNIT "message=\"test skipped\"></skipped>\n";
         $junit_num_skipped_tests++;
     } elsif ($result != 100) {
