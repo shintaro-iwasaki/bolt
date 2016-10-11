@@ -1181,6 +1181,14 @@ __kmp_omp_task( kmp_int32 gtid, kmp_task_t * new_task, bool serialize_immediate 
 
     /* Should we execute the new task or queue it?   For now, let's just always try to
        queue it.  If the queue fills up, then we'll execute it.  */
+    if(new_taskdata->td_flags.final){
+        // Execute this task immediately because it is final
+        kmp_taskdata_t * current_task = __kmp_global.threads[ gtid ] -> th.th_current_task;
+        __kmp_invoke_task( gtid, new_task, current_task );
+        return TASK_CURRENT_NOT_QUEUED;
+    }
+    
+    
 #if OMP_41_ENABLED
     if ( new_taskdata->td_flags.proxy == TASK_PROXY || __kmp_push_task( gtid, new_task ) == TASK_NOT_PUSHED ) // if cannot defer
 #else

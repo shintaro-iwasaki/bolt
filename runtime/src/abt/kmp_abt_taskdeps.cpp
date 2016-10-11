@@ -459,7 +459,6 @@ __kmpc_omp_task_with_deps( ident_t *loc_ref, kmp_int32 gtid, kmp_task_t * new_ta
     KA_TRACE(10, ("__kmpc_omp_task_with_deps(exit): T#%d task had no blocking dependencies : "
                   "loc=%p task=%p, transferring to __kmpc_omp_task\n", gtid, loc_ref,
                   new_taskdata ) );
-
     return __kmpc_omp_task(loc_ref,gtid,new_task);
 }
 
