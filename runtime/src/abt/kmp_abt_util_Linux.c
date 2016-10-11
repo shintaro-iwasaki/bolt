@@ -288,6 +288,8 @@ static void __kmp_abt_sched_run_es0(ABT_sched sched)
     ABT_sched_get_pools(sched, num_pools, 0, pools);
 
     while (1) {
+        run_cnt = 0;
+
         /* Execute one work unit from the private pool */
         ABT_pool_get_size(pools[0], &size);
         if (size > 0) {
@@ -308,7 +310,7 @@ static void __kmp_abt_sched_run_es0(ABT_sched sched)
             }
         }
 
-        if (num_pools > 2) {
+        if (run_cnt == 0 && num_pools > 2) {
             /* Steal a work unit from other pools */
             target = rand_r(&seed) % (num_pools-2) + 2;
             ABT_pool_get_size(pools[target], &size);
@@ -368,6 +370,8 @@ static void __kmp_abt_sched_run(ABT_sched sched)
 
     while (1) {
 #ifdef ABT_USE_PRIVATE_POOLS
+        run_cnt = 0;
+
         /* Execute one work unit from the private pool */
         ABT_pool_get_size(pools[0], &size);
         if (size > 0) {
@@ -389,14 +393,16 @@ static void __kmp_abt_sched_run(ABT_sched sched)
         }
 
         /* Steal a work unit from other pools */
-        target = rand_r(&seed) % (num_pools-2) + 2;
-        ABT_pool_get_size(pools[target], &size);
-        if (size > 0) {
-            ABT_pool_pop(pools[target], &unit);
-            if (unit != ABT_UNIT_NULL) {
-                ABT_unit_set_associated_pool(unit, pools[1]);
-                ABT_xstream_run_unit(unit, pools[1]);
-                run_cnt++;
+        if (run_cnt == 0) {
+            target = rand_r(&seed) % (num_pools-2) + 2;
+            ABT_pool_get_size(pools[target], &size);
+            if (size > 0) {
+                ABT_pool_pop(pools[target], &unit);
+                if (unit != ABT_UNIT_NULL) {
+                    ABT_unit_set_associated_pool(unit, pools[1]);
+                    ABT_xstream_run_unit(unit, pools[1]);
+                    run_cnt++;
+                }
             }
         }
 #else /* ABT_USE_PRIVATE_POOLS */
