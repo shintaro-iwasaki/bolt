@@ -532,7 +532,7 @@ __kmp_runtime_initialize( void )
     int status;
 
     if (__kmp_global.init_runtime) return;
-
+    
     #if ( KMP_ARCH_X86 || KMP_ARCH_X86_64 )
         if ( ! __kmp_global.cpuinfo.initialized ) {
             __kmp_query_cpuid( &__kmp_global.cpuinfo );
@@ -566,7 +566,7 @@ __kmp_runtime_initialize( void )
 
     /* use TLS functions to store gtid */
     //__kmp_global.gtid_mode = 2;
-
+    
     __kmp_abt_initialize();
 
     // FIXME: Do we need a thread-specific key?
