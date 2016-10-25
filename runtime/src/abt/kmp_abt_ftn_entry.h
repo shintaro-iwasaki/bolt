@@ -411,8 +411,10 @@ xexpand(FTN_GET_THREAD_NUM)( void )
         if (!__kmp_global.init_parallel) {
             return 0;
         }
+        //int rank;
+        //ABT_xstream_self_rank(&rank);
+        //return rank;
         int gtid = __kmp_gtid_get_specific();
-
         return __kmp_tid_from_gtid( gtid );
     #endif
 }

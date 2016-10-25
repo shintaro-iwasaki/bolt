@@ -1950,9 +1950,6 @@ ___kmp_fast_free( kmp_info_t *this_thr, void * ptr KMP_SRC_LOC_DECL )
                  by Argobots, the memory allocation is not needed here*/
                 next=NULL;
                 while ( next != NULL ) {
-                    printf("T#%d en el fast free con %d == %d\n", __kmp_gtid_from_thread(this_thr),
-                            ((kmp_mem_descr_t*)((char*)next - sizeof(kmp_mem_descr_t)))->size_allocated + 1,
-                            ((kmp_mem_descr_t*)((char*)tail - sizeof(kmp_mem_descr_t)))->size_allocated);
                     KMP_DEBUG_ASSERT(
                         // queue size should decrease by 1 each step through the list
                         ((kmp_mem_descr_t*)((char*)next - sizeof(kmp_mem_descr_t)))->size_allocated + 1 ==

@@ -1717,15 +1717,17 @@ int
 __kmp_get_global_thread_id_reg( )
 {
     int gtid;
+        //KA_TRACE( 1000, ( "*** __kmp_get_global_thread_id_reg: antes global\n" ));
 
     if ( !__kmp_init_global ) {
         __kmp_global_initialize();
     }
+        //KA_TRACE( 1000, ( "*** __kmp_get_global_thread_id_reg: despues global\n" ));
 
     if ( !__kmp_global.init_serial ) {
         gtid = KMP_GTID_DNE;
     } else {
-        KA_TRACE( 1000, ( "*** __kmp_get_global_thread_id_reg: using keyed TLS\n" ));
+        //KA_TRACE( 1000, ( "*** __kmp_get_global_thread_id_reg: using keyed TLS\n" ));
         gtid = __kmp_gtid_get_specific();
     }
 
@@ -5357,14 +5359,13 @@ __kmp_free_thread( kmp_info_t *this_th )
     /*[AC] This is the last chance to check the pending tasks (if any) it can occur
      if the application ends as soon as the task region ends*/
     
-     int t;
+    int t;
     int old_size = 0;
     int current_size = this_th->th.tasks_in_the_queue;
-    //KA_TRACE( 10, ("__kmp_launch_worker: T#%d freing %d tasks\n", gtid, end) );
     while(old_size != current_size){
         KA_TRACE( 20, ("__kmp_free_thread: T#%d freing %d tasks\n", gtid, current_size-old_size));
         for(t=old_size;t<current_size;t++){
-            ABT_thread_join(this_th->th.th_task_queue[t]);
+            ABT_thread_free(&this_th->th.th_task_queue[t]);
         }
         old_size = current_size;
         current_size = this_th->th.tasks_in_the_queue;
@@ -6064,10 +6065,7 @@ __kmp_internal_join( ident_t *id, int gtid, kmp_team_t *team )
         old_size = current_size;
         current_size = this_thr->th.tasks_in_the_queue;
     }
-    /*
-    for(t=0;t<end;t++){
-        ABT_thread_free(&this_thr->th.th_task_queue[t]);
-    }*/
+
     this_thr->th.tasks_in_the_queue = 0;
     
     KA_TRACE( 10, ("__kmp_internal_join: T#%d freing %d tasks done, now we have %d tasks\n", gtid, current_size, this_thr->th.tasks_in_the_queue) );

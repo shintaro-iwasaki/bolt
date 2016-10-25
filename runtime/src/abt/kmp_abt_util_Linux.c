@@ -675,7 +675,6 @@ __kmp_abt_free_task( kmp_int32 gtid, kmp_taskdata_t * taskdata, kmp_info_t * thr
     taskdata -> td_flags.complete = 1;   // mark the task as completed
     __kmp_release_deps(gtid,taskdata);
     taskdata -> td_flags.executing = 0;  // suspend the finishing task
-
     // Check to make sure all flags and counters have the correct values
     //KMP_DEBUG_ASSERT( taskdata->td_flags.tasktype == TASK_EXPLICIT );
     //KMP_DEBUG_ASSERT( taskdata->td_flags.executing == 0 );
@@ -766,7 +765,30 @@ void __kmp_task_execution(void * arg){
     /* Deceicve this task as if it is executed by 'th'. */
     __kmp_set_self_info(th);
     gtid = th->th.th_info.ds.ds_gtid;
+/*    int rank;
+    ABT_xstream_self_rank(&rank);
 
+    ABT_thread self;
+    ABT_thread_self(&self);
+    int ntasks=th->th.tasks_in_the_queue;
+    i = 0;
+    int equal = 0;
+    printf("the gtid chosen is %d\n",gtid);
+    while (i< ntasks && !equal){
+        ABT_thread_equal(self, th->th.th_task_queue[i] , &equal);
+        i++;
+    }
+    if(i==ntasks){
+        printf("no es mia asi que pa adentro\n");
+        th->th.th_task_queue[th->th.tasks_in_the_queue++] = self;
+    }
+    else{
+        printf("ya era mia\n");
+    }
+*/
+
+    
+    
     KA_TRACE(20, ("__kmp_task_execution: T#%d before executing task %p.\n", gtid, task ) );
 
     /* [AC] Right now, we don't need to go throw OpenMP task management so we can
@@ -794,35 +816,79 @@ void __kmp_create_task(kmp_int32 gtid, kmp_task_t * task, kmp_info_t *thread)
 
 void __kmp_task_wait(kmp_int32 gtid, kmp_info_t * thread)
 {
-        KA_TRACE(20, ("__kmp_task_wait (enter): T#%d before checking.\n", gtid) );
+    KA_TRACE(20, ("__kmp_task_wait (enter): T#%d before checking.\n", gtid) );
 
     int ntasks = thread->th.tasks_in_the_queue;
-    int current = ntasks-1;
-    int equal, i ,first, status;
+    //int current = ntasks-1; Used in the first version
+    int current = 0;
+    int equal = 0, i ,first, status;
     ABT_thread current_task;
     ABT_thread_state state;
       
     KA_TRACE(20, ("__kmp_task_wait: T#%d checks %d tasks.\n", gtid, ntasks) );
 
     ABT_thread_self(&current_task);
-    ABT_thread_equal(current_task, thread->th.th_task_queue[current] , &equal);
     
-    while(!equal && current >= 0){
-        KA_TRACE(20, ("__kmp_task_wait (before joining): T#%d joins task %d .\n", gtid, current) );
-        
+    while(!equal && current < ntasks){
+        ABT_thread_equal(current_task, thread->th.th_task_queue[current] , &equal);
+        KA_TRACE(20, ("__kmp_task_wait (while): T#%d current and task %d equal? %d.\n", gtid, current, (equal)? 1 : 0) );
+        current++;
+    }
+    if(current == ntasks){
+        KA_TRACE(20, ("__kmp_task_wait (while): T#%d all tasks are childrens so current task was stolen.\n", gtid) );
+        first = 0;
+    }
+    else{
+        first = current;
+        KA_TRACE(20, ("__kmp_task_wait (while): T#%d just from %d to %d are childrens.\n", gtid, first, ntasks) );
+    }
+    for(i = first; i < ntasks; i++){
+        KA_TRACE(20, ("__kmp_task_wait (before joining): T#%d joins task %d.\n", gtid, i) );
+        if (state != ABT_THREAD_STATE_TERMINATED || state != ABT_THREAD_STATE_BLOCKED)
+        {
+            KA_TRACE(20, ("__kmp_task_wait (inside if) state=%d: T#%d joins task %d .\n", state, gtid, i) );
+            ABT_thread_join(thread->th.th_task_queue[i]);
+        }
+        KA_TRACE(20, ("__kmp_task_wait (after joining): T#%d joins task %d .\n", gtid, i) );
+    
+    }
+    
+     
+    /* [AC] First version. this implementation was working before the thread 
+     * id assignment in task execution */
+    /*
+    while(current >= 0){
+        ABT_thread_equal(current_task, thread->th.th_task_queue[current] , &equal);
+        KA_TRACE(20, ("__kmp_task_wait (before joining): T#%d joins task %d equal? %d.\n", gtid, current, (equal)? 1 : 0) );
+        if(equal){break;}        
         status = ABT_thread_get_state(thread->th.th_task_queue[current], &state);
         //KMP_ASSERT(status == ABT_SUCCESS);
         
-        if (state != ABT_THREAD_STATE_TERMINATED) 
+        if (state != ABT_THREAD_STATE_TERMINATED){
+            KA_TRACE(20, ("__kmp_task_wait (inside if) state=%d: T#%d joins task %d .\n", state, gtid, current) );
             ABT_thread_join(thread->th.th_task_queue[current]);
-        
+        }
         KA_TRACE(20, ("__kmp_task_wait (after joining): T#%d joins task %d .\n", gtid, current) );
         current--;
-        ABT_thread_equal(current_task, thread->th.th_task_queue[current] , &equal);
     }
-    
+     */
     KA_TRACE(20, ("__kmp_task_wait (exit): T#%d.\n", gtid) );
 
+}
+
+void __kmp_task_wait_a(kmp_int32 gtid, kmp_info_t * thread)
+{
+   /* KA_TRACE(20, ("__kmp_task_wait (enter): T#%d before checking.\n", gtid) );
+    int i;
+    int total_ntasks =  thread->th.tasks_in_the_queue;
+    printf("__kmp_task_wait (enter): T#%d => %d tasks.\n", gtid,total_ntasks);
+    for(i=0;i<total_ntasks;i++){
+        printf("__kmp_task_wait (joining): T#%d => %d task.\n", gtid,i);
+        ABT_thread_join(thread->th.th_task_queue[i]);
+        printf("__kmp_task_wait (joined): T#%d => %d task.\n", gtid,i);
+    }
+    KA_TRACE(20, ("__kmp_task_wait (exit): T#%d.\n", gtid) );
+*/
 }
 
 /* ------------------------------------------------------------------------ */
@@ -885,14 +951,7 @@ __kmp_launch_worker( void *thr )
 
     KA_TRACE( 10, ("__kmp_launch_worker: T#%d done\n", gtid) );
     /* [AC]*/
-    /*int t;        
-    int end = this_thr->th.tasks_in_the_queue;
-    KA_TRACE( 10, ("__kmp_launch_worker: T#%d freing %d tasks\n", gtid, end) );
-
-    for(t=0;t<end;t++){
-        ABT_thread_free(&this_thr->th.th_task_queue[t]);
-    }*/
-    
+   
     int t;
     int old_size = 0;
     int current_size = this_thr->th.tasks_in_the_queue;
