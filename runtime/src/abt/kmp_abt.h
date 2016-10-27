@@ -1709,7 +1709,6 @@ typedef struct kmp_internal_control {
     int           serial_nesting_level;  /* corresponds to the value of the th_team_serialized field */
     kmp_int8      nested;                /* internal control for nested parallelism (per thread) */
     kmp_int8      dynamic;               /* internal control for dynamic adjustment of threads (per thread) */
-    kmp_int8      tasklet;               /* internal control for using tasklet for next parallel region (per thread) */
     int           nproc;                 /* internal control for #threads for next parallel region (per thread) */
     int           max_active_levels;     /* internal control for max_active_levels */
     kmp_r_sched_t sched;                 /* internal control for runtime schedule {sched,chunk} pair */
@@ -1793,9 +1792,9 @@ typedef struct kmp_local {
         ( ( (xthread)->th.th_current_task->td_icvs.dynamic ) ? (FTN_TRUE) : (FTN_FALSE) )
 
 #define set__tasklet( xthread, xval )                            \
-        ( ( (xthread)->th.th_current_task->td_icvs.tasklet ) = (xval) )
+        ( ( (xthread)->th.use_tasklet_team ) = (xval) )
 #define get__tasklet( xthread ) \
-        ( ( (xthread)->th.th_current_task->td_icvs.tasklet ) ? (FTN_TRUE) : (FTN_FALSE) )
+        ( ( (xthread)->th.use_tasklet_team ) ? (FTN_TRUE) : (FTN_FALSE) )
 
 #define set__nproc( xthread, xval )                            \
         ( ( (xthread)->th.th_current_task->td_icvs.nproc ) = (xval) )
@@ -2118,6 +2117,8 @@ typedef struct KMP_ALIGN_CACHE kmp_base_info {
     int               th_in_pool;    /* in thread pool (32 bits for TCR/TCW) */
     kmp_abt_task_t   th_task_queue[MAX_ABT_TASKS]; /* [AC] It is the per thread task queue pointer*/
     int tasks_in_the_queue = 0;
+    int use_tasklet_team = FTN_FALSE; /* internal control for using tasklet for next parallel region (per thread) */
+
     /* The following are cached from the team info structure */
     /* TODO use these in more places as determined to be needed via profiling */
     int               th_team_nproc;      /* number of threads in a team */

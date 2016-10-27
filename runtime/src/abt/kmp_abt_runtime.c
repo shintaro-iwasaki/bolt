@@ -1138,7 +1138,6 @@ __kmp_get_global_icvs( void ) {
       0,                            //int serial_nesting_level; //corresponds to the value of the th_team_serialized field
       (kmp_int8)__kmp_global.dflt_nested,            //int nested;               //internal control for nested parallelism (per thread)
       (kmp_int8)__kmp_global.g.g_dynamic,                                 //internal control for dynamic adjustment of threads (per thread)
-      FTN_FALSE,                    // internal control for using tasklet for next parallel region (per thread)
       __kmp_global.dflt_team_nth,          //int nproc;                //internal control for # of threads for next parallel region (per thread)
                                     // (use a max ub on value if __kmp_parallel_initialize not called yet)
       __kmp_global.dflt_max_active_levels, //int max_active_levels;    //internal control for max_active_levels
