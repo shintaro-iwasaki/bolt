@@ -1002,6 +1002,18 @@ __kmp_launch_tasklet_worker( void *thr )
 #endif
 
 void
+__kmp_create_uber( int gtid, kmp_info_t *th, size_t stack_size )
+{
+    KMP_DEBUG_ASSERT( KMP_UBER_GTID(gtid) );
+    KA_TRACE( 10, ("__kmp_create_uber: T#%d\n", gtid) );
+
+    ABT_thread handle;
+    ABT_thread_self( &handle );
+    ABT_thread_set_arg(handle, (void *)th);
+    th -> th.th_info.ds.ds_thread = handle;
+}
+
+void
 __kmp_create_worker( int gtid, kmp_info_t *th, size_t stack_size )
 {
     ABT_thread      handle;
@@ -1011,13 +1023,8 @@ __kmp_create_worker( int gtid, kmp_info_t *th, size_t stack_size )
     // [SM] th->th.th_info.ds.ds_gtid is setup in __kmp_allocate_thread
     KMP_DEBUG_ASSERT( th->th.th_info.ds.ds_gtid == gtid );
 
-    if ( KMP_UBER_GTID(gtid) ) {
-        KA_TRACE( 10, ("__kmp_create_worker: uber T#%d\n", gtid) );
-        ABT_thread_self( &handle );
-        ABT_thread_set_arg(handle, (void *)th);
-        th -> th.th_info.ds.ds_thread = handle;
-        return;
-    }; // if
+    /* uber thread is created in __kmp_create_uber(). */
+    KMP_DEBUG_ASSERT( !KMP_UBER_GTID(gtid) );
 
     KA_TRACE( 10, ("__kmp_create_worker: try to create T#%d\n", gtid) );
 

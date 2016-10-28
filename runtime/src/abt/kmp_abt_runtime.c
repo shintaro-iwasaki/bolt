@@ -1503,7 +1503,7 @@ __kmp_register_root( int initial_thread )
     //__kmp_gtid_set_specific( gtid );
     root_thread->th.th_info.ds.ds_gtid = gtid;
 
-    __kmp_create_worker( gtid, root_thread, __kmp_global.stksize );
+    __kmp_create_uber( gtid, root_thread, __kmp_global.stksize );
     KMP_DEBUG_ASSERT( __kmp_gtid_get_specific() == gtid );
     TCW_4(__kmp_global.init_gtid, TRUE);
 

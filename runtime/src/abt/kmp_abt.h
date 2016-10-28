@@ -2856,6 +2856,7 @@ extern double __kmp_read_cpu_time( void );
 extern int  __kmp_read_system_info( struct kmp_sys_info *info );
 
 //extern void *__kmp_launch_thread( kmp_info_t *thr );
+extern void __kmp_create_uber( int gtid, kmp_info_t *th, size_t stack_size );
 extern void __kmp_create_worker( int gtid, kmp_info_t *th, size_t stack_size );
 extern void __kmp_create_tasklet_worker( int gtid, kmp_info_t *th );
 extern void __kmp_revive_worker( kmp_info_t *th );
