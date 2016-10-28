@@ -88,16 +88,17 @@ static inline
 ABT_pool __kmp_abt_get_pool( int gtid )
 {
     KMP_DEBUG_ASSERT(__kmp_abt != NULL);
-
-    gtid = (gtid >= 0) ? gtid : -gtid;
-    int eid = gtid % __kmp_abt->num_xstreams;
+    KMP_DEBUG_ASSERT(gtid >= 0);
 
 #ifdef ABT_USE_PRIVATE_POOLS
     if (gtid < __kmp_abt->num_xstreams)
-        return __kmp_abt->priv_pool[eid];
-    else
+        return __kmp_abt->priv_pool[gtid];
+    else {
+        int eid = gtid % __kmp_abt->num_xstreams;
         return __kmp_abt->shared_pool[eid];
+    }
 #else /* ABT_USE_PRIVATE_POOLS */
+    int eid = gtid % __kmp_abt->num_xstreams;
     return __kmp_abt->shared_pool[eid];
 #endif /* ABT_USE_PRIVATE_POOLS */
 }
@@ -106,8 +107,12 @@ static inline
 ABT_pool __kmp_abt_get_my_pool(int gtid)
 {
     int eid;
-    ABT_xstream_self_rank(&eid);
-    return __kmp_abt->shared_pool[eid];
+    if (gtid < __kmp_abt->num_xstreams) {
+        return __kmp_abt->shared_pool[gtid];
+    } else {
+        ABT_xstream_self_rank(&eid);
+        return __kmp_abt->shared_pool[eid];
+    }
 }
 
 static void __kmp_abt_initialize(void)
