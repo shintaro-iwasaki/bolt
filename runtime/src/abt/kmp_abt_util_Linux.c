@@ -168,7 +168,8 @@ static void __kmp_abt_initialize(void)
     };
 
     ABT_sched_config config;
-    ABT_sched_config_create(&config, cv_freq, 10, ABT_sched_config_var_end);
+    int freq = (num_xstreams < 100) ? 100 : num_xstreams;
+    ABT_sched_config_create(&config, cv_freq, freq, ABT_sched_config_var_end);
 
     ABT_sched_def sched_def = {
         .type = ABT_SCHED_TYPE_ULT,
