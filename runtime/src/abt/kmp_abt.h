@@ -60,6 +60,7 @@
 #define KMP_THREAD_ATTR
 
 #define KMP_ABT_USE_TASKLET_TEAM
+#define KMP_ABT_USE_SELF_INFO
 
 #include <stdio.h>
 #include <stdlib.h>
