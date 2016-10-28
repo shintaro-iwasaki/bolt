@@ -621,55 +621,6 @@ __kmp_runtime_destroy( void )
 /* ------------------------------------------------------------------------ */
 /* ------------------------------------------------------------------------ */
 
-void
-__kmp_set_self_info( kmp_info_t *th )
-{
-    KMP_ASSERT( __kmp_global.init_runtime );
-
-    ABT_self_set_arg((void *)th);
-}
-
-void
-__kmp_gtid_set_specific( int gtid )
-{
-    ABT_thread self;
-    kmp_info_t *th;
-    KMP_ASSERT( __kmp_global.init_runtime );
-
-    ABT_thread_self(&self);
-    ABT_thread_get_arg(self, (void **)&th);
-    KMP_ASSERT( th != NULL );
-    th->th.th_info.ds.ds_gtid = gtid;
-}
-
-int
-__kmp_gtid_get_specific()
-{
-    ABT_thread self;
-    kmp_info_t *th;
-    int gtid;
-
-    if ( !__kmp_global.init_runtime ) {
-        KA_TRACE( 50, ("__kmp_get_specific: runtime shutdown, returning KMP_GTID_SHUTDOWN\n" ) );
-        return KMP_GTID_SHUTDOWN;
-    }
-
-    ABT_thread_self(&self);
-    ABT_thread_get_arg(self, (void **)&th);
-    if (th == NULL) {
-        gtid = KMP_GTID_DNE;
-    } else {
-        gtid = th->th.th_info.ds.ds_gtid;
-    }
-    KA_TRACE( 50, ("__kmp_gtid_get_specific: ULT:%p gtid:%d\n", self, gtid ));
-
-    return gtid;
-}
-
-/* ------------------------------------------------------------------------ */
-/* ------------------------------------------------------------------------ */
-
-
 static void
 __kmp_abt_free_task( kmp_int32 gtid, kmp_taskdata_t * taskdata, kmp_info_t * thread )
 {

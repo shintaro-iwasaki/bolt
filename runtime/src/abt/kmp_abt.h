@@ -2851,10 +2851,6 @@ extern void __kmp_runtime_destroy( void );
 ///extern void __kmp_cleanup_hierarchy();
 ///extern void __kmp_get_hierarchy(kmp_uint32 nproc, kmp_bstate_t *thr_bar);
 
-extern void __kmp_set_self_info( kmp_info_t *th );
-extern void __kmp_gtid_set_specific( int gtid );
-extern int  __kmp_gtid_get_specific( void );
-
 extern double __kmp_read_cpu_time( void );
 
 extern int  __kmp_read_system_info( struct kmp_sys_info *info );
@@ -3353,6 +3349,8 @@ KMP_EXPORT void KMPC_CONVENTION kmpc_set_stacksize(int);
 KMP_EXPORT void KMPC_CONVENTION kmpc_set_stacksize_s(size_t);
 KMP_EXPORT void KMPC_CONVENTION kmpc_set_library(int);
 KMP_EXPORT void KMPC_CONVENTION kmpc_set_defaults(char const *);
+
+#include "kmp_abt_inline.h"
 
 #ifdef __cplusplus
 }
