@@ -278,9 +278,11 @@ static void __kmp_abt_sched_run_es0(ABT_sched sched)
     size_t size;
 
     int run_cnt = 0;
+#ifdef ABT_USE_SCHED_SLEEP
     struct timespec sleep_time;
     sleep_time.tv_sec = 0;
     sleep_time.tv_nsec = 128;
+#endif
 
     ABT_sched_get_data(sched, (void **)&p_data);
     ABT_sched_get_num_pools(sched, &num_pools);
@@ -359,9 +361,11 @@ static void __kmp_abt_sched_run(ABT_sched sched)
     size_t size;
 
     int run_cnt = 0;
+#ifdef ABT_USE_SCHED_SLEEP
     struct timespec sleep_time;
     sleep_time.tv_sec = 0;
     sleep_time.tv_nsec = 128;
+#endif
 
     ABT_sched_get_data(sched, (void **)&p_data);
     ABT_sched_get_num_pools(sched, &num_pools);
