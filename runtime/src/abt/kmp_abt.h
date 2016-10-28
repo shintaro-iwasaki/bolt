@@ -59,6 +59,8 @@
 #define KMP_CANCEL_THREADS
 #define KMP_THREAD_ATTR
 
+#define KMP_ABT_USE_TASKLET_TEAM
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stddef.h>
@@ -2937,6 +2939,20 @@ extern int __kmp_fork_call( ident_t *loc, int gtid, enum fork_context_e fork_con
                              va_list ap
 #endif
                              );
+
+#ifdef KMP_ABT_USE_TASKLET_TEAM
+extern int __kmp_fork_join_tasklet_team( ident_t *loc, int gtid, enum fork_context_e fork_context,
+                             kmp_int32 argc,
+                             microtask_t microtask,
+                             launch_t invoker,
+/* TODO: revert workaround for Intel(R) 64 tracker #96 */
+#if (KMP_ARCH_ARM || KMP_ARCH_X86_64 || KMP_ARCH_AARCH64) && KMP_OS_LINUX
+                             va_list *ap
+#else
+                             va_list ap
+#endif
+                             );
+#endif
 
 extern void __kmp_join_call( ident_t *loc, int gtid
 #if OMP_40_ENABLED

@@ -977,6 +977,41 @@ __kmp_launch_worker( void *thr )
 
 }
 
+#ifdef KMP_ABT_USE_TASKLET_TEAM
+static void
+__kmp_launch_tasklet_worker( void *thr )
+{
+    int gtid, tid;
+    kmp_info_t *this_thr = (kmp_info_t *)thr;
+    kmp_team_t *(*volatile pteam);
+
+    gtid = this_thr->th.th_info.ds.ds_gtid;
+    tid = this_thr->th.th_info.ds.ds_tid;
+
+    KMP_MB();
+
+    KA_TRACE( 10, ("__kmp_launch_tasklet_worker: T#%d:%d enter\n", gtid, tid) );
+
+    pteam = (kmp_team_t *(*))(& this_thr->th.th_team);
+    if ( TCR_SYNC_PTR(*pteam) && !TCR_4(__kmp_global.g.g_done) ) {
+        /* run our new task */
+        if ( TCR_SYNC_PTR((*pteam)->t.t_pkfn) != NULL ) {
+            int rc;
+            __kmp_run_before_invoked_task( gtid, tid, this_thr, *pteam );
+            rc = __kmp_invoke_microtask( (microtask_t) TCR_SYNC_PTR((*pteam)->t.t_pkfn),
+                    gtid, tid, (int)(*pteam)->t.t_argc, (void **)(*pteam)->t.t_argv);
+            __kmp_run_after_invoked_task( gtid, tid, this_thr, *pteam );
+            //rc = (*pteam)->t.t_invoke( gtid );
+            KMP_ASSERT( rc );
+        }
+    }
+
+    KMP_MB();
+
+    KA_TRACE( 10, ("__kmp_launch_tasklet_worker: T#%d:%d done\n", gtid, tid) );
+}
+
+#else
 static void
 __kmp_launch_tasklet_worker( void *thr )
 {
@@ -1013,7 +1048,7 @@ __kmp_launch_tasklet_worker( void *thr )
 
     KA_TRACE( 10, ("__kmp_launch_tasklet_worker: T#%d done\n", gtid) );
 }
-
+#endif
 
 void
 __kmp_create_worker( int gtid, kmp_info_t *th, size_t stack_size )
@@ -1167,15 +1202,19 @@ __kmp_join_worker( kmp_info_t *th )
 
     KA_TRACE( 10, ("__kmp_join_worker: try to join worker T#%d\n", th->th.th_info.ds.ds_gtid) );
 
+#ifndef KMP_ABT_USE_TASKLET_TEAM
     if (get__tasklet(th)) {
         ABT_task ds_tasklet = th->th.th_info.ds.ds_tasklet;
         status = ABT_task_join(ds_tasklet);
         KMP_ASSERT( status == ABT_SUCCESS );
     } else {
+#endif
         ABT_thread ds_thread = th->th.th_info.ds.ds_thread;
         status = ABT_thread_join(ds_thread);
         KMP_ASSERT( status == ABT_SUCCESS );
+#ifndef KMP_ABT_USE_TASKLET_TEAM
     }
+#endif
 
     KA_TRACE( 10, ("__kmp_join_worker: done joining worker T#%d\n", th->th.th_info.ds.ds_gtid) );
 
@@ -1304,6 +1343,138 @@ __kmp_init_nest_lock( kmp_lock_t *lck )
     ABT_mutex_attr_free( &mattr );
 }
 
+#ifdef KMP_ABT_USE_TASKLET_TEAM
+int
+__kmp_fork_join_tasklet_team(
+    ident_t   * loc,
+    int         gtid,
+    enum fork_context_e  call_context, // Intel, GNU, ...
+    kmp_int32   argc,
+    microtask_t microtask,
+    launch_t invoker,
+/* TODO: revert workaround for Intel(R) 64 tracker #96 */
+#if (KMP_ARCH_X86_64 || KMP_ARCH_ARM || KMP_ARCH_AARCH64) && KMP_OS_LINUX
+    va_list   * ap
+#else
+    va_list     ap
+#endif
+    )
+{
+    void          **argv;
+    int             i;
+    int             master_tid;
+    kmp_team_t     *parent_team;
+    kmp_info_t     *master_th;
+    int             nthreads;
+    int             master_set_numthreads;
+    int             level;
+
+    kmp_team_t *team;
+    int status;
+    //printf("kmp_team_t=%lu\n", sizeof(kmp_team_t));
+
+    KA_TRACE( 20, ("__kmp_fork_join_tasklet_team: enter T#%d\n", gtid ));
+
+    /* initialize if needed */
+    KMP_DEBUG_ASSERT( __kmp_global.init_serial ); // AC: potentially unsafe, not in sync with shutdown
+    if( ! TCR_4(__kmp_global.init_parallel) )
+        __kmp_parallel_initialize();
+
+    /* setup current data */
+    master_th     = __kmp_global.threads[ gtid ];
+    parent_team   = master_th->th.th_team;
+    master_tid    = master_th->th.th_info.ds.ds_tid;
+    master_set_numthreads = master_th->th.th_set_nproc;
+
+    level = parent_team->t.t_level + 1;
+
+    /* setup the new team info */
+    //kmp_team_t t_team;
+    //team = &t_team;
+    team = (kmp_team_t *)__kmp_allocate(sizeof(kmp_team_t));
+    team->t.t_master_tid = master_tid;
+    team->t.t_parent     = parent_team;
+
+    team->t.t_argc = argc;
+    team->t.t_argv = (void **)__kmp_allocate(sizeof(void *) * argc);
+    argv = (void**)team->t.t_argv;
+    for ( i=argc-1; i >= 0; --i ) {
+        // TODO: revert workaround for Intel(R) 64 tracker #96
+#if (KMP_ARCH_X86_64 || KMP_ARCH_ARM || KMP_ARCH_AARCH64) && KMP_OS_LINUX
+        *argv++ = va_arg( *ap, void * );
+#else
+        *argv++ = va_arg( ap, void * );
+#endif
+    }
+
+    nthreads = master_set_numthreads ? master_set_numthreads
+             : get__nproc_2( parent_team, master_tid );
+    team->t.t_nproc = nthreads;
+    team->t.t_serialized = nthreads > 1 ? 0 : 1;
+
+    TCW_SYNC_PTR(team->t.t_pkfn, microtask);
+    team->t.t_invoke = invoker;
+
+    team->t.t_dispatch = (kmp_disp_t *)__kmp_allocate(sizeof(kmp_disp_t) * nthreads);
+
+    /* create tasklets */
+    size_t size = sizeof(kmp_info_t) * nthreads;
+    kmp_info_t *t_threads = (kmp_info_t *)__kmp_allocate(size);
+    team->t.t_threads = &t_threads;
+
+    //kmp_info_t *th = master_th; //&t_threads[0];
+    kmp_info_t *th = &t_threads[0];
+    th->th.th_team = team;
+    th->th.th_info.ds.ds_tid = 0;
+    th->th.th_info.ds.ds_gtid = gtid;
+    th->th.th_dispatch = &team->t.t_dispatch[0];
+    th->th.th_team_nproc = nthreads;
+
+    for (i = 1; i < nthreads; i++) {
+        th = &t_threads[i];
+        th->th.th_team = team;
+        th->th.th_info.ds.ds_tid = i;
+        int my_gtid = gtid + i;
+        th->th.th_info.ds.ds_gtid = my_gtid;
+        th->th.th_dispatch = &team->t.t_dispatch[i];
+        th->th.th_team_nproc = nthreads;
+
+        ABT_pool tar_pool;
+        if (level > 1) {
+            tar_pool = __kmp_abt_get_my_pool(my_gtid);
+        } else {
+            tar_pool = __kmp_abt_get_pool(my_gtid);
+        }
+        status = ABT_task_create( tar_pool, __kmp_launch_tasklet_worker,
+                                  (void *)th,
+                                  &th->th.th_info.ds.ds_tasklet );
+        KMP_ASSERT( status == ABT_SUCCESS );
+    }
+
+    /* make the master thread do the work */
+    __kmp_set_self_info(&t_threads[0]);
+    __kmp_launch_tasklet_worker((void *)&t_threads[0]);
+    __kmp_set_self_info(master_th);
+
+    /* restore the master_th information */
+    master_th->th.th_set_nproc = 0;
+
+    /* join tasklets */
+    for (i = 1; i < nthreads; i++) {
+        status = ABT_task_free(&t_threads[i].th.th_info.ds.ds_tasklet);
+        KMP_ASSERT( status == ABT_SUCCESS );
+    }
+
+    __kmp_free(t_threads);
+    __kmp_free(team->t.t_argv);
+    __kmp_free(team->t.t_dispatch);
+    __kmp_free(team);
+
+    KA_TRACE( 20, ("__kmp_fork_join_tasklet_team: done T#%d\n", gtid ));
+
+    return (nthreads > 1) ? TRUE : FALSE;
+}
+#endif
 
 /* ------------------------------------------------------------------------ */
 /* ------------------------------------------------------------------------ */

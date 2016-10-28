@@ -5994,6 +5994,7 @@ __kmp_internal_fork( ident_t *id, int gtid, kmp_team_t *team )
         kmp_info_t *th = team->t.t_threads[f];
         int th_gtid = __kmp_gtid_from_tid(f, team);
 
+#ifndef KMP_ABT_USE_TASKLET_TEAM
         if (get__tasklet(th)) {
             if (th->th.th_info.ds.ds_tasklet == ABT_TASK_NULL) {
                 __kmp_create_tasklet_worker( th_gtid, th );
@@ -6009,6 +6010,7 @@ __kmp_internal_fork( ident_t *id, int gtid, kmp_team_t *team )
                               __kmp_get_gtid(), th_gtid) );
             }
         } else {
+#endif
             if (th->th.th_info.ds.ds_thread == ABT_THREAD_NULL) {
                 __kmp_create_worker( th_gtid, th, __kmp_global.stksize );
                 KA_TRACE( 20, ("__kmp_internal_fork: after __kmp_create_worker: "
@@ -6022,7 +6024,9 @@ __kmp_internal_fork( ident_t *id, int gtid, kmp_team_t *team )
                                "T#%d revived T#%d\n",
                               __kmp_get_gtid(), th_gtid) );
             }
+#ifndef KMP_ABT_USE_TASKLET_TEAM
         }
+#endif
     }
 }
 
