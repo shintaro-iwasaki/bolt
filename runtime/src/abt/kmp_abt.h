@@ -2325,7 +2325,7 @@ typedef struct KMP_ALIGN_CACHE kmp_base_team {
     // Using CACHE_LINE=64 reduces memory footprint, but causes a big perf regression of epcc 'parallel'
     // and 'barrier' on fxe256lin01. This extra padding serves to fix the performance of epcc 'parallel'
     // and 'barrier' when CACHE_LINE=64. TODO: investigate more and get rid if this padding.
-    char dummy_padding[1024];
+    //char dummy_padding[1024];
 #endif
     KMP_ALIGN_CACHE kmp_taskdata_t *t_implicit_task_taskdata;  // Taskdata for the thread's implicit task
     kmp_internal_control_t  *t_control_stack_top;  // internal control stack for additional nested teams.
