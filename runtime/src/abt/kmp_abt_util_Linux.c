@@ -858,6 +858,26 @@ void __kmp_task_wait_a(kmp_int32 gtid, kmp_info_t * thread)
 */
 }
 
+void __kmp_free_child_tasks(kmp_info_t *th)
+{
+    int t;
+    int old_size = 0;
+    int current_size = th->th.tasks_in_the_queue;
+
+    while (old_size != current_size) {
+        KA_TRACE( 20, ("__kmp_free_child_tasks: T#%d freeing %d tasks\n",
+                       __kmp_gtid_from_thread(th), current_size-old_size));
+        for (t = old_size; t < current_size; t++) {
+            ABT_thread_free(&th->th.th_task_queue[t]);
+        }
+        old_size = current_size;
+        current_size = th->th.tasks_in_the_queue;
+    }
+
+    th->th.tasks_in_the_queue = 0;
+}
+
+
 /* ------------------------------------------------------------------------ */
 /* ------------------------------------------------------------------------ */
 
@@ -917,25 +937,9 @@ __kmp_launch_worker( void *thr )
     //__kmp_common_destroy_gtid( gtid );
 
     KA_TRACE( 10, ("__kmp_launch_worker: T#%d done\n", gtid) );
-    /* [AC]*/
-   
-    int t;
-    int old_size = 0;
-    int current_size = this_thr->th.tasks_in_the_queue;
-    //KA_TRACE( 10, ("__kmp_launch_worker: T#%d freing %d tasks\n", gtid, end) );
-    while(old_size != current_size){
-        KA_TRACE( 10, ("__kmp_launch_worker: T#%d freing %d tasks\n", gtid, current_size-old_size) );
-        for(t=old_size;t<current_size;t++){
-            ABT_thread_free(&this_thr->th.th_task_queue[t]);
-        }
-        old_size = current_size;
-        current_size = this_thr->th.tasks_in_the_queue;
-    }
-    
-    
-    this_thr->th.tasks_in_the_queue = 0;
-    KA_TRACE( 10, ("__kmp_launch_worker: T#%d freing %d tasks done, now we have %d tasks\n", gtid, current_size, this_thr->th.tasks_in_the_queue) );
 
+    /* [AC]*/
+    __kmp_free_child_tasks(this_thr);
 }
 
 #ifdef KMP_ABT_USE_TASKLET_TEAM

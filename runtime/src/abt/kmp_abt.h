@@ -2866,6 +2866,7 @@ extern void __kmp_reap_worker( kmp_info_t *th );
 /* [AC] */
 extern void __kmp_create_task(kmp_int32 gtid, kmp_task_t * task, kmp_info_t * thread);
 extern void __kmp_task_wait(kmp_int32 gtid, kmp_info_t * thread);
+extern void __kmp_free_child_tasks(kmp_info_t *th);
 
 extern void __kmp_elapsed( double * );
 extern void __kmp_elapsed_tick( double * );
