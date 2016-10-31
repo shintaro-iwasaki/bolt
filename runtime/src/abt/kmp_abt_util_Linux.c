@@ -1233,6 +1233,9 @@ __kmp_barrier( int gtid )
     KA_TRACE(15, ("__kmp_barrier: T#%d(%d:%d) has arrived\n",
                   gtid, __kmp_team_from_gtid(gtid)->t.t_id, __kmp_tid_from_gtid(gtid)));
 
+    /* Complete and free all child tasks */
+    __kmp_free_child_tasks(this_thr);
+
     if (!team->t.t_serialized) {
         KMP_MB();
 
