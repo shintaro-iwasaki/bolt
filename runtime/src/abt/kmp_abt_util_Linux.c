@@ -663,69 +663,20 @@ __kmp_abt_free_task( kmp_int32 gtid, kmp_taskdata_t * taskdata, kmp_info_t * thr
 }
 
 void __kmp_task_execution(void * arg){
-    int i, i_start, i_end;
     int gtid;
 
     kmp_task_t * task = (kmp_task_t *)arg;
     kmp_taskdata_t *taskdata = KMP_TASK_TO_TASKDATA(task);
-    kmp_info_t *th = NULL;
-    
+    kmp_info_t *th;
+
     /* [AC] we need to set some flags in the task data so the dependencies can 
      * be checked and fulfilled */
     taskdata -> td_flags.started = 1;
     taskdata -> td_flags.executing = 1;
-    
-    /* To handle gtid in the task code, we look for a suspended (blocked)
-     * thread in the team and use its info to execute this task.
-     * NOTE: The blocked thread may continue its execution while the task is
-     * running.  Would it be okay to execute two work units that share the same
-     * thread_info?  */
-  retry:
-    kmp_team_t *team = taskdata->td_team;
-    if (team->t.t_level <= 1) {
-        /* outermost team - we try to assign the thread that was executed on
-         * the same ES first and then check other threads in the team.  */
-        int rank;
-        ABT_xstream_self_rank(&rank);
-        if (rank < team->t.t_nproc) {
-            /* [SM] I think this condition should always be true, but just in
-             * case I miss something we check this condition. */
-            i_start = rank;
-            i_end = team->t.t_nproc + rank;
-        } else {
-            i_start = 0;
-            i_end = team->t.t_nproc;
-        }
 
-    } else {
-        /* nested team - we ignore the ES info since threads in the nested team
-         * may be executed by any ES. */
-        i_start = 0;
-        i_end = team->t.t_nproc;
-    }
+    th =  __kmp_bind_task_to_thread(taskdata->td_team, taskdata);
+    gtid = __kmp_gtid_from_thread(th);
 
-    /* TODO: This is a linear search. We can do better? */
-    for (i = i_start; i < i_end; i++) {
-        i = (i < team->t.t_nproc) ? i : i % team->t.t_nproc;
-        th = team->t.t_threads[i];
-        ABT_thread ult = th->th.th_info.ds.ds_thread;
-
-        if (th->th.th_active == FALSE && ult != ABT_THREAD_NULL) {
-            break;
-        }
-    }
-
-    /* Try to take the ownership of kmp_info 'th' */
-    if (th == NULL ||
-        KMP_COMPARE_AND_STORE_RET32(&th->th.th_active, FALSE, TRUE) != FALSE) {
-        ABT_thread_yield();
-        th = NULL;
-        goto retry;
-    }
-
-    /* Deceicve this task as if it is executed by 'th'. */
-    __kmp_set_self_info(th);
-    gtid = th->th.th_info.ds.ds_gtid;
 /*    int rank;
     ABT_xstream_self_rank(&rank);
 
@@ -748,8 +699,6 @@ void __kmp_task_execution(void * arg){
     }
 */
 
-    
-    
     KA_TRACE(20, ("__kmp_task_execution: T#%d before executing task %p.\n", gtid, task ) );
 
     /* [AC] Right now, we don't need to go throw OpenMP task management so we can
@@ -758,10 +707,17 @@ void __kmp_task_execution(void * arg){
     //__kmp_invoke_task( gtid, task, current_task );
     (*(task->routine))(gtid, task);
 
+    if (!taskdata->td_flags.tiedness) {
+        /* If this task is an untied one, we need to retrieve kmp_info because
+         * it may have been changed. */
+        th = __kmp_get_self_info();
+        gtid = __kmp_gtid_from_thread(th);
+    }
+
     __kmp_abt_free_task(gtid, taskdata, th);
 
     /* Reset th's ownership */
-    TCW_4(th->th.th_active, FALSE);
+    __kmp_release_info(th);
 
     KA_TRACE(20, ("__kmp_task_execution: T#%d after executing task %p.\n", gtid, task ) );
 }
@@ -789,7 +745,7 @@ void __kmp_task_wait(kmp_int32 gtid, kmp_info_t * thread)
     int current = 0;
     int equal = 0, i ,first, status;
     ABT_thread current_task;
-    ABT_thread_state state;
+    kmp_taskdata_t *taskdata = thread->th.th_current_task;
       
     KA_TRACE(20, ("__kmp_task_wait: T#%d checks %d tasks.\n", gtid, ntasks) );
 
@@ -810,24 +766,16 @@ void __kmp_task_wait(kmp_int32 gtid, kmp_info_t * thread)
     }
 
     /* Let others, e.g., tasks, can use this kmp_info */
-    KMP_DEBUG_ASSERT(thread->th.th_active == TRUE);
-    TCW_4(thread->th.th_active, FALSE);
+    __kmp_release_info(thread);
 
     for(i = first; i < ntasks; i++){
         KA_TRACE(20, ("__kmp_task_wait (before joining): T#%d joins task %d.\n", gtid, i) );
-        if (state != ABT_THREAD_STATE_TERMINATED || state != ABT_THREAD_STATE_BLOCKED)
-        {
-            KA_TRACE(20, ("__kmp_task_wait (inside if) state=%d: T#%d joins task %d .\n", state, gtid, i) );
-            ABT_thread_join(thread->th.th_task_queue[i]);
-        }
+        ABT_thread_join(thread->th.th_task_queue[i]);
         KA_TRACE(20, ("__kmp_task_wait (after joining): T#%d joins task %d .\n", gtid, i) );
-    
     }
 
-    /* This ULT must set th_active to TRUE before proceeding. */
-    while (KMP_COMPARE_AND_STORE_RET32(&thread->th.th_active, FALSE, TRUE) != FALSE) {
-        ABT_thread_yield();
-    }
+    /* Obtain kmp_info to continue the original task. */
+    __kmp_acquire_info_for_task(thread, taskdata);
 
     /* [AC] First version. this implementation was working before the thread 
      * id assignment in task execution */
@@ -873,9 +821,10 @@ void __kmp_free_child_tasks(kmp_info_t *th)
     int current_size = th->th.tasks_in_the_queue;
     if (current_size == 0) return;
 
+    kmp_taskdata_t *taskdata = th->th.th_current_task;
+
     /* Let others, e.g., tasks, can use this kmp_info */
-    KMP_DEBUG_ASSERT(th->th.th_active == TRUE);
-    TCW_4(th->th.th_active, FALSE);
+    __kmp_release_info(th);
 
     while (old_size != current_size) {
         KA_TRACE( 20, ("__kmp_free_child_tasks: T#%d freeing %d tasks\n",
@@ -889,10 +838,63 @@ void __kmp_free_child_tasks(kmp_info_t *th)
 
     th->th.tasks_in_the_queue = 0;
 
-    /* This ULT must set th_active to TRUE before proceeding. */
-    while (KMP_COMPARE_AND_STORE_RET32(&th->th.th_active, FALSE, TRUE) != FALSE) {
+    /* Obtain kmp_info to continue the original task. */
+    __kmp_acquire_info_for_task(th, taskdata);
+}
+
+kmp_info_t *__kmp_bind_task_to_thread(kmp_team_t *team, kmp_taskdata_t *taskdata)
+{
+    int i, i_start, i_end;
+    kmp_info_t *th = NULL;
+
+    /* To handle gtid in the task code, we look for a suspended (blocked)
+     * thread in the team and use its info to execute this task. */
+    while (1) {
+        if (team->t.t_level <= 1) {
+            /* outermost team - we try to assign the thread that was executed on
+             * the same ES first and then check other threads in the team.  */
+            int rank;
+            ABT_xstream_self_rank(&rank);
+            if (rank < team->t.t_nproc) {
+                /* [SM] I think this condition should always be true, but just in
+                 * case I miss something we check this condition. */
+                i_start = rank;
+                i_end = team->t.t_nproc + rank;
+            } else {
+                i_start = 0;
+                i_end = team->t.t_nproc;
+            }
+
+        } else {
+            /* nested team - we ignore the ES info since threads in the nested team
+             * may be executed by any ES. */
+            i_start = 0;
+            i_end = team->t.t_nproc;
+        }
+
+        /* TODO: This is a linear search. Can we do better? */
+        for (i = i_start; i < i_end; i++) {
+            int idx = (i < team->t.t_nproc) ? i : i % team->t.t_nproc;
+            th = team->t.t_threads[idx];
+            ABT_thread ult = th->th.th_info.ds.ds_thread;
+
+            if (th->th.th_active == FALSE && ult != ABT_THREAD_NULL) {
+                /* Try to take the ownership of kmp_info 'th' */
+                if (KMP_COMPARE_AND_STORE_RET32(&th->th.th_active, FALSE, TRUE) == FALSE) {
+                    /* Bind this task as if it is executed by 'th'. */
+                    th->th.th_current_task = taskdata;
+                    __kmp_set_self_info(th);
+                    return th;
+                }
+            }
+        }
+
+        /* We could not find an available kmp_info. Thus, this task yields
+         * control to other work units and will try to find one later. */
         ABT_thread_yield();
     }
+
+    return NULL;
 }
 
 
@@ -1257,8 +1259,9 @@ __kmp_barrier( int gtid )
     if (!team->t.t_serialized) {
         KMP_MB();
 
-        KMP_DEBUG_ASSERT(this_thr->th.th_active == TRUE);
-        TCW_4(this_thr->th.th_active, FALSE);
+        kmp_taskdata_t *taskdata = this_thr->th.th_current_task;
+
+        __kmp_release_info(this_thr);
 
         if (KMP_MASTER_TID(tid)) {
             status = 0;
@@ -1271,10 +1274,7 @@ __kmp_barrier( int gtid )
             KMP_DEBUG_ASSERT( ret == ABT_SUCCESS );
         }
 
-        while (KMP_COMPARE_AND_STORE_RET32(&this_thr->th.th_active, FALSE, TRUE)
-               != FALSE) {
-            ABT_thread_yield();
-        }
+        __kmp_acquire_info_for_task(this_thr, taskdata);
     } else { // Team is serialized.
         status = 0;
     }

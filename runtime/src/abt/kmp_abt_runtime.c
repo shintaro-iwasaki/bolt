@@ -6049,8 +6049,9 @@ __kmp_internal_join( ident_t *id, int gtid, kmp_team_t *team )
 
     //__kmp_join_barrier( gtid );  /* wait for everyone */
 
-    KMP_DEBUG_ASSERT(this_thr->th.th_active == TRUE);
-    TCW_4(this_thr->th.th_active, FALSE);
+    kmp_taskdata_t *taskdata = this_thr->th.th_current_task;
+
+    __kmp_release_info(this_thr);
 
     /* [SM] join Argobots ULTs here */
     for (f = 1; f < team->t.t_nproc; f++) {
@@ -6059,9 +6060,7 @@ __kmp_internal_join( ident_t *id, int gtid, kmp_team_t *team )
                       gtid, __kmp_gtid_from_tid(f,team)) );
     }
 
-    while (KMP_COMPARE_AND_STORE_RET32(&this_thr->th.th_active, FALSE, TRUE) != FALSE) {
-        ABT_thread_yield();
-    }
+    __kmp_acquire_info_for_task(this_thr, taskdata);
 
     KMP_MB();       /* Flush all pending memory write invalidates.  */
     KMP_ASSERT( this_thr->th.th_team  ==  team );

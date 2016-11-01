@@ -75,6 +75,22 @@ __kmp_gtid_get_specific(void)
     return gtid;
 }
 
+static inline void
+__kmp_release_info(kmp_info_t *th)
+{
+    KMP_DEBUG_ASSERT(th->th.th_active == TRUE);
+    TCW_4(th->th.th_active, FALSE);
+}
+
+static inline void
+__kmp_acquire_info_for_task(kmp_info_t *th, kmp_taskdata_t *taskdata)
+{
+    while (KMP_COMPARE_AND_STORE_RET32(&th->th.th_active, FALSE, TRUE) != FALSE) {
+        ABT_thread_yield();
+    }
+    th->th.th_current_task = taskdata;
+}
+
 /* ------------------------------------------------------------------------ */
 
 #endif /* KMP_ABT_INLINE_H */
