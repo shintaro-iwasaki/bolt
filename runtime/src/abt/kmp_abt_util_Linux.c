@@ -680,6 +680,7 @@ void __kmp_task_execution(void * arg){
      * NOTE: The blocked thread may continue its execution while the task is
      * running.  Would it be okay to execute two work units that share the same
      * thread_info?  */
+  retry:
     kmp_team_t *team = taskdata->td_team;
     if (team->t.t_level <= 1) {
         /* outermost team - we try to assign the thread that was executed on
@@ -687,7 +688,7 @@ void __kmp_task_execution(void * arg){
         int rank;
         ABT_xstream_self_rank(&rank);
         if (rank < team->t.t_nproc) {
-            /* [SM] I think this condition should alwasy be true, but just in
+            /* [SM] I think this condition should always be true, but just in
              * case I miss something we check this condition. */
             i_start = rank;
             i_end = team->t.t_nproc + rank;
@@ -709,24 +710,17 @@ void __kmp_task_execution(void * arg){
         th = team->t.t_threads[i];
         ABT_thread ult = th->th.th_info.ds.ds_thread;
 
-        if (ult == ABT_THREAD_NULL) {
-            /* th's ULT hasn't started yet, so let's use it */
+        if (th->th.th_active == FALSE && ult != ABT_THREAD_NULL) {
             break;
-        } else {
-            ABT_thread_state state;
-            int status = ABT_thread_get_state(ult, &state);
-            KMP_ASSERT(status == ABT_SUCCESS);
-            if (state == ABT_THREAD_STATE_BLOCKED ||
-                state == ABT_THREAD_STATE_TERMINATED) {
-                break;
-            }
         }
     }
 
-    if (th == NULL) {
-        /* We couldn't find any blocked threads, so we choose the master
-         * thread. */
-        th = team->t.t_threads[0];
+    /* Try to take the ownership of kmp_info 'th' */
+    if (th == NULL ||
+        KMP_COMPARE_AND_STORE_RET32(&th->th.th_active, FALSE, TRUE) != FALSE) {
+        ABT_thread_yield();
+        th = NULL;
+        goto retry;
     }
 
     /* Deceicve this task as if it is executed by 'th'. */
@@ -763,7 +757,12 @@ void __kmp_task_execution(void * arg){
     //kmp_taskdata_t * current_task = __kmp_global.threads[ gtid ] -> th.th_current_task;
     //__kmp_invoke_task( gtid, task, current_task );
     (*(task->routine))(gtid, task);
+
     __kmp_abt_free_task(gtid, taskdata, th);
+
+    /* Reset th's ownership */
+    TCW_4(th->th.th_active, FALSE);
+
     KA_TRACE(20, ("__kmp_task_execution: T#%d after executing task %p.\n", gtid, task ) );
 }
 
@@ -809,6 +808,11 @@ void __kmp_task_wait(kmp_int32 gtid, kmp_info_t * thread)
         first = current;
         KA_TRACE(20, ("__kmp_task_wait (while): T#%d just from %d to %d are childrens.\n", gtid, first, ntasks) );
     }
+
+    /* Let others, e.g., tasks, can use this kmp_info */
+    KMP_DEBUG_ASSERT(thread->th.th_active == TRUE);
+    TCW_4(thread->th.th_active, FALSE);
+
     for(i = first; i < ntasks; i++){
         KA_TRACE(20, ("__kmp_task_wait (before joining): T#%d joins task %d.\n", gtid, i) );
         if (state != ABT_THREAD_STATE_TERMINATED || state != ABT_THREAD_STATE_BLOCKED)
@@ -819,8 +823,12 @@ void __kmp_task_wait(kmp_int32 gtid, kmp_info_t * thread)
         KA_TRACE(20, ("__kmp_task_wait (after joining): T#%d joins task %d .\n", gtid, i) );
     
     }
-    
-     
+
+    /* This ULT must set th_active to TRUE before proceeding. */
+    while (KMP_COMPARE_AND_STORE_RET32(&thread->th.th_active, FALSE, TRUE) != FALSE) {
+        ABT_thread_yield();
+    }
+
     /* [AC] First version. this implementation was working before the thread 
      * id assignment in task execution */
     /*
@@ -863,6 +871,11 @@ void __kmp_free_child_tasks(kmp_info_t *th)
     int t;
     int old_size = 0;
     int current_size = th->th.tasks_in_the_queue;
+    if (current_size == 0) return;
+
+    /* Let others, e.g., tasks, can use this kmp_info */
+    KMP_DEBUG_ASSERT(th->th.th_active == TRUE);
+    TCW_4(th->th.th_active, FALSE);
 
     while (old_size != current_size) {
         KA_TRACE( 20, ("__kmp_free_child_tasks: T#%d freeing %d tasks\n",
@@ -875,6 +888,11 @@ void __kmp_free_child_tasks(kmp_info_t *th)
     }
 
     th->th.tasks_in_the_queue = 0;
+
+    /* This ULT must set th_active to TRUE before proceeding. */
+    while (KMP_COMPARE_AND_STORE_RET32(&th->th.th_active, FALSE, TRUE) != FALSE) {
+        ABT_thread_yield();
+    }
 }
 
 
@@ -1239,6 +1257,9 @@ __kmp_barrier( int gtid )
     if (!team->t.t_serialized) {
         KMP_MB();
 
+        KMP_DEBUG_ASSERT(this_thr->th.th_active == TRUE);
+        TCW_4(this_thr->th.th_active, FALSE);
+
         if (KMP_MASTER_TID(tid)) {
             status = 0;
             ret = ABT_barrier_wait( team->t.t_bar );
@@ -1250,6 +1271,10 @@ __kmp_barrier( int gtid )
             KMP_DEBUG_ASSERT( ret == ABT_SUCCESS );
         }
 
+        while (KMP_COMPARE_AND_STORE_RET32(&this_thr->th.th_active, FALSE, TRUE)
+               != FALSE) {
+            ABT_thread_yield();
+        }
     } else { // Team is serialized.
         status = 0;
     }

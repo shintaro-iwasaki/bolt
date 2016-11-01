@@ -1323,8 +1323,20 @@ __kmpc_omp_taskyield( ident_t *loc_ref, kmp_int32 gtid, int end_part )
         taskdata->td_taskwait_thread = - taskdata->td_taskwait_thread;
     }
 */
+
+    /* Let others, e.g., tasks, can use this kmp_info */
+    thread = __kmp_global.threads[ gtid ];
+    KMP_DEBUG_ASSERT(thread->th.th_active == TRUE);
+    TCW_4(thread->th.th_active, FALSE);
+
     //[AC] In a taskyield directive we just do it... yield
     __kmp_yield(1);
+
+    /* This ULT must set th_active to TRUE before proceeding. */
+    while (KMP_COMPARE_AND_STORE_RET32(&thread->th.th_active, FALSE, TRUE) != FALSE) {
+        ABT_thread_yield();
+    }
+
     KA_TRACE(10, ("__kmpc_omp_taskyield(exit): T#%d task %p resuming, "
                   "returning TASK_CURRENT_NOT_QUEUED\n", gtid, taskdata) );
 

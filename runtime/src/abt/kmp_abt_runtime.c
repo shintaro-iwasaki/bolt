@@ -1499,6 +1499,9 @@ __kmp_register_root( int initial_thread )
     /* initialize the thread, get it ready to go */
     __kmp_initialize_info( root_thread, root->r.r_root_team, 0, gtid );
 
+    /* Mark root_thread as active */
+    TCW_4(root_thread->th.th_active, TRUE);
+
     /* prepare the master thread for get_gtid() */
     //__kmp_gtid_set_specific( gtid );
     root_thread->th.th_info.ds.ds_gtid = gtid;
@@ -6045,11 +6048,19 @@ __kmp_internal_join( ident_t *id, int gtid, kmp_team_t *team )
     __kmp_free_child_tasks(this_thr);
 
     //__kmp_join_barrier( gtid );  /* wait for everyone */
+
+    KMP_DEBUG_ASSERT(this_thr->th.th_active == TRUE);
+    TCW_4(this_thr->th.th_active, FALSE);
+
     /* [SM] join Argobots ULTs here */
     for (f = 1; f < team->t.t_nproc; f++) {
         __kmp_join_worker( team->t.t_threads[f] );
         KA_TRACE( 20, ("__kmp_internal_join: after __kmp_join_worker: T#%d joined T#%d\n",
                       gtid, __kmp_gtid_from_tid(f,team)) );
+    }
+
+    while (KMP_COMPARE_AND_STORE_RET32(&this_thr->th.th_active, FALSE, TRUE) != FALSE) {
+        ABT_thread_yield();
     }
 
     KMP_MB();       /* Flush all pending memory write invalidates.  */
