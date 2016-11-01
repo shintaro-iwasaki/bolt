@@ -1946,9 +1946,6 @@ ___kmp_fast_free( kmp_info_t *this_thr, void * ptr KMP_SRC_LOC_DECL )
                 void * old_ptr;
                 void * tail = head;
                 void * next = *((void **)head);
-                /*[AC] as we don't need this extra check because our tasks are managed 
-                 by Argobots, the memory allocation is not needed here*/
-                next=NULL;
                 while ( next != NULL ) {
                     KMP_DEBUG_ASSERT(
                         // queue size should decrease by 1 each step through the list
