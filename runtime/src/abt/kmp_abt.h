@@ -2019,6 +2019,9 @@ struct kmp_taskdata {                                 /* aligned during dynamic 
     kmp_task_team_t *       td_task_team;
     kmp_int32               td_size_alloc;        // The size of task structure, including shareds etc.
 #endif
+    kmp_abt_task_t *        td_task_queue;        // child tasks
+    kmp_int32               td_tq_cur_size;       // current size of td_task_queue
+    kmp_int32               td_tq_max_size;       // maximum size of td_task_queue
 }; // struct kmp_taskdata
 
 // Make sure padding above worked
@@ -2103,7 +2106,7 @@ typedef struct kmp_teams_size {
 // OpenMP thread data structures
 //
 
-#define MAX_ABT_TASKS 2048
+#define MAX_ABT_TASKS 1024
 
 typedef struct KMP_ALIGN_CACHE kmp_base_info {
 /*
@@ -2118,8 +2121,6 @@ typedef struct KMP_ALIGN_CACHE kmp_base_info {
     kmp_info_p       *th_next_pool;  /* next available thread in the pool */
     kmp_disp_t       *th_dispatch;   /* thread's dispatch data */
     int               th_in_pool;    /* in thread pool (32 bits for TCR/TCW) */
-    kmp_abt_task_t   th_task_queue[MAX_ABT_TASKS]; /* [AC] It is the per thread task queue pointer*/
-    int tasks_in_the_queue = 0;
     int use_tasklet_team = FTN_FALSE; /* internal control for using tasklet for next parallel region (per thread) */
 
     /* The following are cached from the team info structure */
@@ -2864,9 +2865,8 @@ extern void __kmp_revive_tasklet_worker( kmp_info_t *th );
 extern void __kmp_join_worker( kmp_info_t *th );
 extern void __kmp_reap_worker( kmp_info_t *th );
 /* [AC] */
-extern void __kmp_create_task(kmp_int32 gtid, kmp_task_t * task, kmp_info_t * thread);
-extern void __kmp_task_wait(kmp_int32 gtid, kmp_info_t * thread);
-extern void __kmp_free_child_tasks(kmp_info_t *th);
+extern int __kmp_create_task(kmp_info_t *th, kmp_task_t *task);
+extern void __kmp_wait_child_tasks(kmp_info_t *th, int yield);
 extern kmp_info_t *__kmp_bind_task_to_thread(kmp_team_t *team, kmp_taskdata_t *taskdata);
 
 extern void __kmp_elapsed( double * );

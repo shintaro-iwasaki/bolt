@@ -340,10 +340,10 @@ __kmp_push_task(kmp_int32 gtid, kmp_task_t * task )
     __kmp_release_bootstrap_lock( & thread_data -> td.td_deque_lock );
 */ /*[AC]*/
     //ABT_pool dest = __kmp_abt_get_pool(gtid);
-    if(thread->th.tasks_in_the_queue >= MAX_ABT_TASKS)
-        return TASK_NOT_PUSHED;
 
-    __kmp_create_task(gtid, task, thread);
+    if (!__kmp_create_task(thread, task)) {
+        return TASK_NOT_PUSHED;
+    }
     /*ABT_xstream aux;
     ABT_xstream_self (&aux);
     int a; ABT_xstream_self_rank(&a);
@@ -351,12 +351,8 @@ __kmp_push_task(kmp_int32 gtid, kmp_task_t * task )
 
     ABT_thread_create_on_xstream (aux, execution_task, (void *)task, ABT_THREAD_ATTR_NULL , &thread->th.th_task_queue[thread->th.tasks_in_the_queue++]);*/
     //ABT_task_create(dest, execution_task, (void *)task, &thread->th.th_task_queue[pos++]);
-    KA_TRACE(20, ("__kmp_push_task: T#%d returning TASK_SUCCESSFULLY_PUSHED: "
-                  "task=%p ntasks=%d head=%u tail=%u en xstream %d\n",
-                  //gtid, taskdata, thread_data->td.td_deque_ntasks,
-                  //thread_data->td.td_deque_tail, thread_data->td.td_deque_head) );
-                  gtid, thread->th.th_task_queue[thread->th.tasks_in_the_queue-1], thread->th.tasks_in_the_queue,
-                  thread_data->td.td_deque_tail, thread_data->td.td_deque_head) );
+    KA_TRACE(20, ("__kmp_push_task: T#%d pushed task %p; returning TASK_SUCCESSFULLY_PUSHED\n",
+                  gtid, task));
 
     return TASK_SUCCESSFULLY_PUSHED;
 }
@@ -955,6 +951,10 @@ __kmp_task_alloc( ident_t *loc_ref, kmp_int32 gtid, kmp_tasking_flags_t *flags,
     taskdata->td_task_team         = thread->th.th_task_team;
     taskdata->td_size_alloc        = shareds_offset + sizeof_shareds;
 #endif
+    taskdata->td_task_queue        = NULL;
+    taskdata->td_tq_cur_size       = 0;
+    taskdata->td_tq_max_size       = 0;
+
     taskdata->td_flags.tasktype    = TASK_EXPLICIT;
 
     // GEH - TODO: fix this to copy parent task's value of tasking_ser flag
@@ -1249,7 +1249,7 @@ __kmpc_omp_taskwait( ident_t *loc_ref, kmp_int32 gtid )
         // GEH TODO: shouldn't we have some sort of OMPRAP API calls here to mark begin wait?
 
         thread = __kmp_global.threads[ gtid ];
-        __kmp_task_wait(gtid,thread);
+        __kmp_wait_child_tasks(thread, TRUE);
         /* [AC] we call the taskwait just for check the pending tasks in the queue*/
        /* taskdata = thread -> th.th_current_task;
 

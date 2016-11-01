@@ -631,11 +631,12 @@ __kmp_runtime_destroy( void )
 /* ------------------------------------------------------------------------ */
 /* ------------------------------------------------------------------------ */
 
-static void
-__kmp_abt_free_task( kmp_int32 gtid, kmp_taskdata_t * taskdata, kmp_info_t * thread )
+static inline
+void __kmp_abt_free_task(kmp_info_t *th, kmp_taskdata_t *taskdata)
 {
-    KA_TRACE(30, ("__kmp_free_task: T#%d freeing data from task %p\n",
-                  gtid, taskdata) );
+    int gtid = __kmp_gtid_from_thread(th);
+
+    KA_TRACE(30, ("__kmp_free_task: (enter) T#%d - task %p\n", gtid, taskdata));
 
     /* [AC] we need those steps to mark the task as finished so the dependencies
      *  can be completed */
@@ -651,21 +652,28 @@ __kmp_abt_free_task( kmp_int32 gtid, kmp_taskdata_t * taskdata, kmp_info_t * thr
     //KMP_DEBUG_ASSERT( TCR_4(taskdata->td_incomplete_child_tasks) == 0 );
 
     taskdata->td_flags.freed = 1;
+
+    /* Free the task queue if it was allocated. */
+    if (taskdata->td_task_queue) {
+        KMP_DEBUG_ASSERT(taskdata->td_tq_cur_size == 0);
+        KMP_INTERNAL_FREE(taskdata->td_task_queue);
+    }
+
     // deallocate the taskdata and shared variable blocks associated with this task
     #if USE_FAST_MEMORY
-        __kmp_fast_free( thread, taskdata );
+        __kmp_fast_free( th, taskdata );
     #else /* ! USE_FAST_MEMORY */
-        __kmp_thread_free( thread, taskdata );
+        __kmp_thread_free( th, taskdata );
     #endif
 
-    KA_TRACE(20, ("__kmp_free_task: T#%d freed task %p\n",
-                  gtid, taskdata) );
+    KA_TRACE(20, ("__kmp_free_task: (exit) T#%d - task %p\n", gtid, taskdata));
 }
 
-void __kmp_task_execution(void * arg){
+static void __kmp_execute_task(void *arg)
+{
     int gtid;
 
-    kmp_task_t * task = (kmp_task_t *)arg;
+    kmp_task_t *task = (kmp_task_t *)arg;
     kmp_taskdata_t *taskdata = KMP_TASK_TO_TASKDATA(task);
     kmp_info_t *th;
 
@@ -674,32 +682,10 @@ void __kmp_task_execution(void * arg){
     taskdata -> td_flags.started = 1;
     taskdata -> td_flags.executing = 1;
 
-    th =  __kmp_bind_task_to_thread(taskdata->td_team, taskdata);
+    th = __kmp_bind_task_to_thread(taskdata->td_team, taskdata);
     gtid = __kmp_gtid_from_thread(th);
 
-/*    int rank;
-    ABT_xstream_self_rank(&rank);
-
-    ABT_thread self;
-    ABT_thread_self(&self);
-    int ntasks=th->th.tasks_in_the_queue;
-    i = 0;
-    int equal = 0;
-    printf("the gtid chosen is %d\n",gtid);
-    while (i< ntasks && !equal){
-        ABT_thread_equal(self, th->th.th_task_queue[i] , &equal);
-        i++;
-    }
-    if(i==ntasks){
-        printf("no es mia asi que pa adentro\n");
-        th->th.th_task_queue[th->th.tasks_in_the_queue++] = self;
-    }
-    else{
-        printf("ya era mia\n");
-    }
-*/
-
-    KA_TRACE(20, ("__kmp_task_execution: T#%d before executing task %p.\n", gtid, task ) );
+    KA_TRACE(20, ("__kmp_execute_task: T#%d before executing task %p.\n", gtid, task));
 
     /* [AC] Right now, we don't need to go throw OpenMP task management so we can
        just execute the task, don't we?*/
@@ -711,92 +697,103 @@ void __kmp_task_execution(void * arg){
         /* If this task is an untied one, we need to retrieve kmp_info because
          * it may have been changed. */
         th = __kmp_get_self_info();
-        gtid = __kmp_gtid_from_thread(th);
     }
 
-    __kmp_abt_free_task(gtid, taskdata, th);
+    __kmp_abt_free_task(th, taskdata);
 
     /* Reset th's ownership */
     __kmp_release_info(th);
 
-    KA_TRACE(20, ("__kmp_task_execution: T#%d after executing task %p.\n", gtid, task ) );
+    KA_TRACE(20, ("__kmp_execute_task: T#%d after executing task %p.\n",
+                  __kmp_gtid_from_thread(th), task));
 }
 
-
-
-void __kmp_create_task(kmp_int32 gtid, kmp_task_t * task, kmp_info_t *thread)
+int __kmp_create_task(kmp_info_t *th, kmp_task_t *task)
 {
+    int status;
+    int gtid = __kmp_gtid_from_thread(th);
     ABT_pool dest = __kmp_abt_get_my_pool(gtid);
-    KA_TRACE(20, ("__kmp_create_task: T#%d before creating task %p into the pool %p.\n", gtid, task, dest ) );
-   
-    ABT_thread_create(dest,__kmp_task_execution, (void *)task, 
-                        ABT_THREAD_ATTR_NULL , 
-                        &thread->th.th_task_queue[thread->th.tasks_in_the_queue++]);
-    KA_TRACE(20, ("__kmp_create_task: T#%d after creating task %p into the pool %p.\n", gtid, task, dest ) );
 
+    KA_TRACE(20, ("__kmp_create_task: T#%d before creating task %p into the pool %p.\n",
+                  gtid, task, dest));
+
+    /* Check if the task queue has an empty slot */
+    kmp_taskdata_t *td = th->th.th_current_task;
+    if (td->td_tq_cur_size == td->td_tq_max_size) {
+        size_t new_max_size;
+        if (td->td_tq_max_size == 0) {
+            /* Empty queue. We allocate 32 slots by default. */
+            new_max_size = 32;
+        } else {
+            /* The task queue is full. Expand it if possible. */
+            new_max_size = td->td_tq_max_size * 2;
+            if (new_max_size > MAX_ABT_TASKS) {
+                KA_TRACE(20, ("__kmp_create_task: T#%d - queue is full\n", gtid));
+                return FALSE;
+            }
+        }
+
+        void *queue = (void *)td->td_task_queue;
+        size_t size = sizeof(kmp_abt_task_t) * new_max_size;
+        td->td_task_queue = (kmp_abt_task_t *)KMP_INTERNAL_REALLOC(queue, size);
+        td->td_tq_max_size = new_max_size;
+    }
+
+    status = ABT_thread_create(dest, __kmp_execute_task, (void *)task,
+                               ABT_THREAD_ATTR_NULL,
+                               &td->td_task_queue[td->td_tq_cur_size++]);
+    KMP_ASSERT(status == ABT_SUCCESS);
+
+    KA_TRACE(20, ("__kmp_create_task: T#%d after creating task %p into the pool %p.\n",
+                  gtid, task, dest));
+
+    return TRUE;
 }
 
-void __kmp_task_wait(kmp_int32 gtid, kmp_info_t * thread)
+void __kmp_wait_child_tasks(kmp_info_t *th, int yield)
 {
-    KA_TRACE(20, ("__kmp_task_wait (enter): T#%d before checking.\n", gtid) );
+    KA_TRACE(20, ("__kmp_wait_child_tasks: T#%d enter\n", __kmp_gtid_from_thread(th)));
 
-    int ntasks = thread->th.tasks_in_the_queue;
-    //int current = ntasks-1; Used in the first version
-    int current = 0;
-    int equal = 0, i ,first, status;
-    ABT_thread current_task;
-    kmp_taskdata_t *taskdata = thread->th.th_current_task;
-      
-    KA_TRACE(20, ("__kmp_task_wait: T#%d checks %d tasks.\n", gtid, ntasks) );
+    int i, status;
+    kmp_taskdata_t *taskdata = th->th.th_current_task;
 
-    ABT_thread_self(&current_task);
-    
-    while(!equal && current < ntasks){
-        ABT_thread_equal(current_task, thread->th.th_task_queue[current] , &equal);
-        KA_TRACE(20, ("__kmp_task_wait (while): T#%d current and task %d equal? %d.\n", gtid, current, (equal)? 1 : 0) );
-        current++;
-    }
-    if(current == ntasks){
-        KA_TRACE(20, ("__kmp_task_wait (while): T#%d all tasks are childrens so current task was stolen.\n", gtid) );
-        first = 0;
-    }
-    else{
-        first = current;
-        KA_TRACE(20, ("__kmp_task_wait (while): T#%d just from %d to %d are childrens.\n", gtid, first, ntasks) );
+    if (taskdata->td_tq_cur_size == 0) {
+        /* leaf task case */
+        if (yield) {
+            __kmp_release_info(th);
+
+            ABT_thread_yield();
+
+            if (taskdata->td_flags.tiedness) {
+                __kmp_acquire_info_for_task(th, taskdata);
+            } else {
+                __kmp_bind_task_to_thread(th->th.th_team, taskdata);
+            }
+        }
+        return;
     }
 
     /* Let others, e.g., tasks, can use this kmp_info */
-    __kmp_release_info(thread);
+    __kmp_release_info(th);
 
-    for(i = first; i < ntasks; i++){
-        KA_TRACE(20, ("__kmp_task_wait (before joining): T#%d joins task %d.\n", gtid, i) );
-        ABT_thread_join(thread->th.th_task_queue[i]);
-        KA_TRACE(20, ("__kmp_task_wait (after joining): T#%d joins task %d .\n", gtid, i) );
+    /* Give other tasks a chance for execution */
+    if (yield) ABT_thread_yield();
+
+    /* Wait until all child tasks are complete. */
+    for (i = 0; i < taskdata->td_tq_cur_size; i++) {
+        status = ABT_thread_free(&taskdata->td_task_queue[i]);
+        KMP_ASSERT(status == ABT_SUCCESS);
+    }
+    taskdata->td_tq_cur_size = 0;
+
+    if (taskdata->td_flags.tiedness) {
+        /* Obtain kmp_info to continue the original task. */
+        __kmp_acquire_info_for_task(th, taskdata);
+    } else {
+        th = __kmp_bind_task_to_thread(th->th.th_team, taskdata);
     }
 
-    /* Obtain kmp_info to continue the original task. */
-    __kmp_acquire_info_for_task(thread, taskdata);
-
-    /* [AC] First version. this implementation was working before the thread 
-     * id assignment in task execution */
-    /*
-    while(current >= 0){
-        ABT_thread_equal(current_task, thread->th.th_task_queue[current] , &equal);
-        KA_TRACE(20, ("__kmp_task_wait (before joining): T#%d joins task %d equal? %d.\n", gtid, current, (equal)? 1 : 0) );
-        if(equal){break;}        
-        status = ABT_thread_get_state(thread->th.th_task_queue[current], &state);
-        //KMP_ASSERT(status == ABT_SUCCESS);
-        
-        if (state != ABT_THREAD_STATE_TERMINATED){
-            KA_TRACE(20, ("__kmp_task_wait (inside if) state=%d: T#%d joins task %d .\n", state, gtid, current) );
-            ABT_thread_join(thread->th.th_task_queue[current]);
-        }
-        KA_TRACE(20, ("__kmp_task_wait (after joining): T#%d joins task %d .\n", gtid, current) );
-        current--;
-    }
-     */
-    KA_TRACE(20, ("__kmp_task_wait (exit): T#%d.\n", gtid) );
-
+    KA_TRACE(20, ("__kmp_wait_child_tasks: T#%d done\n", __kmp_gtid_from_thread(th)));
 }
 
 void __kmp_task_wait_a(kmp_int32 gtid, kmp_info_t * thread)
@@ -814,38 +811,12 @@ void __kmp_task_wait_a(kmp_int32 gtid, kmp_info_t * thread)
 */
 }
 
-void __kmp_free_child_tasks(kmp_info_t *th)
-{
-    int t;
-    int old_size = 0;
-    int current_size = th->th.tasks_in_the_queue;
-    if (current_size == 0) return;
-
-    kmp_taskdata_t *taskdata = th->th.th_current_task;
-
-    /* Let others, e.g., tasks, can use this kmp_info */
-    __kmp_release_info(th);
-
-    while (old_size != current_size) {
-        KA_TRACE( 20, ("__kmp_free_child_tasks: T#%d freeing %d tasks\n",
-                       __kmp_gtid_from_thread(th), current_size-old_size));
-        for (t = old_size; t < current_size; t++) {
-            ABT_thread_free(&th->th.th_task_queue[t]);
-        }
-        old_size = current_size;
-        current_size = th->th.tasks_in_the_queue;
-    }
-
-    th->th.tasks_in_the_queue = 0;
-
-    /* Obtain kmp_info to continue the original task. */
-    __kmp_acquire_info_for_task(th, taskdata);
-}
-
 kmp_info_t *__kmp_bind_task_to_thread(kmp_team_t *team, kmp_taskdata_t *taskdata)
 {
     int i, i_start, i_end;
     kmp_info_t *th = NULL;
+
+    KA_TRACE(20, ("__kmp_bind_task_to_thread: (enter) task %p\n", taskdata));
 
     /* To handle gtid in the task code, we look for a suspended (blocked)
      * thread in the team and use its info to execute this task. */
@@ -884,6 +855,8 @@ kmp_info_t *__kmp_bind_task_to_thread(kmp_team_t *team, kmp_taskdata_t *taskdata
                     /* Bind this task as if it is executed by 'th'. */
                     th->th.th_current_task = taskdata;
                     __kmp_set_self_info(th);
+                    KA_TRACE(20, ("__kmp_bind_task_to_thread: (exit) task %p bound to T#%d\n",
+                                  taskdata, __kmp_gtid_from_thread(th)));
                     return th;
                 }
             }
@@ -959,7 +932,16 @@ __kmp_launch_worker( void *thr )
     KA_TRACE( 10, ("__kmp_launch_worker: T#%d done\n", gtid) );
 
     /* [AC]*/
-    __kmp_free_child_tasks(this_thr);
+    __kmp_wait_child_tasks(this_thr, FALSE);
+
+    /* Below is for the implicit task */
+    kmp_taskdata_t *td = this_thr->th.th_current_task;
+    if (td->td_task_queue) {
+        KMP_DEBUG_ASSERT(td->td_tq_cur_size == 0);
+        KMP_INTERNAL_FREE(td->td_task_queue);
+        td->td_task_queue = NULL;
+        td->td_tq_max_size = 0;
+    }
 }
 
 #ifdef KMP_ABT_USE_TASKLET_TEAM
@@ -1254,7 +1236,7 @@ __kmp_barrier( int gtid )
                   gtid, __kmp_team_from_gtid(gtid)->t.t_id, __kmp_tid_from_gtid(gtid)));
 
     /* Complete and free all child tasks */
-    __kmp_free_child_tasks(this_thr);
+    __kmp_wait_child_tasks(this_thr, FALSE);
 
     if (!team->t.t_serialized) {
         KMP_MB();

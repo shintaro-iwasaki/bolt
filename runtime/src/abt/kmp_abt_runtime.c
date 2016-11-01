@@ -3915,6 +3915,34 @@ __kmp_alloc_argv_entries( int argc, kmp_team_t *team, int realloc )
     }
 }
 
+/* This function is used to initialize task queues for implicit tasks. */
+static inline void
+__kmp_init_task_queues(kmp_taskdata_t *tds, int num)
+{
+    int i;
+    for (i = 0; i < num; i++) {
+        tds[i].td_task_queue = NULL;
+        tds[i].td_tq_cur_size = 0;
+        tds[i].td_tq_max_size = 0;
+    }
+}
+
+/* This function is used to deallocate task queues for implicit tasks. */
+static inline void
+__kmp_fini_task_queues(kmp_taskdata_t *tds, int num)
+{
+    int i;
+    for (i = 0; i < num; i++) {
+        kmp_taskdata_t *td = &tds[i];
+        if (td->td_task_queue) {
+            KMP_DEBUG_ASSERT(td->td_tq_cur_size == 0);
+            KMP_INTERNAL_FREE(td->td_task_queue);
+            td->td_task_queue = NULL;
+            td->td_tq_max_size = 0;
+        }
+    }
+}
+
 static void
 __kmp_allocate_team_arrays(kmp_team_t *team, int max_nth)
 {
@@ -3955,6 +3983,7 @@ __kmp_allocate_team_arrays(kmp_team_t *team, int max_nth)
     //team->t.t_set_sched = (kmp_r_sched_t*) __kmp_allocate( sizeof(kmp_r_sched_t) * max_nth );
     team->t.t_implicit_task_taskdata = (kmp_taskdata_t*) __kmp_allocate( sizeof(kmp_taskdata_t) * max_nth );
 #endif
+    __kmp_init_task_queues(team->t.t_implicit_task_taskdata, max_nth);
     team->t.t_max_nproc = max_nth;
 
     /* setup dispatch buffers */
@@ -3977,6 +4006,8 @@ __kmp_free_team_arrays(kmp_team_t *team) {
         }; // if
     }; // for
     __kmp_free(team->t.t_threads);
+    __kmp_fini_task_queues(team->t.t_implicit_task_taskdata,
+                           team->t.t_max_nproc);
     #if !KMP_USE_POOLED_ALLOC
         __kmp_free(team->t.t_disp_buffer);
         __kmp_free(team->t.t_dispatch);
@@ -3996,6 +4027,8 @@ static void
 __kmp_reallocate_team_arrays(kmp_team_t *team, int max_nth) {
     kmp_info_t **oldThreads = team->t.t_threads;
 
+    __kmp_fini_task_queues(team->t.t_implicit_task_taskdata,
+                           team->t.t_max_nproc);
     #if !KMP_USE_POOLED_ALLOC
         __kmp_free(team->t.t_disp_buffer);
         __kmp_free(team->t.t_dispatch);
@@ -5360,7 +5393,7 @@ __kmp_free_thread( kmp_info_t *this_th )
 
     /*[AC] This is the last chance to check the pending tasks (if any) it can occur
      if the application ends as soon as the task region ends*/
-    __kmp_free_child_tasks(this_th);
+    __kmp_wait_child_tasks(this_th, FALSE);
 
     KA_TRACE( 20, ("__kmp_free_thread: T#%d putting T#%d back on free pool.\n",
                 __kmp_get_gtid(), this_th->th.th_info.ds.ds_gtid ));
@@ -6045,7 +6078,7 @@ __kmp_internal_join( ident_t *id, int gtid, kmp_team_t *team )
 #endif /* KMP_DEBUG */
 
     /* [AC] here, the master thread checks the task queue and execute the remaining tasks*/
-    __kmp_free_child_tasks(this_thr);
+    __kmp_wait_child_tasks(this_thr, FALSE);
 
     //__kmp_join_barrier( gtid );  /* wait for everyone */
 
