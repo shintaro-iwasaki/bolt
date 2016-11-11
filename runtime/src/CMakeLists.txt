@@ -81,11 +81,6 @@ else()
     libomp_append(LIBOMP_CFILES z_Windows_NT_util.c)
     libomp_append(LIBOMP_CFILES z_Windows_NT-586_util.c)
     libomp_append(LIBOMP_ASMFILES z_Windows_NT-586_asm.asm) # Windows assembly file
-  elseif(${LIBOMP_USE_ARGOBOTS})
-    # Unix specific files
-    libomp_append(LIBOMP_CFILES z_Linux_abt_util.c)
-    libomp_append(LIBOMP_CFILES kmp_gsupport.c)
-    libomp_append(LIBOMP_ASMFILES z_Linux_asm.s) # Unix assembly file
   else()
     # Unix specific files
     libomp_append(LIBOMP_CFILES z_Linux_util.c)
@@ -116,8 +111,8 @@ libomp_append(LIBOMP_CFILES kmp_ftn_extra.c)
 libomp_append(LIBOMP_CFILES kmp_version.c)
 libomp_append(LIBOMP_CFILES ompt-general.c IF_TRUE LIBOMP_OMPT_SUPPORT)
 
-# If we use a new implementation, we ignore existing files.
-if(LIBOMP_USE_ARGOBOTS_NEW)
+# For BOLT with Argobots, we ignore existing files.
+if(LIBOMP_USE_ARGOBOTS)
   include_directories(${LIBOMP_SRC_DIR}/abt)
   set(LIBOMP_CFILES
       abt/kmp_abt_alloc.c
