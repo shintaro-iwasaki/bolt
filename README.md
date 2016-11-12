@@ -4,10 +4,10 @@ BOLT targets a high-performing OpenMP implementation, especially specialized
 for fine-grain parallelism.  BOLT utilizes a lightweight threading model for
 its underlying threading mechanism.  It currently adopts Argobots, a new
 holistic, low-level threading and tasking runtime, in order to overcome
-shortcomings of conventional OS-level threads.  The current BOLT runtime is
-based on the OpenMP runtime in LLVM, and thus it can be used with LLVM/Clang,
-Intel OpenMP compiler, and GCC.  More information about BOLT can be found at
-http://www.bolt-omp.org.
+shortcomings of conventional OS-level threads.  The current BOLT implementation
+is based on the OpenMP runtime in LLVM, and thus it can be used with
+LLVM/Clang, Intel OpenMP compiler, and GCC.  More information about BOLT can be
+found at http://www.bolt-omp.org.
 
 
 1. Getting Started
@@ -24,17 +24,17 @@ http://www.bolt-omp.org.
 The following instructions take you through a sequence of steps to get the
 default configuration of BOLT up and running.
 
-Henceforth, VERSION indicates the version number of release tarball.
+Henceforth, VERSION indicates the version number of the release tarball.
 
 (a) You will need the following prerequisites.
 
-    - REQUIRED: This tar file bolt-runtime-VERSION.tar.gz
+    - REQUIRED: This tar file bolt-VERSION.tar.gz
 
     - REQUIRED: C and C++ compilers (gcc and g++ are sufficient)
 
     - REQUIRED: CMake (http://www.cmake.org/download)
 
-    - REQUIRED: Argobots (http://www.argobots.org) installed.
+    - REQUIRED: Argobots (http://www.argobots.org)
                 We assume Argobots has been installed in
                 /home/<USERNAME>/argobots-install
 
@@ -44,27 +44,27 @@ Henceforth, VERSION indicates the version number of release tarball.
 
 (b) Unpack the tar file and create a build directory:
 
-      tar xzf bolt-runtime-VERSION.tar.gz
-      mkdir bolt-runtime-build
-      cd bolt-runtime-build
+      tar xzf bolt-VERSION.tar.gz
+      mkdir bolt-build
+      cd bolt-build
 
     If your tar doesn't accept the z option, use
 
-      gunzip bolt-runtime-VERSION.tar.gz
-      tar xf bolt-runtime-VERSION.tar
-      mkdir bolt-runtime-build
-      cd bolt-runtime-build
+      gunzip bolt-VERSION.tar.gz
+      tar xf bolt-VERSION.tar
+      mkdir bolt-build
+      cd bolt-build
 
 (c) Choose an installation directory, say
-    /home/<USERNAME>/bolt-runtime-install, which is assumed to non-existent
+    /home/<USERNAME>/bolt-install, which is assumed to non-existent
     or empty.
 
 (d) Configure BOLT specifying the installation directory:
 
     for csh and tcsh:
 
-      cmake ../bolt-runtime-VERSION -G "Unix Makefiles" \
-          -DCMAKE_INSTALL_PREFIX=/home/<USERNAME>/bolt-runtime-install \
+      cmake ../bolt-VERSION -G "Unix Makefiles" \
+          -DCMAKE_INSTALL_PREFIX=/home/<USERNAME>/bolt-install \
           -DCMAKE_C_COMPILER=<C compiler> \
           -DCMAKE_CXX_COMPILER=<C++ compiler> \
           -DCMAKE_BUILD_TYPE=Release \
@@ -75,8 +75,8 @@ Henceforth, VERSION indicates the version number of release tarball.
 
     for bash and sh:
 
-      cmake ../bolt-runtime-VERSION -G "Unix Makefiles" \
-          -DCMAKE_INSTALL_PREFIX=/home/<USERNAME>/bolt-runtime-install \
+      cmake ../bolt-VERSION -G "Unix Makefiles" \
+          -DCMAKE_INSTALL_PREFIX=/home/<USERNAME>/bolt-install \
           -DCMAKE_C_COMPILER=<C compiler> \
           -DCMAKE_CXX_COMPILER=<C++ compiler> \
           -DCMAKE_BUILD_TYPE=Release \
@@ -135,12 +135,12 @@ clang, Intel OpenMP compiler (icc), or gcc.
 
 For example, using clang with bash:
 
-    cd ../bolt-runtime-VERSION/testsuite
+    cd ../bolt-VERSION/testsuite
     export TEST_CC=clang
-    export TEST_CFLAGS="-g -O2 -fopenmp -I/home/<USERNAME>/bolt-runtime-install/include \
-                        -L/home/<USERNAME>/bolt-runtime-install/lib -lomp \
+    export TEST_CFLAGS="-g -O2 -fopenmp -I/home/<USERNAME>/bolt-install/include \
+                        -L/home/<USERNAME>/bolt-install/lib -lomp \
                         -Wl,-rpath=/home/<USERNAME>/argobots-install/lib \
-                        -Wl,-rpath=/home/<USERNAME>/bolt-runtime-install/lib"
+                        -Wl,-rpath=/home/<USERNAME>/bolt-install/lib"
     make ctest
 
 You can also specify the number of execution streams (ESs) when running the
@@ -163,7 +163,7 @@ If you have problems with the installation or usage of BOLT, please follow
 these steps:
 
 (a) First visit the Frequently Asked Questions (FAQ) page at
-https://github.com/pmodels/bolt-runtime/wiki/FAQ
+https://github.com/pmodels/bolt/wiki/FAQ
 to see if the problem you are facing has a simple solution.
 
 (b) If you cannot find an answer on the FAQ page, look through previous
@@ -182,9 +182,9 @@ COMPRESS BEFORE SENDING, AS THE FILES CAN BE LARGE.  Note that,
 depending on which step the build failed, some of the files might not
 exist.
 
-    bolt-runtime-build/c.txt (generated in step 1(d) above)
-    bolt-runtime-build/m.txt (generated in step 1(e) above)
-    bolt-runtime-build/mi.txt (generated in step 1(f) above)
+    bolt-build/c.txt (generated in step 1(d) above)
+    bolt-build/m.txt (generated in step 1(e) above)
+    bolt-build/mi.txt (generated in step 1(f) above)
 
     DID WE MENTION? DO NOT FORGET TO COMPRESS THESE FILES!
 
@@ -194,7 +194,7 @@ a smaller application or benchmark and send that along in your bug
 report.
 
 (d) If you have found a bug in BOLT, we request that you report it
-at our github issues page (https://github.com/pmodels/bolt-runtime/issues).
+at our github issues page (https://github.com/pmodels/bolt/issues).
 Even if you believe you have found a bug, we recommend you sending an
 email to bolt@lists.mcs.anl.gov first.
 
