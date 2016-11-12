@@ -424,22 +424,10 @@ xexpand(FTN_GET_THREAD_NUM)( void )
                 }
             } else {
             #endif
-            #if KMP_USE_ARGOBOTS
-                if (!__kmp_init_parallel) {
-                    return 0;
-                }
-                void *keyval;
-                ABT_key_get( __kmp_gtid_threadprivate_key, &keyval );
-                gtid = (int)(intptr_t)keyval;
-                if (gtid == 0) {
-                    return 0;
-                }
-            #else
                 if (!__kmp_init_parallel ||
                     (gtid = (kmp_intptr_t)(pthread_getspecific( __kmp_gtid_threadprivate_key ))) == 0) {
                     return 0;
                 }
-            #endif
                 --gtid;
             #ifdef KMP_TDATA_GTID
             }

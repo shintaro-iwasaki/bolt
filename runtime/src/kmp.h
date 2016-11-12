@@ -510,11 +510,7 @@ typedef int PACKED_REDUCTION_METHOD_T;
 #endif
 
 #if KMP_OS_UNIX
-#if KMP_USE_ARGOBOTS
-# include <abt.h>
-#else
 # include <pthread.h>
-#endif
 # include <dlfcn.h>
 #endif
 
@@ -1215,13 +1211,8 @@ struct kmp_region_info {
 #endif /* KMP_OS_WINDOWS */
 
 #if KMP_OS_UNIX
-#if KMP_USE_ARGOBOTS
-    typedef ABT_thread          kmp_thread_t;
-    typedef ABT_key             kmp_key_t;
-#else
     typedef pthread_t           kmp_thread_t;
     typedef pthread_key_t       kmp_key_t;
-#endif
 #endif
 
 extern kmp_key_t  __kmp_gtid_threadprivate_key;
@@ -1886,11 +1877,7 @@ typedef struct kmp_win32_cond
 union KMP_ALIGN_CACHE kmp_cond_union {
     double              c_align;
     char                c_pad[ CACHE_LINE ];
-#if KMP_USE_ARGOBOTS
-    ABT_cond            c_cond;
-#else
     pthread_cond_t      c_cond;
-#endif
 };
 
 typedef union kmp_cond_union kmp_cond_align_t;
@@ -1898,11 +1885,7 @@ typedef union kmp_cond_union kmp_cond_align_t;
 union KMP_ALIGN_CACHE kmp_mutex_union {
     double              m_align;
     char                m_pad[ CACHE_LINE ];
-#if KMP_USE_ARGOBOTS
-    ABT_mutex           m_mutex;
-#else
     pthread_mutex_t     m_mutex;
-#endif
 };
 
 typedef union kmp_mutex_union kmp_mutex_align_t;
@@ -2435,10 +2418,6 @@ typedef struct KMP_ALIGN_CACHE kmp_base_info {
     kmp_cond_align_t  th_suspend_cv;
     kmp_mutex_align_t th_suspend_mx;
     int               th_suspend_init_count;
-#endif
-#if KMP_USE_ARGOBOTS
-    ABT_eventual      th_bar_arrived;
-    ABT_eventual      th_bar_go;
 #endif
 
 #if USE_ITT_BUILD
@@ -3346,12 +3325,6 @@ extern kmp_uint64 __kmp_hardware_timestamp(void);
 
 #if KMP_OS_UNIX
 extern int  __kmp_read_from_file( char const *path, char const *format, ... );
-#endif
-
-#if KMP_USE_ARGOBOTS && KMP_DEBUG
-extern void __kmp_abt_print_thread( kmp_info_t *th, const char *msg );
-#else
-#define __kmp_abt_print_thread(th,msg)
 #endif
 
 /* ------------------------------------------------------------------------ */

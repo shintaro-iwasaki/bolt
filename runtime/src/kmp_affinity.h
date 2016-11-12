@@ -15,9 +15,7 @@
 #ifndef KMP_AFFINITY_H
 #define KMP_AFFINITY_H
 
-#if KMP_AFFINITY_SUPPORTED
 extern int __kmp_affinity_compact; /* Affinity 'compact' value */
-#endif /* KMP_AFFINITY_SUPPORTED */
 
 class Address {
 public:
@@ -114,7 +112,6 @@ __kmp_affinity_cmp_Address_labels(const void *a, const void *b)
 }
 
 
-#if KMP_AFFINITY_SUPPORTED
 static int
 __kmp_affinity_cmp_Address_child_num(const void *a, const void *b)
 {
@@ -139,7 +136,6 @@ __kmp_affinity_cmp_Address_child_num(const void *a, const void *b)
     }
     return 0;
 }
-#endif /* KMP_AFFINITY_SUPPORTED */
 
 
 /** A structure for holding machine-specific hierarchy info to be computed once at init.
