@@ -471,39 +471,6 @@ static int __kmp_abt_sched_free(ABT_sched sched)
     return ABT_SUCCESS;
 }
 
-#if KMP_DEBUG
-void __kmp_abt_print_thread( kmp_info_t *th, const char *msg )
-{
-    if (kmp_a_debug == 0) return;
-
-    int gtid = th->th.th_info.ds.ds_gtid;
-    ABT_thread thread = th->th.th_info.ds.ds_thread;
-    ABT_thread self;
-    ABT_thread_id thread_id;
-    ABT_xstream xstream;
-    ABT_pool pool;
-    int es_rank, pool_id;
-    size_t pool_size, pool_total_size;
-
-    ABT_thread_self(&self);
-    ABT_thread_get_id(self, &thread_id);
-
-    ABT_xstream_self(&xstream);
-    ABT_xstream_self_rank(&es_rank);
-    ABT_thread_get_last_pool(self, &pool);
-    ABT_pool_get_id(pool, &pool_id);
-    ABT_pool_get_size(pool, &pool_size);
-    ABT_pool_get_total_size(pool, &pool_total_size);
-
-    printf("%s: T#%d - U%u (%p) on ES%d (%p) from P%d (%p,%lu,%lu)\n",
-           msg, gtid, (unsigned)thread_id, self,
-           es_rank, xstream,
-           pool_id, pool, pool_size, pool_total_size);
-    fflush(stdout);
-}
-#endif
-
-
 static int
 __kmp_get_xproc( void ) {
 
@@ -580,20 +547,7 @@ __kmp_runtime_initialize( void )
     /* Set up minimum number of threads to switch to TLS gtid */
     __kmp_global.tls_gtid_min = KMP_TLS_GTID_MIN;
 
-    /* use TLS functions to store gtid */
-    //__kmp_global.gtid_mode = 2;
-    
     __kmp_abt_initialize();
-
-    // FIXME: Do we need a thread-specific key?
-    //status = ABT_key_create( __kmp_internal_end_dest, &__kmp_global.gtid_threadprivate_key );
-//    status = ABT_key_create( NULL, &__kmp_global.gtid_threadprivate_key );
-//    KMP_CHECK_SYSFAIL( "ABT_key_create", status );
-
-//    status = ABT_mutex_create( & __kmp_wait_mx.m_mutex );
-//    KMP_CHECK_SYSFAIL( "ABT_mutex_create", status );
-//    status = ABT_cond_create( & __kmp_wait_cv.c_cond );
-//    KMP_CHECK_SYSFAIL( "ABT_cond_create", status );
 
     __kmp_global.init_runtime = TRUE;
 }
@@ -608,17 +562,6 @@ __kmp_runtime_destroy( void )
         return; // Nothing to do.
     };
 
-//    status = ABT_key_free( & __kmp_global.gtid_threadprivate_key );
-//    KMP_CHECK_SYSFAIL( "ABT_key_free", status );
-
-//    status = ABT_mutex_free( & __kmp_wait_mx.m_mutex );
-//    if ( status != ABT_SUCCESS ) {
-//        KMP_SYSFAIL( "ABT_mutex_free", status );
-//    }
-//    status = ABT_cond_free( & __kmp_wait_cv.c_cond );
-//    if ( status != ABT_SUCCESS ) {
-//        KMP_SYSFAIL( "ABT_cond_free", status );
-//    }
 //    #if KMP_AFFINITY_SUPPORTED
 //        __kmp_affinity_uninitialize();
 //    #endif
@@ -796,21 +739,6 @@ void __kmp_wait_child_tasks(kmp_info_t *th, int yield)
     KA_TRACE(20, ("__kmp_wait_child_tasks: T#%d done\n", __kmp_gtid_from_thread(th)));
 }
 
-void __kmp_task_wait_a(kmp_int32 gtid, kmp_info_t * thread)
-{
-   /* KA_TRACE(20, ("__kmp_task_wait (enter): T#%d before checking.\n", gtid) );
-    int i;
-    int total_ntasks =  thread->th.tasks_in_the_queue;
-    printf("__kmp_task_wait (enter): T#%d => %d tasks.\n", gtid,total_ntasks);
-    for(i=0;i<total_ntasks;i++){
-        printf("__kmp_task_wait (joining): T#%d => %d task.\n", gtid,i);
-        ABT_thread_join(thread->th.th_task_queue[i]);
-        printf("__kmp_task_wait (joined): T#%d => %d task.\n", gtid,i);
-    }
-    KA_TRACE(20, ("__kmp_task_wait (exit): T#%d.\n", gtid) );
-*/
-}
-
 kmp_info_t *__kmp_bind_task_to_thread(kmp_team_t *team, kmp_taskdata_t *taskdata)
 {
     int i, i_start, i_end;
@@ -968,7 +896,6 @@ __kmp_launch_tasklet_worker( void *thr )
             rc = __kmp_invoke_microtask( (microtask_t) TCR_SYNC_PTR((*pteam)->t.t_pkfn),
                     gtid, tid, (int)(*pteam)->t.t_argc, (void **)(*pteam)->t.t_argv);
             __kmp_run_after_invoked_task( gtid, tid, this_thr, *pteam );
-            //rc = (*pteam)->t.t_invoke( gtid );
             KMP_ASSERT( rc );
         }
     }
@@ -1353,7 +1280,6 @@ __kmp_fork_join_tasklet_team(
 
     kmp_team_t *team;
     int status;
-    //printf("kmp_team_t=%lu\n", sizeof(kmp_team_t));
 
     KA_TRACE( 20, ("__kmp_fork_join_tasklet_team: enter T#%d\n", gtid ));
 
@@ -1371,8 +1297,6 @@ __kmp_fork_join_tasklet_team(
     level = parent_team->t.t_level + 1;
 
     /* setup the new team info */
-    //kmp_team_t t_team;
-    //team = &t_team;
     team = (kmp_team_t *)__kmp_allocate(sizeof(kmp_team_t));
     team->t.t_master_tid = master_tid;
     team->t.t_parent     = parent_team;
@@ -1404,7 +1328,6 @@ __kmp_fork_join_tasklet_team(
     kmp_info_t *t_threads = (kmp_info_t *)__kmp_allocate(size);
     team->t.t_threads = &t_threads;
 
-    //kmp_info_t *th = master_th; //&t_threads[0];
     kmp_info_t *th = &t_threads[0];
     th->th.th_team = team;
     th->th.th_info.ds.ds_tid = 0;
@@ -1716,40 +1639,9 @@ __kmp_suspend_initialize( void )
 {
 }
 
-static void
-__kmp_suspend_initialize_thread( kmp_info_t *th )
-{
-///    if ( th->th.th_suspend_init_count <= __kmp_fork_count ) {
-///        /* this means we haven't initialized the suspension ABT_thread objects for this thread
-///           in this instance of the process */
-///        int     status;
-///        status = ABT_cond_create( &th->th.th_suspend_cv.c_cond );
-///        KMP_CHECK_SYSFAIL( "ABT_cond_create", status );
-///        status = ABT_mutex_create( &th->th.th_suspend_mx.m_mutex );
-///        KMP_CHECK_SYSFAIL( "ABT_mutex_create", status );
-///        *(volatile int*)&th->th.th_suspend_init_count = __kmp_fork_count + 1;
-///    };
-}
-
 void
 __kmp_suspend_uninitialize_thread( kmp_info_t *th )
 {
-///    if(th->th.th_suspend_init_count > __kmp_fork_count) {
-///        /* this means we have initialize the suspension ABT_thread objects for this thread
-///           in this instance of the process */
-///        int status;
-///
-///        status = ABT_cond_free( &th->th.th_suspend_cv.c_cond );
-///        if ( status != ABT_SUCCESS ) {
-///            KMP_SYSFAIL( "ABT_cond_free", status );
-///        };
-///        status = ABT_mutex_free( &th->th.th_suspend_mx.m_mutex );
-///        if ( status != ABT_SUCCESS ) {
-///            KMP_SYSFAIL( "ABT_mutex_free", status );
-///        };
-///        --th->th.th_suspend_init_count;
-///        KMP_DEBUG_ASSERT(th->th.th_suspend_init_count == __kmp_fork_count);
-///    }
 }
 
 /* ------------------------------------------------------------------------ */

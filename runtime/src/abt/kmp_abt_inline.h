@@ -58,11 +58,6 @@ __kmp_gtid_get_specific(void)
     kmp_info_t *th;
     int gtid;
 
-    //if ( !__kmp_global.init_runtime ) {
-    //    KA_TRACE( 50, ("__kmp_get_specific: runtime shutdown, returning KMP_GTID_SHUTDOWN\n" ) );
-    //    return KMP_GTID_SHUTDOWN;
-    //}
-
     ABT_thread_self(&self);
     ABT_thread_get_arg(self, (void **)&th);
     if (th == NULL) {

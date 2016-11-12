@@ -1,6 +1,6 @@
 /*! \file */
 /*
- * kmp.h -- KPTS runtime header file.
+ * kmp_abt.h -- KPTS runtime header file.
  */
 
 
@@ -107,11 +107,7 @@
 #endif
 
 #if KMP_OS_UNIX
-#if KMP_USE_ARGOBOTS
 # include <abt.h>
-#else
-# include <pthread.h>
-#endif
 # include <dlfcn.h>
 #endif
 
@@ -453,7 +449,6 @@ extern "C" {
 // TYPES AND DATA STRUCTURES
 /* ------------------------------------------------------------------------ */
 
-#if KMP_USE_ARGOBOTS
 typedef ABT_thread          kmp_thread_t;
 typedef ABT_task            kmp_tasklet_t;
 typedef ABT_key             kmp_key_t;
@@ -462,17 +457,7 @@ typedef ABT_mutex           kmp_mutex_t;
 typedef ABT_cond            kmp_cond_t;
 typedef ABT_mutex           kmp_lock_t;
 typedef ABT_mutex           kmp_bootstrap_lock_t;
-// [AC]
-typedef ABT_thread            kmp_abt_task_t;
-#else
-typedef pthread_t           kmp_thread_t;
-typedef pthread_key_t       kmp_key_t;
-typedef pthread_barrier_t   kmp_barrier_t;
-typedef pthread_mutex_t     kmp_mutex_t;
-typedef pthread_cond_t      kmp_cond_t;
-typedef pthread_mutex_t     kmp_lock_t;
-typedef pthread_mutex_t     kmp_bootstrap_lock_t;
-#endif
+typedef ABT_thread          kmp_abt_task_t;
 
 typedef kmp_lock_t          kmp_bootstrap_lock_t;
 typedef kmp_lock_t          kmp_queuing_lock_t;
@@ -480,7 +465,6 @@ typedef kmp_lock_t          kmp_tas_lock_t;
 typedef kmp_lock_t          kmp_atomic_lock_t;
 typedef kmp_lock_t *        kmp_user_lock_p;
 
-#if KMP_USE_ARGOBOTS
 #define __kmp_mutex_lock(m)                             ABT_mutex_lock(m)
 #define __kmp_mutex_trylock(m)                          ABT_mutex_trylock(m)
 #define __kmp_mutex_unlock(m)                           ABT_mutex_unlock(m)
@@ -508,10 +492,6 @@ typedef kmp_lock_t *        kmp_user_lock_p;
 #define __kmp_acquire_tas_lock(l_ptr,gtid)              ABT_mutex_lock(*(l_ptr))
 #define __kmp_test_tas_lock(l_ptr,gtid)                 ABT_mutex_trylock(*(l_ptr))
 #define __kmp_release_tas_lock(l_ptr,gtid)              ABT_mutex_unlock(*(l_ptr))
-
-#else
-#error "not yet implemented"
-#endif
 
 
 /* Enumeration types */
@@ -1728,9 +1708,6 @@ copy_icvs( kmp_internal_control_t *dst, kmp_internal_control_t *src ) {
 
 
 typedef struct kmp_desc_base {
-///    void    *ds_stackbase;
-///    size_t            ds_stacksize;
-///    int               ds_stackgrow;
     kmp_thread_t      ds_thread;
     kmp_tasklet_t     ds_tasklet;
     volatile int      ds_tid;
@@ -2405,32 +2382,6 @@ typedef struct kmp_nested_nthreads_t {
 /* ------------------------------------------------------------------------ */
 
 /* ------------------------------------------------------------------------ */
-// internal control variables
-typedef struct kmp_icv {
-    // scope: device
-    int def_sched;
-    int stacksize;
-    int wait_policy;
-    int max_active_levels;
-
-    // scope: global
-    int cancel;
-    int max_task_priority;
-
-    // scope: data environment
-    int dyn;
-    int nest;
-    int nthreads;
-    int run_sched;
-    int bind;
-    int thread_limit;
-    int active_levels;
-    int default_device;
-
-    // scope: implicit task
-    int place_partition;
-} kmp_icv_t;
-
 // global data
 typedef struct KMP_ALIGN_CACHE kmp_global {
     kmp_base_global_t   g;
@@ -2548,14 +2499,6 @@ typedef struct KMP_ALIGN_CACHE kmp_global {
     int need_register_atfork;/* At initialization, call pthread_atfork to install fork handler */
     int need_register_atfork_specified;
 
-    /*int gtid_mode;     * Method of getting gtid, values:
-                           0 - not set, will be set at runtime
-                           1 - using stack search
-                           2 - dynamic TLS (pthread_getspecific(Linux* OS/OS X*) or TlsGetValue(Windows* OS))
-                           3 - static TLS (__declspec(thread) __kmp_gtid), Linux* OS .so only.
-                        */
-    //int adjust_gtid_mode; /* If true, adjust method based on #threads */
-
     int        tls_gtid_min;   /* #threads below which use sp search for gtid */
     int        foreign_tp;     /* If true, separate TP var for each foreign thread */
 #if KMP_ARCH_X86 || KMP_ARCH_X86_64
@@ -2617,10 +2560,6 @@ typedef struct KMP_ALIGN_CACHE kmp_global {
 
     /* end data protected by fork/join lock */
     /* --------------------------------------------------------------------------- */
-
-    //kmp_key_t gtid_threadprivate_key;    /* thread key */
-
-    //kmp_icv_t icv;                  /* default ICVs */
 
 } kmp_global_t;
 /* ------------------------------------------------------------------------ */
@@ -2736,7 +2675,6 @@ extern int  __kmp_get_load_balance( int );
 
 extern int  __kmp_get_global_thread_id( void );
 extern int  __kmp_get_global_thread_id_reg( void );
-///extern void __kmp_exit_thread( int exit_status );
 extern void __kmp_abort_thread( void );
 extern void __kmp_abort_process( void );
 extern void __kmp_warn( char const * format, ... );
@@ -2856,7 +2794,6 @@ extern double __kmp_read_cpu_time( void );
 
 extern int  __kmp_read_system_info( struct kmp_sys_info *info );
 
-//extern void *__kmp_launch_thread( kmp_info_t *thr );
 extern void __kmp_create_uber( int gtid, kmp_info_t *th, size_t stack_size );
 extern void __kmp_create_worker( int gtid, kmp_info_t *th, size_t stack_size );
 extern void __kmp_create_tasklet_worker( int gtid, kmp_info_t *th );
@@ -2864,7 +2801,6 @@ extern void __kmp_revive_worker( kmp_info_t *th );
 extern void __kmp_revive_tasklet_worker( kmp_info_t *th );
 extern void __kmp_join_worker( kmp_info_t *th );
 extern void __kmp_reap_worker( kmp_info_t *th );
-/* [AC] */
 extern int __kmp_create_task(kmp_info_t *th, kmp_task_t *task);
 extern void __kmp_wait_child_tasks(kmp_info_t *th, int yield);
 extern kmp_info_t *__kmp_bind_task_to_thread(kmp_team_t *team, kmp_taskdata_t *taskdata);
@@ -2916,8 +2852,6 @@ KMP_EXPORT void  kmpc_free( void *ptr );
 extern int  __kmp_barrier( int gtid );
 extern int __kmp_begin_split_barrier( int gtid );
 extern void __kmp_end_split_barrier ( int gtid );
-//extern void __kmp_fork_barrier(int gtid, int tid);
-//extern void __kmp_join_barrier(int gtid);
 extern void __kmp_init_nest_lock( kmp_lock_t *lck );
 
 /*!
@@ -3019,12 +2953,6 @@ extern kmp_uint64 __kmp_hardware_timestamp(void);
 
 #if KMP_OS_UNIX
 extern int  __kmp_read_from_file( char const *path, char const *format, ... );
-#endif
-
-#if KMP_USE_ARGOBOTS && KMP_DEBUG
-extern void __kmp_abt_print_thread( kmp_info_t *th, const char *msg );
-#else
-#define __kmp_abt_print_thread(th,msg)
 #endif
 
 /* ------------------------------------------------------------------------ */

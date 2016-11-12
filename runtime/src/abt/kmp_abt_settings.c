@@ -3605,47 +3605,6 @@ __kmp_stg_print_par_range_env( kmp_str_buf_t * buffer, char const * name, void *
 #endif
 
 // -------------------------------------------------------------------------------------------------
-// KMP_GTID_MODE
-// -------------------------------------------------------------------------------------------------
-
-///static void
-///__kmp_stg_parse_gtid_mode( char const * name, char const * value, void * data ) {
-///    //
-///    // Modes:
-///    //   0 -- do not change default
-///    //   1 -- sp search
-///    //   2 -- use "keyed" TLS var, i.e.
-///    //        pthread_getspecific(Linux* OS/OS X*) or TlsGetValue(Windows* OS)
-///    //   3 -- __declspec(thread) TLS var in tdata section
-///    //
-///    int mode = 0;
-///    int max  = 2;
-///    #ifdef KMP_TDATA_GTID
-///        max = 3;
-///    #endif /* KMP_TDATA_GTID */
-///    __kmp_stg_parse_int( name, value, 0, max, & mode );
-///    // TODO; parse_int is not very suitable for this case. In case of overflow it is better to use
-///    // 0 rather that max value.
-///    if ( mode == 0 ) {
-///        __kmp_global.adjust_gtid_mode = TRUE;
-///    }
-///    else {
-///        __kmp_global.gtid_mode = mode;
-///        __kmp_global.adjust_gtid_mode = FALSE;
-///    }; // if
-///} // __kmp_str_parse_gtid_mode
-///
-///static void
-///__kmp_stg_print_gtid_mode( kmp_str_buf_t * buffer, char const * name, void * data ) {
-///    if ( __kmp_global.adjust_gtid_mode ) {
-///        __kmp_stg_print_int( buffer, name, 0 );
-///    }
-///    else {
-///        __kmp_stg_print_int( buffer, name, __kmp_global.gtid_mode );
-///    }
-///} // __kmp_stg_print_gtid_mode
-
-// -------------------------------------------------------------------------------------------------
 // KMP_NUM_LOCKS_IN_BLOCK
 // -------------------------------------------------------------------------------------------------
 
@@ -4376,7 +4335,6 @@ static kmp_setting_t __kmp_stg_table[] = {
     { "KMP_MALLOC_POOL_INCR",              __kmp_stg_parse_malloc_pool_incr,   __kmp_stg_print_malloc_pool_incr,   NULL, 0, 0 },
     //{ "KMP_INIT_WAIT",                     __kmp_stg_parse_init_wait,          __kmp_stg_print_init_wait,          NULL, 0, 0 },
     //{ "KMP_NEXT_WAIT",                     __kmp_stg_parse_next_wait,          __kmp_stg_print_next_wait,          NULL, 0, 0 },
-    //{ "KMP_GTID_MODE",                     __kmp_stg_parse_gtid_mode,          __kmp_stg_print_gtid_mode,          NULL, 0, 0 },
     { "OMP_DYNAMIC",                       __kmp_stg_parse_omp_dynamic,        __kmp_stg_print_omp_dynamic,        NULL, 0, 0 },
     { "KMP_DYNAMIC_MODE",                  __kmp_stg_parse_kmp_dynamic_mode,   __kmp_stg_print_kmp_dynamic_mode,   NULL, 0, 0 },
 

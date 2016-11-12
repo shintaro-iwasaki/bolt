@@ -74,12 +74,12 @@
 # define KMP_AFFINITY_SUPPORTED 0
 # define KMP_GROUP_AFFINITY     0
 #endif
-#ifdef KMP_USE_ARGOBOTS
+
 # undef KMP_AFFINITY_SUPPORTED
 # undef KMP_GROUP_AFFINITY
 # define KMP_AFFINITY_SUPPORTED 0
 # define KMP_GROUP_AFFINITY     0
-#endif
+
 
 /* Check for quad-precision extension. */
 #define KMP_HAVE_QUAD 0

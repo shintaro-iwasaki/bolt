@@ -188,9 +188,6 @@ __kmp_global_initialize(void)
     __kmp_global.need_register_atfork = TRUE; /* At initialization, call pthread_atfork to install fork handler */
     __kmp_global.need_register_atfork_specified = TRUE;
 
-    //__kmp_global.gtid_mode = 2; /* use TLS functions to store gtid */
-    //__kmp_global.adjust_gtid_mode = FALSE;
-
     __kmp_global.tls_gtid_min = INT_MAX;
     __kmp_global.foreign_tp = TRUE;
 #if KMP_ARCH_X86 || KMP_ARCH_X86_64

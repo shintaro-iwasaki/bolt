@@ -339,18 +339,10 @@ __kmp_push_task(kmp_int32 gtid, kmp_task_t * task )
 
     __kmp_release_bootstrap_lock( & thread_data -> td.td_deque_lock );
 */ /*[AC]*/
-    //ABT_pool dest = __kmp_abt_get_pool(gtid);
 
     if (!__kmp_create_task(thread, task)) {
         return TASK_NOT_PUSHED;
     }
-    /*ABT_xstream aux;
-    ABT_xstream_self (&aux);
-    int a; ABT_xstream_self_rank(&a);
-        KA_TRACE(20, ("__kmp_push_task: T#%d (ES %d) trying to push task %p.\n", gtid, a,taskdata ) );
-
-    ABT_thread_create_on_xstream (aux, execution_task, (void *)task, ABT_THREAD_ATTR_NULL , &thread->th.th_task_queue[thread->th.tasks_in_the_queue++]);*/
-    //ABT_task_create(dest, execution_task, (void *)task, &thread->th.th_task_queue[pos++]);
     KA_TRACE(20, ("__kmp_push_task: T#%d pushed task %p; returning TASK_SUCCESSFULLY_PUSHED\n",
                   gtid, task));
 
