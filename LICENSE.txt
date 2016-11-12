@@ -9,6 +9,8 @@ relevant licenses is included below.
 In addition, a license agreement from the copyright/patent holders of the
 software contained in this directory tree is included below.
 
+For the copyright of BOLT, please see BOLT_COPYRIGHT.txt for details.
+
 ==============================================================================
 
 University of Illinois/NCSA
