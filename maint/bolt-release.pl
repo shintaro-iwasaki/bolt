@@ -1,7 +1,7 @@
 #!/usr/bin/env perl
 #
 # (C) 2016 by Argonne National Laboratory.
-#     See COPYRIGHT in top-level directory.
+#     See COPYRIGHT.txt in top-level directory.
 #
 
 use strict;
@@ -16,8 +16,6 @@ my $branch = "";
 my $version = "";
 my $append_commit_id;
 my $root = cwd();
-my $with_autoconf = "";
-my $with_automake = "";
 my $git_repo = "";
 
 my $logfile = "release.log";
@@ -104,7 +102,7 @@ print("\n");
 
 
 my $tdir = tempdir(CLEANUP => 1);
-my $local_git_clone = "${tdir}/bolt-runtime-clone";
+my $local_git_clone = "${tdir}/bolt-clone";
 
 
 # clone git repo
@@ -116,13 +114,20 @@ print("done\n");
 check_git_repo($local_git_clone);
 print("\n");
 
+my $current_ver = `git show ${branch}:autogen.sh | grep BOLT_VERSION= | \
+                   sed -e 's/^BOLT_VERSION=\\(.*\\)/\\1/g'`;
+chomp $current_ver;
+if ("$current_ver" ne "$version") {
+    print("\tWARNING: version in autogen.sh ($current_ver) does not match user version ($version)\n\n");
+}
+
 if ($append_commit_id) {
     my $desc = `git describe --always ${branch}`;
     chomp $desc;
     $version .= "-${desc}";
 }
 
-my $expdir = "${tdir}/bolt-runtime-${version}";
+my $expdir = "${tdir}/bolt-${version}";
 
 # Clean up the log file
 system("rm -f ${root}/$logfile");
@@ -131,7 +136,16 @@ system("rm -f ${root}/$logfile");
 print("===> Exporting code from git... ");
 run_cmd("rm -rf ${expdir}");
 run_cmd("mkdir -p ${expdir}");
-run_cmd("git archive ${branch} --prefix='bolt-runtime-${version}/' | tar -x -C $tdir");
+run_cmd("git archive ${branch} --prefix='bolt-${version}/' | tar -x -C $tdir");
+print("done\n");
+
+# Create CMakeLists.txt
+print("===> Creating CMakeLists.txt in the main codebase... ");
+chdir($expdir);
+{
+    my $cmd = "./autogen.sh -r";
+    run_cmd($cmd);
+}
 print("done\n");
 
 # Remove unnecessary files
@@ -144,10 +158,10 @@ print("done\n");
 # TODO: Get docs
 
 # Create the main tarball
-print("===> Creating the final bolt-runtime tarball... ");
+print("===> Creating the final bolt tarball... ");
 chdir("${tdir}");
-run_cmd("tar -czvf bolt-runtime-${version}.tar.gz bolt-runtime-${version}");
-run_cmd("cp -a bolt-runtime-${version}.tar.gz ${root}/");
+run_cmd("tar -czvf bolt-${version}.tar.gz bolt-${version}");
+run_cmd("cp -a bolt-${version}.tar.gz ${root}/");
 print("done\n");
 
 # make sure we are outside of the tempdir so that the CLEANUP logic can run
