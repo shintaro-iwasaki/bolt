@@ -345,6 +345,26 @@ endif()
 
 set(LIBOMP_LIB_FILE ${LIBOMP_LIB_NAME}${LIBOMP_LIBRARY_SUFFIX})
 
+# Set BOLT version, release date, and build information
+set(BOLT_VERSION %BOLT_VERSION%)
+set(BOLT_NUMVERSION %BOLT_NUMVERSION%)
+set(BOLT_RELEASE_DATE %BOLT_RELEASE_DATE%)
+set(BOLT_COMPILER_CC ${CMAKE_C_COMPILER})
+set(BOLT_COMPILER_CXX ${CMAKE_CXX_COMPILER})
+if("${libomp_build_type_lowercase}" STREQUAL "release")
+  set(BOLT_COMPILER_CFLAGS ${CMAKE_C_FLAGS_RELEASE})
+  set(BOLT_COMPILER_CXXFLAGS ${CMAKE_CXX_FLAGS_RELEASE})
+elseif("${libomp_build_type_lowercase}" STREQUAL "debug")
+  set(BOLT_COMPILER_CFLAGS ${CMAKE_C_FLAGS_DEBUG})
+  set(BOLT_COMPILER_CXXFLAGS ${CMAKE_CXX_FLAGS_DEBUG})
+elseif("${libomp_build_type_lowercase}" STREQUAL "relwithdebinfo")
+  set(BOLT_COMPILER_CFLAGS ${CMAKE_C_FLAGS_RELWITHDEBINFO})
+  set(BOLT_COMPILER_CXXFLAGS ${CMAKE_CXX_FLAGS_RELWITHDEBINFO})
+elseif("${libomp_build_type_lowercase}" STREQUAL "minsizerel")
+  set(BOLT_COMPILER_CFLAGS ${CMAKE_C_FLAGS_RELEASE})
+  set(BOLT_COMPILER_CXXFLAGS ${CMAKE_CXX_FLAGS_RELEASE})
+endif()
+
 # Print configuration after all variables are set.
 if(${LIBOMP_STANDALONE_BUILD})
   libomp_say("Operating System     -- ${CMAKE_SYSTEM_NAME}")
