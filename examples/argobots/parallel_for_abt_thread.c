@@ -1,7 +1,7 @@
 /* -*- Mode: C; c-basic-offset:4 ; indent-tabs-mode:nil ; -*- */
 
 /*
- * See COPYRIGHT in top-level directory.
+ * See LICENSE.txt in top-level directory.
  */
 
 /*  parallel_for_abt_thread.c code mimics the parallel for OpenMP directive.

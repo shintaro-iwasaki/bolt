@@ -1,5 +1,8 @@
-
 /* -*- Mode: C; c-basic-offset:4 ; indent-tabs-mode:nil ; -*- */
+
+/*
+ * See LICENSE.txt in top-level directory.
+ */
 
 /*
  * A bunch of n tasks (1st arg) are created by a single thread.

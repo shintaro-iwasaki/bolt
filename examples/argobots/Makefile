@@ -1,6 +1,6 @@
 # -*- Mode: Makefile; -*-
 #
-# See COPYRIGHT in top-level directory.
+# See LICENSE.txt in top-level directory.
 #
 
 CC=gcc

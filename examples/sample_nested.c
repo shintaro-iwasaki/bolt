@@ -1,3 +1,9 @@
+/* -*- Mode: C; c-basic-offset:4 ; indent-tabs-mode:nil ; -*- */
+
+/*
+ * See LICENSE.txt in top-level directory.
+ */
+
 #include <omp.h>
 #include <stdio.h>
 #include <sys/time.h>
