@@ -1,7 +1,7 @@
 #!/usr/bin/env perl
 #
 # (C) 2016 by Argonne National Laboratory.
-#     See COPYRIGHT.txt in top-level directory.
+#     See LICENSE.txt in top-level directory.
 #
 
 use strict;
