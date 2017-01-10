@@ -34,8 +34,10 @@ Henceforth, VERSION indicates the version number of the release tarball.
 
     - REQUIRED: CMake (http://www.cmake.org/download)
 
-    - REQUIRED: Argobots (http://www.argobots.org)
-                We assume Argobots has been installed in
+    - OPTIONAL: Argobots (http://www.argobots.org)
+                Argobots comes with the BOLT release tarball.  However, you
+                can use your Argobots build instead of the accompanied one.
+                In this case, we assume Argobots has been installed in
                 /home/<USERNAME>/argobots-install
 
     Also, you need to know what shell you are using since different shell
@@ -61,6 +63,32 @@ Henceforth, VERSION indicates the version number of the release tarball.
 
 (d) Configure BOLT specifying the installation directory:
 
+If you want to use the built-in Argobots,
+
+    for csh and tcsh:
+
+      cmake ../bolt-VERSION -G "Unix Makefiles" \
+          -DCMAKE_INSTALL_PREFIX=/home/<USERNAME>/bolt-install \
+          -DCMAKE_C_COMPILER=<C compiler> \
+          -DCMAKE_CXX_COMPILER=<C++ compiler> \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DLIBOMP_USE_ITT_NOTIFY=off \
+          -DLIBOMP_USE_ARGOBOTS=on \
+          |& tee c.txt
+
+    for bash and sh:
+
+      cmake ../bolt-VERSION -G "Unix Makefiles" \
+          -DCMAKE_INSTALL_PREFIX=/home/<USERNAME>/bolt-install \
+          -DCMAKE_C_COMPILER=<C compiler> \
+          -DCMAKE_CXX_COMPILER=<C++ compiler> \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DLIBOMP_USE_ITT_NOTIFY=off \
+          -DLIBOMP_USE_ARGOBOTS=on \
+          2>&1 | tee c.txt
+
+If you want to use your own Argobots build,
+
     for csh and tcsh:
 
       cmake ../bolt-VERSION -G "Unix Makefiles" \
@@ -85,9 +113,9 @@ Henceforth, VERSION indicates the version number of the release tarball.
           -DLIBOMP_ARGOBOTS_INSTALL_DIR=/home/<USERNAME>/argobots-install \
           2>&1 | tee c.txt
 
-    Bourne-like shells, sh and bash, accept "2>&1 |".  Csh-like shell, csh and
-    tcsh, accept "|&".  If a failure occurs, the cmake command will display the
-    error.  Most errors are straight-forward to follow.
+Bourne-like shells, sh and bash, accept "2>&1 |".  Csh-like shell, csh and
+tcsh, accept "|&".  If a failure occurs, the cmake command will display the
+error.  Most errors are straight-forward to follow.
 
 (e) Build BOLT:
 
@@ -134,6 +162,17 @@ To test BOLT, you can run the test suite in the testsuite directory with
 clang, Intel OpenMP compiler (icc), or gcc.
 
 For example, using clang with bash:
+
+When you use the built-in Argobots,
+
+    cd ../bolt-VERSION/testsuite
+    export TEST_CC=clang
+    export TEST_CFLAGS="-g -O2 -fopenmp -I/home/<USERNAME>/bolt-install/include \
+                        -L/home/<USERNAME>/bolt-install/lib -lomp \
+                        -Wl,-rpath=/home/<USERNAME>/bolt-install/lib"
+    make ctest
+
+When you use your own Argobots build,
 
     cd ../bolt-VERSION/testsuite
     export TEST_CC=clang
