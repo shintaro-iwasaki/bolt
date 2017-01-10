@@ -56,7 +56,7 @@ Henceforth, VERSION indicates the version number of the release tarball.
       cd bolt-build
 
 (c) Choose an installation directory, say
-    /home/<USERNAME>/bolt-install, which is assumed to non-existent
+    /home/<USERNAME>/bolt-install, which is assumed to be non-existent
     or empty.
 
 (d) Configure BOLT specifying the installation directory:
@@ -103,11 +103,11 @@ Henceforth, VERSION indicates the version number of the release tarball.
     Check file m.txt.  If there were problems, do a "make clean" and then run
     make again with V=1.
 
-      make V=1 |& tee m.txt       (for csh and tcsh)
+      make V=1 VERBOSE=1 |& tee m.txt       (for csh and tcsh)
 
       OR
 
-      make V=1 2>&1 | tee m.txt   (for bash and sh)
+      make V=1 VERBOSE=1 2>&1 | tee m.txt   (for bash and sh)
 
     Then go to step 3 below, for reporting the issue to the BOLT developers and
     other users.
@@ -167,14 +167,14 @@ https://github.com/pmodels/bolt/wiki/FAQ
 to see if the problem you are facing has a simple solution.
 
 (b) If you cannot find an answer on the FAQ page, look through previous
-email threads on the bolt@lists.mcs.anl.gov mailing list archive
-(https://lists.mcs.anl.gov/mailman/listinfo/bolt).  It is likely
+email threads on the discuss@bolt-omp.org mailing list archive
+(https://lists.bolt-omp.org/mailman/listinfo/discuss).  It is likely
 someone else had a similar problem, which has already been resolved
 before.
 
 (c) If neither of the above steps work, please send an email to
-bolt@lists.mcs.anl.gov.  You need to subscribe to this list
-(https://lists.mcs.anl.gov/mailman/listinfo/bolt) before sending
+discuss@bolt-omp.org.  You need to subscribe to this list
+(https://lists.bolt-omp.org/mailman/listinfo/discuss) before sending
 an email.
 
 Your email should contain the following files.  ONCE AGAIN, PLEASE
@@ -196,7 +196,7 @@ report.
 (d) If you have found a bug in BOLT, we request that you report it
 at our github issues page (https://github.com/pmodels/bolt/issues).
 Even if you believe you have found a bug, we recommend you sending an
-email to bolt@lists.mcs.anl.gov first.
+email to discuss@bolt-omp.org first.
 
 -------------------------------------------------------------------------------
 
