@@ -35,40 +35,40 @@ Henceforth, VERSION indicates the version number of the release tarball.
     - REQUIRED: CMake (http://www.cmake.org/download)
 
     - OPTIONAL: Argobots (http://www.argobots.org)
-                Argobots comes with the BOLT release tarball.  However, you
-                can use your Argobots build instead of the accompanied one.
-                In this case, we assume Argobots has been installed in
-                /home/<USERNAME>/argobots-install
+                The BOLT release tarball includes the Argobots source code, and
+                thus you can build BOLT together with the built-in Argobots.
+                Of course, you can use your own Argobots build instead of the
+                accompanied one.  In the latter case, we assume Argobots has
+                been installed in /home/USERNAME/argobots-install.
 
-    Also, you need to know what shell you are using since different shell
-    has different command syntax.  Command "echo $SHELL" prints out the
-    current shell used by your terminal program.
+  Also, you need to know what shell you are using since different shell has
+  different command syntax.  Command "echo $SHELL" prints out the current shell
+  used by your terminal program.
 
 (b) Unpack the tar file and create a build directory:
 
-      tar xzf bolt-VERSION.tar.gz
-      mkdir bolt-build
-      cd bolt-build
+    tar xzf bolt-VERSION.tar.gz
+    mkdir bolt-build
+    cd bolt-build
 
-    If your tar doesn't accept the z option, use
+  If your tar doesn't accept the z option, use
 
-      gunzip bolt-VERSION.tar.gz
-      tar xf bolt-VERSION.tar
-      mkdir bolt-build
-      cd bolt-build
+    gunzip bolt-VERSION.tar.gz
+    tar xf bolt-VERSION.tar
+    mkdir bolt-build
+    cd bolt-build
 
-(c) Choose an installation directory, say
-    /home/<USERNAME>/bolt-install, which is assumed to be non-existent
-    or empty.
+(c) Choose an installation directory, say /home/USERNAME/bolt-install, which is
+assumed to be non-existent or empty.
 
 (d) Configure BOLT specifying the installation directory:
 
-If you want to use the built-in Argobots,
+  If you want to use the built-in Argobots,
 
     for csh and tcsh:
 
       cmake ../bolt-VERSION -G "Unix Makefiles" \
-          -DCMAKE_INSTALL_PREFIX=/home/<USERNAME>/bolt-install \
+          -DCMAKE_INSTALL_PREFIX=/home/USERNAME/bolt-install \
           -DCMAKE_C_COMPILER=<C compiler> \
           -DCMAKE_CXX_COMPILER=<C++ compiler> \
           -DCMAKE_BUILD_TYPE=Release \
@@ -79,7 +79,7 @@ If you want to use the built-in Argobots,
     for bash and sh:
 
       cmake ../bolt-VERSION -G "Unix Makefiles" \
-          -DCMAKE_INSTALL_PREFIX=/home/<USERNAME>/bolt-install \
+          -DCMAKE_INSTALL_PREFIX=/home/USERNAME/bolt-install \
           -DCMAKE_C_COMPILER=<C compiler> \
           -DCMAKE_CXX_COMPILER=<C++ compiler> \
           -DCMAKE_BUILD_TYPE=Release \
@@ -87,35 +87,35 @@ If you want to use the built-in Argobots,
           -DLIBOMP_USE_ARGOBOTS=on \
           2>&1 | tee c.txt
 
-If you want to use your own Argobots build,
+  If you want to use your own Argobots build,
 
     for csh and tcsh:
 
       cmake ../bolt-VERSION -G "Unix Makefiles" \
-          -DCMAKE_INSTALL_PREFIX=/home/<USERNAME>/bolt-install \
+          -DCMAKE_INSTALL_PREFIX=/home/USERNAME/bolt-install \
           -DCMAKE_C_COMPILER=<C compiler> \
           -DCMAKE_CXX_COMPILER=<C++ compiler> \
           -DCMAKE_BUILD_TYPE=Release \
           -DLIBOMP_USE_ITT_NOTIFY=off \
           -DLIBOMP_USE_ARGOBOTS=on \
-          -DLIBOMP_ARGOBOTS_INSTALL_DIR=/home/<USERNAME>/argobots-install \
+          -DLIBOMP_ARGOBOTS_INSTALL_DIR=/home/USERNAME/argobots-install \
           |& tee c.txt
 
     for bash and sh:
 
       cmake ../bolt-VERSION -G "Unix Makefiles" \
-          -DCMAKE_INSTALL_PREFIX=/home/<USERNAME>/bolt-install \
+          -DCMAKE_INSTALL_PREFIX=/home/USERNAME/bolt-install \
           -DCMAKE_C_COMPILER=<C compiler> \
           -DCMAKE_CXX_COMPILER=<C++ compiler> \
           -DCMAKE_BUILD_TYPE=Release \
           -DLIBOMP_USE_ITT_NOTIFY=off \
           -DLIBOMP_USE_ARGOBOTS=on \
-          -DLIBOMP_ARGOBOTS_INSTALL_DIR=/home/<USERNAME>/argobots-install \
+          -DLIBOMP_ARGOBOTS_INSTALL_DIR=/home/USERNAME/argobots-install \
           2>&1 | tee c.txt
 
-Bourne-like shells, sh and bash, accept "2>&1 |".  Csh-like shell, csh and
-tcsh, accept "|&".  If a failure occurs, the cmake command will display the
-error.  Most errors are straight-forward to follow.
+  Bourne-like shells, sh and bash, accept "2>&1 |".  Csh-like shell, csh and
+  tcsh, accept "|&".  If a failure occurs, the cmake command will display the
+  error.  Most errors are straight-forward to follow.
 
 (e) Build BOLT:
 
@@ -127,18 +127,18 @@ error.  Most errors are straight-forward to follow.
 
       make 2>&1 | tee m.txt
 
-    This step should succeed if there were no problems with the preceding step.
-    Check file m.txt.  If there were problems, do a "make clean" and then run
-    make again with V=1.
+  This step should succeed if there were no problems with the preceding step.
+  Check file m.txt.  If there were problems, do a "make clean" and then run
+  make again with V=1 and VERBOSE=1.
 
-      make V=1 VERBOSE=1 |& tee m.txt       (for csh and tcsh)
+    make V=1 VERBOSE=1 |& tee m.txt       (for csh and tcsh)
 
-      OR
+    OR
 
-      make V=1 VERBOSE=1 2>&1 | tee m.txt   (for bash and sh)
+    make V=1 VERBOSE=1 2>&1 | tee m.txt   (for bash and sh)
 
-    Then go to step 3 below, for reporting the issue to the BOLT developers and
-    other users.
+  Then go to step 3 below, for reporting the issue to the BOLT developers and
+  other users.
 
 (f) Install BOLT:
 
@@ -150,8 +150,8 @@ error.  Most errors are straight-forward to follow.
 
       make install 2>&1 | tee mi.txt
 
-    This step collects all required header and library files in the directory
-    specified by the prefix argument to cmake.
+  This step collects all required header and library files in the directory
+  specified by the prefix argument to cmake.
 
 -------------------------------------------------------------------------------
 
@@ -163,23 +163,23 @@ clang, Intel OpenMP compiler (icc), or gcc.
 
 For example, using clang with bash:
 
-When you use the built-in Argobots,
+  When you use the built-in Argobots,
 
     cd ../bolt-VERSION/testsuite
     export TEST_CC=clang
-    export TEST_CFLAGS="-g -O2 -fopenmp -I/home/<USERNAME>/bolt-install/include \
-                        -L/home/<USERNAME>/bolt-install/lib -lomp \
-                        -Wl,-rpath=/home/<USERNAME>/bolt-install/lib"
+    export TEST_CFLAGS="-g -O2 -fopenmp -I/home/USERNAME/bolt-install/include \
+                        -L/home/USERNAME/bolt-install/lib -lomp \
+                        -Wl,-rpath=/home/USERNAME/bolt-install/lib"
     make ctest
 
-When you use your own Argobots build,
+  When you use your own Argobots build,
 
     cd ../bolt-VERSION/testsuite
     export TEST_CC=clang
-    export TEST_CFLAGS="-g -O2 -fopenmp -I/home/<USERNAME>/bolt-install/include \
-                        -L/home/<USERNAME>/bolt-install/lib -lomp \
-                        -Wl,-rpath=/home/<USERNAME>/argobots-install/lib \
-                        -Wl,-rpath=/home/<USERNAME>/bolt-install/lib"
+    export TEST_CFLAGS="-g -O2 -fopenmp -I/home/USERNAME/bolt-install/include \
+                        -L/home/USERNAME/bolt-install/lib -lomp \
+                        -Wl,-rpath=/home/USERNAME/argobots-install/lib \
+                        -Wl,-rpath=/home/USERNAME/bolt-install/lib"
     make ctest
 
 You can also specify the number of execution streams (ESs) when running the
