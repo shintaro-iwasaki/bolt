@@ -76,9 +76,7 @@ int ABT_task_create(ABT_pool pool,
 #else
     abt_errno = ABTI_pool_push(p_pool, p_newtask->unit, ABTI_xstream_self());
     if (abt_errno != ABT_SUCCESS) {
-        p_newtask->state = ABT_TASK_STATE_CREATED;
-        int ret = ABT_task_free(&h_newtask);
-        ABTI_CHECK_TRUE(ret == ABT_SUCCESS, ret);
+        ABTI_task_free(p_newtask);
         goto fn_fail;
     }
 #endif
@@ -304,8 +302,7 @@ int ABT_task_free(ABT_task *task)
     ABTI_CHECK_NULL_TASK_PTR(p_task);
 
     /* Wait until the task terminates */
-    while (p_task->state != ABT_TASK_STATE_TERMINATED &&
-           p_task->state != ABT_TASK_STATE_CREATED) {
+    while (p_task->state != ABT_TASK_STATE_TERMINATED) {
         ABT_thread_yield();
     }
 
@@ -825,10 +822,9 @@ void ABTI_task_print(ABTI_task *p_task, FILE *p_os, int indent)
     }
 
     ABTI_xstream *p_xstream = p_task->p_xstream;
-    uint64_t xstream_rank = p_xstream ? p_xstream->rank : 0;
+    int xstream_rank = p_xstream ? p_xstream->rank : 0;
     char *state;
     switch (p_task->state) {
-        case ABT_TASK_STATE_CREATED:    state = "CREATED"; break;
         case ABT_TASK_STATE_READY:      state = "READY"; break;
         case ABT_TASK_STATE_RUNNING:    state = "RUNNING"; break;
         case ABT_TASK_STATE_TERMINATED: state = "TERMINATED"; break;
@@ -839,7 +835,7 @@ void ABTI_task_print(ABTI_task *p_task, FILE *p_os, int indent)
         "%s== TASKLET (%p) ==\n"
         "%sid        : %" PRIu64 "\n"
         "%sstate     : %s\n"
-        "%sES        : %p (%" PRIu64 ")\n"
+        "%sES        : %p (%d)\n"
 #ifndef ABT_CONFIG_DISABLE_STACKABLE_SCHED
         "%sis_sched  : %p\n"
 #endif

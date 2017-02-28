@@ -14,12 +14,11 @@ int main(int argc, char *argv[])
 {
     ABT_xstream *xstreams;
     int num_xstreams = DEFAULT_NUM_XSTREAMS;
-    int i;
-    int ret, tmp;
+    int i, ret;
+    int rank;
 
     /* Initialize */
     ATS_init(argc, argv);
-
     if (argc > 1) {
         num_xstreams = ATS_get_arg_val(ATS_ARG_N_ES);
     }
@@ -33,23 +32,27 @@ int main(int argc, char *argv[])
     ret = ABT_xstream_self(&xstreams[0]);
     ATS_ERROR(ret, "ABT_xstream_self");
     for (i = 1; i < num_xstreams; i++) {
-        ret = ABT_xstream_create(ABT_SCHED_NULL, &xstreams[i]);
-        ATS_ERROR(ret, "ABT_xstream_create");
+        rank = num_xstreams - i;
+        ret = ABT_xstream_create_with_rank(ABT_SCHED_NULL, rank, &xstreams[i]);
+        ATS_ERROR(ret, "ABT_xstream_create_with_rank");
     }
 
-    /* Get the number of Execution Streams */
-    ret = ABT_xstream_get_num(&tmp);
-    ATS_ERROR(ret, "ABT_xstream_get_num");
-    assert(tmp == num_xstreams);
+    /* Check the rank of each ES */
+    for (i = 1; i < num_xstreams; i++) {
+        ret = ABT_xstream_get_rank(xstreams[i], &rank);
+        ATS_ERROR(ret, "ABT_xstream_get_rank");
+        assert(rank == (num_xstreams - i));
+    }
 
-    /* Join Execution Streams */
+    /* Test an invalid rank, which is already taken */
+    ABT_xstream tmp;
+    ret = ABT_xstream_create_with_rank(ABT_SCHED_NULL, 0, &tmp);
+    assert(ret == ABT_ERR_INV_XSTREAM_RANK);
+
+    /* Join and free ESs */
     for (i = 1; i < num_xstreams; i++) {
         ret = ABT_xstream_join(xstreams[i]);
         ATS_ERROR(ret, "ABT_xstream_join");
-    }
-
-    /* Free Execution Streams */
-    for (i = 1; i < num_xstreams; i++) {
         ret = ABT_xstream_free(&xstreams[i]);
         ATS_ERROR(ret, "ABT_xstream_free");
     }

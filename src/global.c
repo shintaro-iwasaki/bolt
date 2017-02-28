@@ -24,8 +24,8 @@ static uint32_t g_ABTI_num_inits = 0;
  * It internally creates objects for the \a primary ES and the \a primary ULT.
  *
  * \c ABT_init() must be called by the primary ULT before using any other
- * Argobots APIs. \c ABT_init() can be called again after \c ABT_finalize() is
- * called.
+ * Argobots functions. \c ABT_init() can be called again after
+ * \c ABT_finalize() is called.
  *
  * @param[in] argc the number of arguments
  * @param[in] argv the argument vector
@@ -52,8 +52,7 @@ int ABT_init(int argc, char **argv)
     /* Initialize the event environment */
     ABTI_event_init();
 
-    /* Initialize rank and IDs. */
-    ABTI_xstream_reset_rank();
+    /* Initialize IDs */
     ABTI_thread_reset_id();
     ABTI_task_reset_id();
     ABTI_sched_reset_id();
@@ -105,12 +104,13 @@ int ABT_init(int argc, char **argv)
  * @brief   Terminate the Argobots execution environment.
  *
  * \c ABT_finalize() terminates the Argobots execution environment and
- * deallocates memory internally used in Argobots. This routine also contains
+ * deallocates memory internally used in Argobots. This function also contains
  * deallocation of objects for the primary ES and the primary ULT.
  *
  * \c ABT_finalize() must be called by the primary ULT. Invoking the Argobots
- * APIs after \c ABT_finalize() is not allowed. To use the Argobots APIs after
- * calling \c ABT_finalize(), \c ABT_init() needs to be called again.
+ * functions after \c ABT_finalize() is not allowed. To use the Argobots
+ * functions after calling \c ABT_finalize(), \c ABT_init() needs to be called
+ * again.
  *
  * @return Error code
  * @retval ABT_SUCCESS on success
@@ -149,7 +149,7 @@ int ABT_finalize(void)
         /* Set the orphan request for the primary ULT */
         ABTI_thread_set_request(p_thread, ABTI_THREAD_REQ_ORPHAN);
 
-        LOG_EVENT("[U%" PRIu64 ":E%" PRIu64 "] yield to scheduler\n",
+        LOG_EVENT("[U%" PRIu64 ":E%d] yield to scheduler\n",
                   ABTI_thread_get_id(p_thread), p_thread->p_last_xstream->rank);
 
         /* Switch to the top scheduler */
@@ -158,13 +158,9 @@ int ABT_finalize(void)
         ABTD_thread_context_switch(&p_thread->ctx, p_sched->p_ctx);
 
         /* Back to the original thread */
-        LOG_EVENT("[U%" PRIu64 ":E%" PRIu64 "] resume after yield\n",
+        LOG_EVENT("[U%" PRIu64 ":E%d] resume after yield\n",
                   ABTI_thread_get_id(p_thread), p_thread->p_last_xstream->rank);
     }
-
-    /* Remove the primary ES from the global ES array */
-    gp_ABTI_global->p_xstreams[p_xstream->rank] = NULL;
-    gp_ABTI_global->num_xstreams--;
 
     /* Remove the primary ULT */
     ABTI_thread_free_main(p_thread);
@@ -192,9 +188,6 @@ int ABT_finalize(void)
     /* Free the ABTI_global structure */
     ABTU_free(gp_ABTI_global);
     gp_ABTI_global = NULL;
-
-    /* Free internal arrays */
-    ABTI_xstream_free_ranks();
 
   fn_exit:
     return abt_errno;
@@ -224,5 +217,28 @@ int ABT_initialized(void)
     }
 
     return abt_errno;
+}
+
+/* If new_size is equal to zero, we double max_xstreams.
+ * NOTE: This function currently cannot decrease max_xstreams.
+ */
+void ABTI_global_update_max_xstreams(int new_size)
+{
+    int i;
+
+    if (new_size != 0 && new_size < gp_ABTI_global->max_xstreams) return;
+
+    ABTI_spinlock_acquire(&gp_ABTI_global->lock);
+
+    new_size = (new_size > 0) ? new_size : gp_ABTI_global->max_xstreams * 2;
+    gp_ABTI_global->max_xstreams = new_size;
+    gp_ABTI_global->p_xstreams = (ABTI_xstream **)ABTU_realloc(
+            gp_ABTI_global->p_xstreams, new_size * sizeof(ABTI_xstream *));
+
+    for (i = gp_ABTI_global->num_xstreams; i < new_size; i++) {
+        gp_ABTI_global->p_xstreams[i] = NULL;
+    }
+
+    ABTI_spinlock_release(&gp_ABTI_global->lock);
 }
 
