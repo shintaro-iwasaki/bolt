@@ -348,6 +348,11 @@ if(LIBOMP_USE_HWLOC AND (NOT LIBOMP_HAVE_HWLOC))
   libomp_error_say("Hwloc requested but not available")
 endif()
 
+# Error check Argobots support after config-ix has run
+if(LIBOMP_USE_ARGOBOTS AND (NOT LIBOMP_HAVE_ARGOBOTS))
+  libomp_error_say("Argobots requested but not available")
+endif()
+
 # Hierarchical scheduling support
 set(LIBOMP_USE_HIER_SCHED FALSE CACHE BOOL
   "Hierarchical scheduling support?")
@@ -428,6 +433,9 @@ if(${OPENMP_STANDALONE_BUILD})
   libomp_say("Use quad precision   -- ${LIBOMP_USE_QUAD_PRECISION}")
   libomp_say("Use TSAN-support     -- ${LIBOMP_TSAN_SUPPORT}")
   libomp_say("Use Hwloc library    -- ${LIBOMP_USE_HWLOC}")
+  libomp_say("Use Argobots         -- ${LIBOMP_USE_ARGOBOTS}")
+  libomp_say("Use builtin Argobots -- ${LIBOMP_USE_BUILTIN_ARGOBOTS}")
+  libomp_say("Argobots path        -- ${LIBOMP_ARGOBOTS_INSTALL_DIR}")
 endif()
 
 add_subdirectory(src)
