@@ -45,6 +45,12 @@ Henceforth, VERSION indicates the version number of the release tarball.
   different command syntax.  Command "echo $SHELL" prints out the current shell
   used by your terminal program.
 
+  Note: if you obtained BOLT via github, the following commands download the
+  built-in Argobots from the Argobots repository.
+
+    git submodule init
+    git submodule update
+
 (b) Unpack the tar file and create a build directory:
 
     tar xzf bolt-VERSION.tar.gz
