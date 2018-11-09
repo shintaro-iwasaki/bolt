@@ -1,4 +1,13 @@
 ===============================================================================
+                               Changes in 1.0rc1
+===============================================================================
+
+- Upgraded to LLVM OpenMP 7.0
+- Support task depend and taskloop
+- Support OpenMP 4.5 except untied task and cancellation
+- Argobots updated to the latest version and integrated as a git submodule
+
+===============================================================================
                                Changes in 1.0b1
 ===============================================================================
 
