@@ -53,6 +53,8 @@ set(OPENMP_TEST_FLAGS "" CACHE STRING
 set(OPENMP_TEST_OPENMP_FLAGS ${OPENMP_TEST_COMPILER_OPENMP_FLAGS} CACHE STRING
   "OpenMP compiler flag to use for testing OpenMP runtime libraries.")
 
+# Build external libraries.
+add_subdirectory(external)
 
 # Build host runtime library.
 add_subdirectory(runtime)
