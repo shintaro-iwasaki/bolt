@@ -653,7 +653,6 @@ static void __kmp_abt_launch_worker(void *thr) {
   KA_TRACE(10, ("__kmp_abt_launch_worker: T#%d done\n", gtid));
 
   __kmp_abt_wait_child_tasks(this_thr, FALSE);
-  this_thr->th.th_task_team = NULL;
 
   /* Below is for the implicit task */
   kmp_taskdata_t *td = this_thr->th.th_current_task;
