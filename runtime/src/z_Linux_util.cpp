@@ -3604,6 +3604,12 @@ static void __kmp_abt_execute_task(void *arg) {
   KA_TRACE(20, ("__kmp_abt_execute_task: T#%d before executing task %p.\n",
                 gtid, task));
 
+  // See __kmp_task_start
+  taskdata->td_flags.started = 1;
+  taskdata->td_flags.executing = 1;
+  KMP_DEBUG_ASSERT(taskdata->td_flags.complete == 0);
+  KMP_DEBUG_ASSERT(taskdata->td_flags.freed == 0);
+
   // Run __kmp_invoke_task to handle internal counters correctly.
 #ifdef KMP_GOMP_COMPAT
   if (taskdata->td_flags.native) {
@@ -3619,6 +3625,14 @@ static void __kmp_abt_execute_task(void *arg) {
     // may have been changed.
     th = __kmp_abt_get_self_info();
   }
+
+  // See __kmp_task_finish
+  // KMP_DEBUG_ASSERT(taskdata->td_flags.executing == 0);
+  taskdata->td_flags.executing = 0;
+  KMP_DEBUG_ASSERT(taskdata->td_flags.complete == 0);
+  taskdata->td_flags.complete = 1; // mark the task as completed
+  // KMP_DEBUG_ASSERT(taskdata->td_flags.started == 1);
+  // KMP_DEBUG_ASSERT(taskdata->td_flags.freed == 0);
 
   // Free this task.
   __kmp_abt_free_task(th, taskdata);
