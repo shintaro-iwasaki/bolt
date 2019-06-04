@@ -22,6 +22,10 @@
 #include "kmp_wait_release.h"
 #include "kmp_wrapper_getpid.h"
 
+#if KMP_USE_ABT
+#include "kmp_taskdeps.h"
+#endif
+
 #if !KMP_OS_DRAGONFLY && !KMP_OS_FREEBSD && !KMP_OS_NETBSD && !KMP_OS_OPENBSD
 #include <alloca.h>
 #endif
