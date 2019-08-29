@@ -3250,9 +3250,26 @@ void __kmp_abt_release_info(kmp_info_t *th) {
   TCW_4(th->th.th_active, FALSE);
 }
 
-void __kmp_abt_acquire_info_for_task(kmp_info_t *th,
-                                     kmp_taskdata_t *taskdata) {
-  while (KMP_COMPARE_AND_STORE_RET32(&th->th.th_active, FALSE, TRUE) != FALSE) {
+void __kmp_abt_acquire_info_for_task(kmp_info_t *th, kmp_taskdata_t *taskdata,
+                                     const kmp_team_t *match_team) {
+  while (1) {
+    // task must be executed by an inactive thread belonging to the same team;
+    // if not, yield to a scheduler.
+
+    // Quick check.
+    if (th->th.th_team != match_team)
+      goto END_WHILE;
+    // Take a lock.
+    if (KMP_COMPARE_AND_STORE_RET32(&th->th.th_active, FALSE, TRUE) != FALSE)
+      goto END_WHILE;
+    // th->th.th_team might have been updated while taking a lock; if th_team
+    // is not matched, yield to a scheduler.
+    if (th->th.th_team != match_team) {
+      __kmp_abt_release_info(th);
+      goto END_WHILE;
+    }
+    break;
+END_WHILE:
     ABT_thread_yield();
   }
   th->th.th_current_task = taskdata;
@@ -3687,6 +3704,8 @@ void __kmp_abt_wait_child_tasks(kmp_info_t *th, int yield) {
 
   int i, status;
   kmp_taskdata_t *taskdata = th->th.th_current_task;
+  // Get the associated team before releasing the ownership of th.
+  kmp_team_t *team = th->th.th_team;
 
   if (taskdata->td_tq_cur_size == 0) {
     /* leaf task case */
@@ -3696,9 +3715,9 @@ void __kmp_abt_wait_child_tasks(kmp_info_t *th, int yield) {
       ABT_thread_yield();
 
       if (taskdata->td_flags.tiedness) {
-        __kmp_abt_acquire_info_for_task(th, taskdata);
+        __kmp_abt_acquire_info_for_task(th, taskdata, team);
       } else {
-        __kmp_abt_bind_task_to_thread(th->th.th_team, taskdata);
+        kmp_info_t *new_th = __kmp_abt_bind_task_to_thread(team, taskdata);
       }
     }
     KA_TRACE(20, ("__kmp_abt_wait_child_tasks: T#%d done\n",
@@ -3722,9 +3741,9 @@ void __kmp_abt_wait_child_tasks(kmp_info_t *th, int yield) {
 
   if (taskdata->td_flags.tiedness) {
     /* Obtain kmp_info to continue the original task. */
-    __kmp_abt_acquire_info_for_task(th, taskdata);
+    __kmp_abt_acquire_info_for_task(th, taskdata, team);
   } else {
-    th = __kmp_abt_bind_task_to_thread(th->th.th_team, taskdata);
+    th = __kmp_abt_bind_task_to_thread(team, taskdata);
   }
 
   KA_TRACE(20, ("__kmp_abt_wait_child_tasks: T#%d done\n",
@@ -3769,8 +3788,14 @@ kmp_info_t *__kmp_abt_bind_task_to_thread(kmp_team_t *team,
 
       if (th->th.th_active == FALSE && ult != ABT_THREAD_NULL) {
         /* Try to take the ownership of kmp_info 'th' */
+        if (th->th.th_team != team)
+          continue;
         if (KMP_COMPARE_AND_STORE_RET32(&th->th.th_active, FALSE, TRUE)
             == FALSE) {
+          if (th->th.th_team != team) {
+            __kmp_abt_release_info(th);
+            continue;
+          }
           /* Bind this task as if it is executed by 'th'. */
           th->th.th_current_task = taskdata;
           __kmp_abt_set_self_info(th);
