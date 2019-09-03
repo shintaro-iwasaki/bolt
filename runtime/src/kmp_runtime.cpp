@@ -1690,7 +1690,6 @@ int __kmp_fork_call(ident_t *loc, int gtid,
 
       parent_team->t.t_pkfn = microtask;
       parent_team->t.t_invoke = invoker;
-      KMP_ATOMIC_INC(&root->r.r_in_parallel);
       parent_team->t.t_active_level++;
       parent_team->t.t_level++;
 #if OMP_50_ENABLED
@@ -1771,7 +1770,7 @@ int __kmp_fork_call(ident_t *loc, int gtid,
       // parallel out of teams construct). This code moved here from
       // __kmp_reserve_threads() to speedup nested serialized parallels.
       if (nthreads > 1) {
-        if ((!get__nested(master_th) && (root->r.r_in_parallel
+        if ((!get__nested(master_th) && (root->r.r_active
 #if OMP_40_ENABLED
                                          && !enter_teams
 #endif /* OMP_40_ENABLED */
@@ -2040,14 +2039,6 @@ int __kmp_fork_call(ident_t *loc, int gtid,
     // executing
     // KMP_ASSERT( master_th->th.th_current_task->td_flags.executing == 1 );
     master_th->th.th_current_task->td_flags.executing = 0;
-
-#if OMP_40_ENABLED
-    if (!master_th->th.th_teams_microtask || level > teams_level)
-#endif /* OMP_40_ENABLED */
-    {
-      /* Increment our nested depth level */
-      KMP_ATOMIC_INC(&root->r.r_in_parallel);
-    }
 
     // See if we need to make a copy of the ICVs.
     int nthreads_icv = master_th->th.th_current_task->td_icvs.nproc;
@@ -2526,7 +2517,6 @@ void __kmp_join_call(ident_t *loc, int gtid
     /* Decrement our nested depth level */
     team->t.t_level--;
     team->t.t_active_level--;
-    KMP_ATOMIC_DEC(&root->r.r_in_parallel);
 
     /* Restore number of threads in the team if needed */
     if (master_th->th.th_team_nproc < master_th->th.th_teams_size.nth) {
@@ -2580,19 +2570,6 @@ void __kmp_join_call(ident_t *loc, int gtid
      separating the parallel user code called in this parallel region
      from the serial user code called after this function returns. */
   __kmp_acquire_bootstrap_lock(&__kmp_forkjoin_lock);
-#endif
-
-#if OMP_40_ENABLED
-  if (!master_th->th.th_teams_microtask ||
-      team->t.t_level > master_th->th.th_teams_level)
-#endif /* OMP_40_ENABLED */
-  {
-    /* Decrement our nested depth level */
-    KMP_ATOMIC_DEC(&root->r.r_in_parallel);
-  }
-
-#if !KMP_REMOVE_FORKJOIN_LOCK
-  KMP_DEBUG_ASSERT(root->r.r_in_parallel >= 0);
 #endif
 
 #if OMPT_SUPPORT
@@ -3311,7 +3288,6 @@ static void __kmp_initialize_root(kmp_root_t *root) {
   __kmp_init_lock(&root->r.r_begin_lock);
   root->r.r_begin = FALSE;
   root->r.r_active = FALSE;
-  root->r.r_in_parallel = 0;
   root->r.r_blocktime = __kmp_dflt_blocktime;
   root->r.r_nested = __kmp_dflt_nested;
   root->r.r_cg_nthreads = 1;
@@ -3543,8 +3519,6 @@ void __kmp_print_structure(void) {
                                      root->r.r_uber_thread);
         __kmp_printf("    Active?:      %2d\n", root->r.r_active);
         __kmp_printf("    Nested?:      %2d\n", root->r.r_nested);
-        __kmp_printf("    In Parallel:  %2d\n",
-                     KMP_ATOMIC_LD_RLX(&root->r.r_in_parallel));
         __kmp_printf("\n");
         __kmp_print_structure_team_accum(list, root->r.r_root_team);
         __kmp_print_structure_team_accum(list, root->r.r_hot_team);
@@ -7926,7 +7900,7 @@ void __kmp_user_set_library(enum library_type arg) {
 
   KA_TRACE(20, ("__kmp_user_set_library: enter T#%d, arg: %d, %d\n", gtid, arg,
                 library_serial));
-  if (root->r.r_in_parallel) { /* Must be called in serial section of top-level
+  if (root->r.r_active) { /* Must be called in serial section of top-level
                                   thread */
     KMP_WARNING(SetLibraryIncorrectCall);
     return;

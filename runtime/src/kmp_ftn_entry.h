@@ -658,7 +658,7 @@ int FTN_STDCALL KMP_EXPAND_NAME(FTN_IN_PARALLEL)(void) {
     return (th->th.th_team->t.t_active_level ? 1 : 0);
   } else
 #endif /* OMP_40_ENABLED */
-    return (th->th.th_root->r.r_in_parallel ? FTN_TRUE : FTN_FALSE);
+    return (th->th.th_root->r.r_active ? FTN_TRUE : FTN_FALSE);
 #endif
 }
 
