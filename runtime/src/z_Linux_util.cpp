@@ -3576,6 +3576,14 @@ static void __kmp_abt_initialize(void) {
     } else {
       __kmp_abt_global.fork_num_ways = KMP_ABT_FORK_NUM_WAYS_DEFAULT;
     }
+    env = getenv("KMP_ABT_SCHED_SLEEP");
+    if (env) {
+      __kmp_abt_global.is_sched_sleep = atoi(env);
+      if (__kmp_abt_global.is_sched_sleep <= 1)
+        __kmp_abt_global.is_sched_sleep = 2;
+    } else {
+      __kmp_abt_global.is_sched_sleep = KMP_ABT_SCHED_SLEEP_DEFAULT;
+    }
   }
 
   KA_TRACE(10, ("__kmp_abt_initialize: # of ESs = %d\n", num_xstreams));
@@ -3728,15 +3736,14 @@ static void __kmp_abt_sched_run(ABT_sched sched) {
   ABT_pool *shared_pools;
   ABT_pool place_pool;
   uint32_t seed;
+  const int is_sched_sleep = __kmp_abt_global.is_sched_sleep;
   do {
     seed = (uint32_t)time(NULL) + 64 + rank;
   } while (seed == 0);
 
-#if ABT_USE_SCHED_SLEEP
   struct timespec sleep_time;
   sleep_time.tv_sec = 0;
   sleep_time.tv_nsec = 128;
-#endif
 
   ABT_sched_get_data(sched, (void **)&p_data);
   ABT_sched_get_num_pools(sched, &num_pools);
@@ -3784,21 +3791,21 @@ static void __kmp_abt_sched_run(ABT_sched sched) {
       if (stop == ABT_TRUE)
         break;
       work_count = 0;
-#if ABT_USE_SCHED_SLEEP
-      if (run_cnt == 0) {
-        sleep_cnt = 0;
-        nanosleep(&sleep_time, NULL);
-        if (sleep_time.tv_nsec < 1048576) {
-          sleep_time.tv_nsec <<= 2;
+      if (is_sched_sleep) {
+        if (run_cnt == 0) {
+          sleep_cnt = 0;
+          nanosleep(&sleep_time, NULL);
+          if (sleep_time.tv_nsec < 1048576) {
+            sleep_time.tv_nsec <<= 2;
+          }
+        } else if (sleep_cnt == 8) {
+          sleep_cnt = 0;
+          nanosleep(&sleep_time, NULL);
+        } else {
+          sleep_time.tv_nsec = 128;
+          sleep_cnt++;
         }
-      } else if (sleep_cnt == 8) {
-        sleep_cnt = 0;
-        nanosleep(&sleep_time, NULL);
-      } else {
-        sleep_time.tv_nsec = 128;
-        sleep_cnt++;
       }
-#endif /* ABT_USE_SCHED_SLEEP */
     }
   }
 }

@@ -18,10 +18,9 @@
 
 #include <abt.h>
 
-#define ABT_USE_SCHED_SLEEP 0
-
 #define KMP_ABT_FORK_NUM_WAYS_DEFAULT 2
 #define KMP_ABT_FORK_CUTOFF_DEFAULT (1 << 20)
+#define KMP_ABT_SCHED_SLEEP_DEFAULT 0
 
 static inline uint32_t __kmp_abt_fast_rand32(uint32_t *p_seed) {
   // George Marsaglia, "Xorshift RNGs", Journal of Statistical Software,
@@ -56,6 +55,7 @@ typedef struct kmp_abt_global {
   int num_xstreams;
   int fork_num_ways;
   int fork_cutoff;
+  int is_sched_sleep;
   int num_places;
   ABT_pool *place_pools;
 
