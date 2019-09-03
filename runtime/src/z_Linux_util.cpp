@@ -3560,9 +3560,23 @@ static void __kmp_abt_initialize(void) {
                                                      verbose);
       }
     }
+    env = getenv("KMP_ABT_FORK_CUTOFF");
+    if (env) {
+      __kmp_abt_global.fork_cutoff = atoi(env);
+      if (__kmp_abt_global.fork_cutoff <= 0)
+        __kmp_abt_global.fork_cutoff = 1;
+    } else {
+      __kmp_abt_global.fork_cutoff = KMP_ABT_FORK_CUTOFF_DEFAULT;
+    }
+    env = getenv("KMP_ABT_FORK_NUM_WAYS");
+    if (env) {
+      __kmp_abt_global.fork_num_ways = atoi(env);
+      if (__kmp_abt_global.fork_num_ways <= 1)
+        __kmp_abt_global.fork_num_ways = 2;
+    } else {
+      __kmp_abt_global.fork_num_ways = KMP_ABT_FORK_NUM_WAYS_DEFAULT;
+    }
   }
-  __kmp_abt_global.fork_cutoff = KMP_ABT_FORK_CUTOFF_DEFAULT;
-  __kmp_abt_global.fork_num_ways = KMP_ABT_FORK_NUM_WAYS_DEFAULT;
 
   KA_TRACE(10, ("__kmp_abt_initialize: # of ESs = %d\n", num_xstreams));
 
