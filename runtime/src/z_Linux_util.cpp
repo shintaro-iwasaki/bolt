@@ -3512,7 +3512,13 @@ static void __kmp_abt_initialize(void) {
 
   {
     int verbose = 0;
-    const char *env = getenv("KMP_ABT_NUM_ESS");
+    const char *env = getenv("KMP_ABT_VERBOSE");
+    if (env && atoi(env) != 0) {
+      verbose = 1;
+      printf("=== BOLT info (KMP_ABT_VERBOSE) ===\n");
+    }
+
+    env = getenv("KMP_ABT_NUM_ESS");
     if (env) {
       num_xstreams = atoi(env);
       if (num_xstreams < __kmp_xproc)
@@ -3520,6 +3526,9 @@ static void __kmp_abt_initialize(void) {
     } else {
       num_xstreams = __kmp_xproc;
     }
+    if (verbose)
+      printf("KMP_ABT_NUM_ESS = %d\n", num_xstreams);
+
     env = getenv("OMP_PLACES");
     if (!env) {
       env = getenv("KMP_AFFINITY");
@@ -3560,6 +3569,7 @@ static void __kmp_abt_initialize(void) {
                                                      verbose);
       }
     }
+
     env = getenv("KMP_ABT_FORK_CUTOFF");
     if (env) {
       __kmp_abt_global.fork_cutoff = atoi(env);
@@ -3568,6 +3578,9 @@ static void __kmp_abt_initialize(void) {
     } else {
       __kmp_abt_global.fork_cutoff = KMP_ABT_FORK_CUTOFF_DEFAULT;
     }
+    if (verbose)
+      printf("KMP_ABT_FORK_CUTOFF = %d\n", __kmp_abt_global.fork_cutoff);
+
     env = getenv("KMP_ABT_FORK_NUM_WAYS");
     if (env) {
       __kmp_abt_global.fork_num_ways = atoi(env);
@@ -3576,6 +3589,9 @@ static void __kmp_abt_initialize(void) {
     } else {
       __kmp_abt_global.fork_num_ways = KMP_ABT_FORK_NUM_WAYS_DEFAULT;
     }
+    if (verbose)
+      printf("KMP_ABT_FORK_NUM_WAYS = %d\n", __kmp_abt_global.fork_num_ways);
+
     env = getenv("KMP_ABT_SCHED_SLEEP");
     if (env) {
       __kmp_abt_global.is_sched_sleep = atoi(env);
@@ -3584,6 +3600,9 @@ static void __kmp_abt_initialize(void) {
     } else {
       __kmp_abt_global.is_sched_sleep = KMP_ABT_SCHED_SLEEP_DEFAULT;
     }
+    if (verbose)
+      printf("KMP_ABT_SCHED_SLEEP = %d\n", __kmp_abt_global.is_sched_sleep);
+
     env = getenv("KMP_ABT_SCHED_MIN_SLEEP_NSEC");
     if (env) {
       __kmp_abt_global.sched_sleep_min_nsec = atoi(env);
@@ -3593,6 +3612,10 @@ static void __kmp_abt_initialize(void) {
       __kmp_abt_global.sched_sleep_min_nsec
           = KMP_ABT_SCHED_MIN_SLEEP_NSEC_DEFAULT;
     }
+    if (verbose)
+      printf("KMP_ABT_SCHED_MIN_SLEEP_NSEC = %d\n",
+             __kmp_abt_global.sched_sleep_min_nsec);
+
     env = getenv("KMP_ABT_SCHED_MAX_SLEEP_NSEC");
     if (env) {
       __kmp_abt_global.sched_sleep_max_nsec = atoi(env);
@@ -3604,6 +3627,10 @@ static void __kmp_abt_initialize(void) {
       __kmp_abt_global.sched_sleep_max_nsec
           = KMP_ABT_SCHED_MAX_SLEEP_NSEC_DEFAULT;
     }
+    if (verbose)
+      printf("KMP_ABT_SCHED_MAX_SLEEP_NSEC = %d\n",
+             __kmp_abt_global.sched_sleep_max_nsec);
+
     env = getenv("KMP_ABT_SCHED_EVENT_FREQ");
     if (env) {
       __kmp_abt_global.sched_event_freq = atoi(env);
@@ -3621,6 +3648,10 @@ static void __kmp_abt_initialize(void) {
         break;
        }
     }
+    if (verbose)
+      printf("KMP_ABT_SCHED_EVENT_FREQ = %d\n",
+             __kmp_abt_global.sched_event_freq);
+
     env = getenv("KMP_ABT_WORK_STEAL_FREQ");
     if (env) {
       __kmp_abt_global.work_steal_freq = atoi(env);
@@ -3638,6 +3669,9 @@ static void __kmp_abt_initialize(void) {
          }
       }
     }
+    if (verbose)
+      printf("KMP_ABT_WORK_STEAL_FREQ = %ud\n",
+             (unsigned int)__kmp_abt_global.work_steal_freq);
   }
 
   KA_TRACE(10, ("__kmp_abt_initialize: # of ESs = %d\n", num_xstreams));
