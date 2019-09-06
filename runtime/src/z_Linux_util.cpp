@@ -3512,7 +3512,13 @@ static void __kmp_abt_initialize(void) {
 
   {
     int verbose = 0;
-    const char *env = getenv("KMP_ABT_NUM_ESS");
+    const char *env = getenv("KMP_ABT_VERBOSE");
+    if (env && atoi(env) != 0) {
+      verbose = 1;
+      printf("=== BOLT info (KMP_ABT_VERBOSE) ===\n");
+    }
+
+    env = getenv("KMP_ABT_NUM_ESS");
     if (env) {
       num_xstreams = atoi(env);
       if (num_xstreams < __kmp_xproc)
@@ -3520,6 +3526,9 @@ static void __kmp_abt_initialize(void) {
     } else {
       num_xstreams = __kmp_xproc;
     }
+    if (verbose)
+      printf("KMP_ABT_NUM_ESS = %d\n", num_xstreams);
+
     env = getenv("OMP_PLACES");
     if (!env) {
       env = getenv("KMP_AFFINITY");
@@ -3560,9 +3569,110 @@ static void __kmp_abt_initialize(void) {
                                                      verbose);
       }
     }
+
+    env = getenv("KMP_ABT_FORK_CUTOFF");
+    if (env) {
+      __kmp_abt_global.fork_cutoff = atoi(env);
+      if (__kmp_abt_global.fork_cutoff <= 0)
+        __kmp_abt_global.fork_cutoff = 1;
+    } else {
+      __kmp_abt_global.fork_cutoff = KMP_ABT_FORK_CUTOFF_DEFAULT;
+    }
+    if (verbose)
+      printf("KMP_ABT_FORK_CUTOFF = %d\n", __kmp_abt_global.fork_cutoff);
+
+    env = getenv("KMP_ABT_FORK_NUM_WAYS");
+    if (env) {
+      __kmp_abt_global.fork_num_ways = atoi(env);
+      if (__kmp_abt_global.fork_num_ways <= 1)
+        __kmp_abt_global.fork_num_ways = 2;
+    } else {
+      __kmp_abt_global.fork_num_ways = KMP_ABT_FORK_NUM_WAYS_DEFAULT;
+    }
+    if (verbose)
+      printf("KMP_ABT_FORK_NUM_WAYS = %d\n", __kmp_abt_global.fork_num_ways);
+
+    env = getenv("KMP_ABT_SCHED_SLEEP");
+    if (env) {
+      __kmp_abt_global.is_sched_sleep = atoi(env);
+      if (__kmp_abt_global.is_sched_sleep <= 1)
+        __kmp_abt_global.is_sched_sleep = 2;
+    } else {
+      __kmp_abt_global.is_sched_sleep = KMP_ABT_SCHED_SLEEP_DEFAULT;
+    }
+    if (verbose)
+      printf("KMP_ABT_SCHED_SLEEP = %d\n", __kmp_abt_global.is_sched_sleep);
+
+    env = getenv("KMP_ABT_SCHED_MIN_SLEEP_NSEC");
+    if (env) {
+      __kmp_abt_global.sched_sleep_min_nsec = atoi(env);
+      if (__kmp_abt_global.sched_sleep_min_nsec <= 0)
+        __kmp_abt_global.sched_sleep_min_nsec = 0;
+    } else {
+      __kmp_abt_global.sched_sleep_min_nsec
+          = KMP_ABT_SCHED_MIN_SLEEP_NSEC_DEFAULT;
+    }
+    if (verbose)
+      printf("KMP_ABT_SCHED_MIN_SLEEP_NSEC = %d\n",
+             __kmp_abt_global.sched_sleep_min_nsec);
+
+    env = getenv("KMP_ABT_SCHED_MAX_SLEEP_NSEC");
+    if (env) {
+      __kmp_abt_global.sched_sleep_max_nsec = atoi(env);
+      if (__kmp_abt_global.sched_sleep_max_nsec
+          < __kmp_abt_global.sched_sleep_min_nsec)
+        __kmp_abt_global.sched_sleep_max_nsec
+            = __kmp_abt_global.sched_sleep_min_nsec;
+    } else {
+      __kmp_abt_global.sched_sleep_max_nsec
+          = KMP_ABT_SCHED_MAX_SLEEP_NSEC_DEFAULT;
+    }
+    if (verbose)
+      printf("KMP_ABT_SCHED_MAX_SLEEP_NSEC = %d\n",
+             __kmp_abt_global.sched_sleep_max_nsec);
+
+    env = getenv("KMP_ABT_SCHED_EVENT_FREQ");
+    if (env) {
+      __kmp_abt_global.sched_event_freq = atoi(env);
+      if (__kmp_abt_global.sched_event_freq <= 1)
+        __kmp_abt_global.sched_event_freq = 1;
+      if (__kmp_abt_global.sched_event_freq > KMP_ABT_SCHED_EVENT_FREQ_MAX)
+        __kmp_abt_global.sched_event_freq = KMP_ABT_SCHED_EVENT_FREQ_MAX;
+    } else {
+      __kmp_abt_global.sched_event_freq = KMP_ABT_SCHED_EVENT_FREQ_DEFAULT;
+    }
+    // Must be 2^N
+    for (int digit = 0;; digit++) {
+      if ((1 << digit) >= __kmp_abt_global.sched_event_freq) {
+        __kmp_abt_global.sched_event_freq = 1 << digit;
+        break;
+       }
+    }
+    if (verbose)
+      printf("KMP_ABT_SCHED_EVENT_FREQ = %d\n",
+             __kmp_abt_global.sched_event_freq);
+
+    env = getenv("KMP_ABT_WORK_STEAL_FREQ");
+    if (env) {
+      __kmp_abt_global.work_steal_freq = atoi(env);
+      if (__kmp_abt_global.work_steal_freq <= 0)
+        __kmp_abt_global.work_steal_freq = 0;
+    } else {
+      __kmp_abt_global.work_steal_freq = KMP_ABT_WORK_STEAL_FREQ_DEFAULT;
+    }
+    // Must be 2^N
+    if (__kmp_abt_global.work_steal_freq != 0) {
+      for (uint32_t digit = 0;; digit++) {
+        if ((1u << digit) >= __kmp_abt_global.work_steal_freq) {
+          __kmp_abt_global.work_steal_freq = 1u << digit;
+          break;
+         }
+      }
+    }
+    if (verbose)
+      printf("KMP_ABT_WORK_STEAL_FREQ = %ud\n",
+             (unsigned int)__kmp_abt_global.work_steal_freq);
   }
-  __kmp_abt_global.fork_cutoff = KMP_ABT_FORK_CUTOFF_DEFAULT;
-  __kmp_abt_global.fork_num_ways = KMP_ABT_FORK_NUM_WAYS_DEFAULT;
 
   KA_TRACE(10, ("__kmp_abt_initialize: # of ESs = %d\n", num_xstreams));
 
@@ -3605,15 +3715,6 @@ static void __kmp_abt_initialize(void) {
   }
 
   /* Create schedulers */
-  ABT_sched_config_var cv_freq = {
-    .idx = 0,
-    .type = ABT_SCHED_CONFIG_INT
-  };
-
-  ABT_sched_config config;
-  int freq = (num_xstreams < 100) ? 100 : num_xstreams;
-  ABT_sched_config_create(&config, cv_freq, freq, ABT_sched_config_var_end);
-
   ABT_sched_def sched_def = {
     .type = ABT_SCHED_TYPE_ULT,
     .init = __kmp_abt_sched_init,
@@ -3635,12 +3736,12 @@ static void __kmp_abt_initialize(void) {
       my_pools[num_pools++] = __kmp_abt_global.locals[i].place_pool;
     }
     status = ABT_sched_create(&sched_def, num_pools, my_pools,
-                              config, &__kmp_abt_global.locals[i].sched);
+                              ABT_SCHED_CONFIG_NULL,
+                              &__kmp_abt_global.locals[i].sched);
     KMP_CHECK_SYSFAIL("ABT_sched_create", status);
   }
 
   free(my_pools);
-  ABT_sched_config_free(&config);
 
   /* Create ESs */
   status = ABT_xstream_self(&__kmp_abt_global.locals[0].xstream);
@@ -3693,44 +3794,37 @@ void __kmp_abt_global_destroy() {
   __kmp_abt_init_global = FALSE;
 }
 
-typedef struct {
-  uint32_t event_freq;
-} __kmp_abt_sched_data_t;
-
 static int __kmp_abt_sched_init(ABT_sched sched, ABT_sched_config config) {
-  __kmp_abt_sched_data_t *p_data = (__kmp_abt_sched_data_t *)
-                                   calloc(1, sizeof(__kmp_abt_sched_data_t));
-  ABT_sched_config_read(config, 1, &p_data->event_freq);
-  ABT_sched_set_data(sched, (void *)p_data);
   return ABT_SUCCESS;
 }
 
 static void __kmp_abt_sched_run(ABT_sched sched) {
   uint32_t work_count = 0;
-  __kmp_abt_sched_data_t *p_data;
   int num_pools, num_shared_pools = __kmp_abt_global.num_xstreams;
   int rank;
   ABT_xstream_self_rank(&rank);
   ABT_pool *shared_pools;
   ABT_pool place_pool;
   uint32_t seed;
+  const int sched_event_freq = __kmp_abt_global.sched_event_freq;
+  const int sched_sleep_min_nsec = __kmp_abt_global.sched_sleep_min_nsec;
+  const int sched_sleep_max_nsec = __kmp_abt_global.sched_sleep_max_nsec;
+  int sched_sleep_nsec = __kmp_abt_global.is_sched_sleep ? sched_sleep_min_nsec
+                                                         : -1;
+  const uint32_t work_steal_freq = __kmp_abt_global.work_steal_freq;
   do {
     seed = (uint32_t)time(NULL) + 64 + rank;
   } while (seed == 0);
+  KMP_DEBUG_ASSERT(!(sched_event_freq & (sched_event_freq - 1))); // must be 2^N
+  const uint32_t sched_event_freq_mask = sched_event_freq - 1;
+  KMP_DEBUG_ASSERT(!(work_steal_freq & (work_steal_freq - 1))); // must be 2^N
+  const uint32_t work_steal_freq_mask = work_steal_freq - 1;
 
-#if ABT_USE_SCHED_SLEEP
-  struct timespec sleep_time;
-  sleep_time.tv_sec = 0;
-  sleep_time.tv_nsec = 128;
-#endif
-
-  ABT_sched_get_data(sched, (void **)&p_data);
   ABT_sched_get_num_pools(sched, &num_pools);
   shared_pools = (ABT_pool *)alloca(num_pools * sizeof(ABT_pool));
   ABT_sched_get_pools(sched, num_pools, 0, shared_pools);
   place_pool = __kmp_abt_global.locals[rank].place_pool;
 
-  int sleep_cnt = 0;
   while (1) {
     ABT_unit unit;
     int run_cnt = 0;
@@ -3752,7 +3846,8 @@ static void __kmp_abt_sched_run(ABT_sched sched) {
     }
 
     /* Steal a work unit from other pools */
-    if (run_cnt == 0 && num_shared_pools >= 2) {
+    if (num_shared_pools >= 2
+        && (run_cnt == 0 || !(work_count & work_steal_freq_mask))) {
       int target = __kmp_abt_fast_rand32(&seed) %
                    ((uint32_t)(num_shared_pools - 1)) + 1;
       ABT_pool_pop(shared_pools[target], &unit);
@@ -3763,36 +3858,32 @@ static void __kmp_abt_sched_run(ABT_sched sched) {
       }
     }
 
-    if (++work_count >= p_data->event_freq) {
+    if (!(++work_count & sched_event_freq_mask)) {
       ABT_bool stop;
       ABT_xstream_check_events(sched);
       ABT_sched_has_to_stop(sched, &stop);
       if (stop == ABT_TRUE)
         break;
-      work_count = 0;
-#if ABT_USE_SCHED_SLEEP
-      if (run_cnt == 0) {
-        sleep_cnt = 0;
-        nanosleep(&sleep_time, NULL);
-        if (sleep_time.tv_nsec < 1048576) {
-          sleep_time.tv_nsec <<= 2;
+      if (sched_sleep_nsec >= 0) {
+        if (run_cnt == 0) {
+          struct timespec sleep_time;
+          sleep_time.tv_sec = 0;
+          sleep_time.tv_nsec = sched_sleep_nsec;
+          nanosleep(&sleep_time, NULL);
+          sched_sleep_nsec = (sched_sleep_nsec == 0) ? 1
+                              : (sched_sleep_nsec << 1);
+          if (sched_sleep_nsec > sched_sleep_max_nsec) {
+            sched_sleep_nsec = sched_sleep_max_nsec;
+          }
+        } else {
+          sched_sleep_nsec = sched_sleep_min_nsec;
         }
-      } else if (sleep_cnt == 8) {
-        sleep_cnt = 0;
-        nanosleep(&sleep_time, NULL);
-      } else {
-        sleep_time.tv_nsec = 128;
-        sleep_cnt++;
       }
-#endif /* ABT_USE_SCHED_SLEEP */
     }
   }
 }
 
 static int __kmp_abt_sched_free(ABT_sched sched) {
-    __kmp_abt_sched_data_t *p_data;
-    ABT_sched_get_data(sched, (void **)&p_data);
-    free(p_data);
     return ABT_SUCCESS;
 }
 
