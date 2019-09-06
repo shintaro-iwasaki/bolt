@@ -178,6 +178,8 @@ int run_loop_64(i64 loop_lb, i64 loop_ub, i64 loop_st, int loop_chunk) {
       if (loop_sync != 0) {
         break;
       }; // if
+      if (!(i & (32 - 1)))
+        THREAD_SCHED_POINT();
     }; // for i
     while (loop_sync == 0) {
       delay();
