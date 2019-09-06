@@ -20,9 +20,7 @@
 /* #define BUILD_PARALLEL_ORDERED 1 */
 
 #if KMP_USE_ABT
-#include <abt.h>
-#define ABT_USE_PRIVATE_POOLS 1
-#define ABT_USE_SCHED_SLEEP 0
+#include "kmp_abt.h"
 #endif
 
 /* This fix replaces gettimeofday with clock_gettime for better scalability on
@@ -3527,7 +3525,11 @@ extern void __kmp_create_monitor(kmp_info_t *th);
 extern void *__kmp_launch_thread(kmp_info_t *thr);
 #endif
 
+#if !KMP_USE_ABT
 extern void __kmp_create_worker(int gtid, kmp_info_t *th, size_t stack_size);
+#else
+extern void __kmp_abt_create_workers(kmp_team_t *team);
+#endif
 
 #if KMP_OS_WINDOWS
 extern int __kmp_still_running(kmp_info_t *th);
@@ -3735,7 +3737,7 @@ extern int __kmp_read_from_file(char const *path, char const *format, ...);
 extern void __kmp_abt_global_initialize(void);
 extern void __kmp_abt_global_destroy(void);
 extern void __kmp_abt_create_uber(int gtid, kmp_info_t *th, size_t stack_size);
-extern void __kmp_abt_join_worker(kmp_info_t *th);
+extern void __kmp_abt_join_workers(kmp_team_t *team);
 extern int __kmp_abt_create_task(kmp_info_t *th, kmp_task_t *task);
 extern void __kmp_abt_wait_child_tasks(kmp_info_t *th, int yield);
 extern kmp_info_t *__kmp_abt_bind_task_to_thread(kmp_team_t *team,
@@ -3745,7 +3747,8 @@ extern kmp_info_t *__kmp_abt_get_self_info(void);
 extern void __kmp_abt_release_info(kmp_info_t *th);
 extern void __kmp_abt_acquire_info_for_task(kmp_info_t *th,
                                             kmp_taskdata_t *taskdata,
-                                            const kmp_team_t *match_team);
+                                            const kmp_team_t *match_team,
+                                            int atomic = 1);
 #endif
 
 /* ------------------------------------------------------------------------ */

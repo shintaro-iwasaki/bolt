@@ -7567,13 +7567,8 @@ void __kmp_internal_fork(ident_t *id, int gtid, kmp_team_t *team) {
   }
 
   /* Create worker threads here */
-  for (int i = 1; i < team->t.t_nproc; i++) {
-    kmp_info_t *th = team->t.t_threads[i];
-    int th_gtid = __kmp_gtid_from_tid(i, team);
-    __kmp_create_worker(th_gtid, th, __kmp_stksize);
-    KA_TRACE(20, ("__kmp_internal_fork: after __kmp_create_worker: "
-                  "T#%d created T#%d\n", __kmp_get_gtid(), th_gtid));
-  }
+  __kmp_abt_create_workers(team);
+  KA_TRACE(20, ("__kmp_internal_fork: after __kmp_abt_create_workers"));
 #else // KMP_USE_ABT
   /* release the worker threads so they may begin working */
   __kmp_fork_barrier(gtid, 0);
@@ -7607,7 +7602,6 @@ void __kmp_internal_join(ident_t *id, int gtid, kmp_team_t *team) {
 
 #if KMP_USE_ABT
   {
-    int f;
     /* The master thread executes the remaining tasks*/
     __kmp_abt_wait_child_tasks(this_thr, FALSE);
 
@@ -7616,12 +7610,12 @@ void __kmp_internal_join(ident_t *id, int gtid, kmp_team_t *team) {
     __kmp_abt_release_info(this_thr);
 
     /* Join Argobots ULTs here */
-    for (f = 1; f < team->t.t_nproc; ++f) {
-      __kmp_abt_join_worker(team->t.t_threads[f]);
-      KA_TRACE(20, ("__kmp_internal_join: after __kmp_join_worker:"
-                    " T#%d joined T#%d\n", gtid, __kmp_gtid_from_tid(f, team)));
-    }
-    __kmp_abt_acquire_info_for_task(this_thr, taskdata, team);
+    __kmp_abt_join_workers(team);
+    KA_TRACE(20, ("__kmp_internal_join: after __kmp_abt_join_workers"));
+    // We don't need atomic operations to get thread info if it joined an
+    // outermost parallel region.
+    __kmp_abt_acquire_info_for_task(this_thr, taskdata, team,
+                                    team->t.t_level != 1);
   }
 #else // KMP_USE_ABT
   __kmp_join_barrier(gtid); /* wait for everyone */
