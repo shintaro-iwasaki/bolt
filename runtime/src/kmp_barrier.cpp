@@ -2052,7 +2052,7 @@ int __kmp_barrier(enum barrier_type bt, int gtid, int is_split,
       ret = ABT_barrier_wait(team->t.t_team_bar);
       KMP_DEBUG_ASSERT(ret == ABT_SUCCESS);
     }
-    __kmp_abt_acquire_info_for_task(this_thr, taskdata);
+    __kmp_abt_acquire_info_for_task(this_thr, taskdata, team);
   } else { // Team is serialized.
     status = 0;
   }

@@ -2004,14 +2004,16 @@ kmp_int32 __kmpc_omp_taskyield(ident_t *loc_ref, kmp_int32 gtid, int end_part) {
   thread = __kmp_threads[gtid];
   taskdata = thread->th.th_current_task;
   // Let others, e.g., tasks, can use this kmp_info.
+  // Get the associated team before releasing the ownership of th.
+  kmp_team_t *team = thread->th.th_team;
   __kmp_abt_release_info(thread);
   // In a taskyield directive we just do it... yield
   __kmp_yield(1);
   if (taskdata->td_flags.tiedness) {
     // Obtain kmp_info to continue the original task.
-    __kmp_abt_acquire_info_for_task(thread, taskdata);
+    __kmp_abt_acquire_info_for_task(thread, taskdata, team);
   } else {
-    thread = __kmp_abt_bind_task_to_thread(thread->th.th_team, taskdata);
+    thread = __kmp_abt_bind_task_to_thread(team, taskdata);
   }
 
 #else // KMP_USE_ABT
