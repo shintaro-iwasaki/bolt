@@ -2829,15 +2829,11 @@ typedef union KMP_ALIGN_CACHE kmp_global {
 } kmp_global_t;
 
 typedef struct kmp_base_root {
-  // TODO: GEH - combine r_active with r_in_parallel then r_active ==
-  // (r_in_parallel>= 0)
   // TODO: GEH - then replace r_active with t_active_levels if we can to reduce
   // the synch overhead or keeping r_active
   volatile int r_active; /* TRUE if some region in a nest has > 1 thread */
   // GEH: This is misnamed, should be r_in_parallel
   volatile int r_nested; // TODO: GEH - This is unused, just remove it entirely.
-  // keeps a count of active parallel regions per root
-  std::atomic<int> r_in_parallel;
   // GEH: This is misnamed, should be r_active_levels
   kmp_team_t *r_root_team;
   kmp_team_t *r_hot_team;
