@@ -3708,15 +3708,15 @@ static int __kmp_abt_sched_init(ABT_sched sched, ABT_sched_config config) {
 static void __kmp_abt_sched_run(ABT_sched sched) {
   uint32_t work_count = 0;
   __kmp_abt_sched_data_t *p_data;
-  int num_pools, num_shared_pools;
-  int num_xstreams = __kmp_abt_global.num_xstreams;
+  int num_pools, num_shared_pools = __kmp_abt_global.num_xstreams;
   int rank;
   ABT_xstream_self_rank(&rank);
-  ABT_pool *pools;
   ABT_pool *shared_pools;
   ABT_pool place_pool;
-  ABT_unit unit;
-  unsigned seed = time(NULL);
+  uint32_t seed;
+  do {
+    seed = (uint32_t)time(NULL) + 64 + rank;
+  } while (seed == 0);
 
 #if ABT_USE_SCHED_SLEEP
   struct timespec sleep_time;
@@ -3726,51 +3726,40 @@ static void __kmp_abt_sched_run(ABT_sched sched) {
 
   ABT_sched_get_data(sched, (void **)&p_data);
   ABT_sched_get_num_pools(sched, &num_pools);
-  pools = (ABT_pool *)malloc(num_pools * sizeof(ABT_pool));
-  ABT_sched_get_pools(sched, num_pools, 0, pools);
-
-  shared_pools = pools;
-  num_shared_pools = __kmp_abt_global.num_xstreams;
+  shared_pools = (ABT_pool *)alloca(num_pools * sizeof(ABT_pool));
+  ABT_sched_get_pools(sched, num_pools, 0, shared_pools);
   place_pool = __kmp_abt_global.locals[rank].place_pool;
 
   int sleep_cnt = 0;
   while (1) {
+    ABT_unit unit;
     int run_cnt = 0;
-    size_t size;
 
     /* From the place pool */
     if (place_pool != ABT_POOL_NULL) {
-      ABT_pool_get_size(place_pool, &size);
-      if (size != 0) {
-        ABT_pool_pop(place_pool, &unit);
-        if (unit != ABT_UNIT_NULL) {
-          ABT_xstream_run_unit(unit, place_pool);
-          run_cnt++;
-        }
-      }
-    }
-
-    /* From the shared pool */
-    ABT_pool_get_size(shared_pools[0], &size);
-    if (size != 0) {
-      ABT_pool_pop(shared_pools[0], &unit);
+      ABT_pool_pop(place_pool, &unit);
       if (unit != ABT_UNIT_NULL) {
-        ABT_xstream_run_unit(unit, shared_pools[0]);
+        ABT_xstream_run_unit(unit, place_pool);
         run_cnt++;
       }
     }
 
+    /* From the shared pool */
+    ABT_pool_pop(shared_pools[0], &unit);
+    if (unit != ABT_UNIT_NULL) {
+      ABT_xstream_run_unit(unit, shared_pools[0]);
+      run_cnt++;
+    }
+
     /* Steal a work unit from other pools */
     if (run_cnt == 0 && num_shared_pools >= 2) {
-      int target = rand_r(&seed) % (num_shared_pools - 1) + 1;
-      ABT_pool_get_size(shared_pools[target], &size);
-      if (size != 0) {
-        ABT_pool_pop(shared_pools[target], &unit);
-        if (unit != ABT_UNIT_NULL) {
-          ABT_unit_set_associated_pool(unit, shared_pools[0]);
-          ABT_xstream_run_unit(unit, shared_pools[0]);
-          run_cnt++;
-        }
+      int target = __kmp_abt_fast_rand32(&seed) %
+                   ((uint32_t)(num_shared_pools - 1)) + 1;
+      ABT_pool_pop(shared_pools[target], &unit);
+      if (unit != ABT_UNIT_NULL) {
+        ABT_unit_set_associated_pool(unit, shared_pools[0]);
+        ABT_xstream_run_unit(unit, shared_pools[0]);
+        run_cnt++;
       }
     }
 
@@ -3798,7 +3787,6 @@ static void __kmp_abt_sched_run(ABT_sched sched) {
 #endif /* ABT_USE_SCHED_SLEEP */
     }
   }
-  free(pools);
 }
 
 static int __kmp_abt_sched_free(ABT_sched sched) {
