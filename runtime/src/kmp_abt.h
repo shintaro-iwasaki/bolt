@@ -23,6 +23,9 @@
 #define KMP_ABT_SCHED_SLEEP_DEFAULT 0
 #define KMP_ABT_SCHED_MIN_SLEEP_NSEC_DEFAULT 1 /* 1ns */
 #define KMP_ABT_SCHED_MAX_SLEEP_NSEC_DEFAULT 1048576 /* 1ms */
+#define KMP_ABT_SCHED_EVENT_FREQ_DEFAULT 256 /* Every 100 work-stealing loops */
+#define KMP_ABT_SCHED_EVENT_FREQ_MAX 1048576 /* Needed to avoid deadlock */
+#define KMP_ABT_WORK_STEAL_FREQ_DEFAULT 65536 /* Every 65536 loops */
 
 static inline uint32_t __kmp_abt_fast_rand32(uint32_t *p_seed) {
   // George Marsaglia, "Xorshift RNGs", Journal of Statistical Software,
@@ -60,6 +63,8 @@ typedef struct kmp_abt_global {
   int is_sched_sleep;
   int sched_sleep_min_nsec;
   int sched_sleep_max_nsec;
+  int sched_event_freq;
+  uint32_t work_steal_freq;
   int num_places;
   ABT_pool *place_pools;
 
