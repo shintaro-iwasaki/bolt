@@ -1850,11 +1850,7 @@ typedef enum kmp_bar_pat { /* Barrier communication patterns */
                            bp_last_bar /* Placeholder to mark the end */
 } kmp_bar_pat_e;
 
-#if KMP_USE_ABT
-/* BOLT does not use KMP barrier, so we need to copy icvs in a naive way. */
-#else
 #define KMP_BARRIER_ICV_PUSH 1
-#endif
 
 /* Record for holding the values of the internal controls stack records */
 typedef struct kmp_internal_control {
@@ -2550,6 +2546,10 @@ typedef struct KMP_ALIGN_CACHE kmp_base_info {
   int th_prev_level; /* previous level for affinity format */
   int th_prev_num_threads; /* previous num_threads for affinity format */
 #endif
+#if KMP_USE_ABT
+  // For N-way thread creation.
+  int th_creation_group_end_tid;
+#endif /* KMP_USE_ABT */
 #if USE_ITT_BUILD
   kmp_uint64 th_bar_arrive_time; /* arrival to barrier timestamp */
   kmp_uint64 th_bar_min_time; /* minimum arrival time at the barrier */
@@ -2756,6 +2756,10 @@ typedef struct KMP_ALIGN_CACHE kmp_base_team {
 // omp_set_num_threads() call
 #if OMP_50_ENABLED
   void *const *t_def_allocator; /* per implicit task default allocator */
+#endif
+#if KMP_USE_ABT && KMP_BARRIER_ICV_PUSH
+  KMP_ALIGN_CACHE
+  kmp_internal_control_t t_master_icvs; // master's icvs
 #endif
 
 // Read/write by workers as well

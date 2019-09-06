@@ -606,6 +606,11 @@ static void *__kmp_launch_worker(void *thr) {
 
 #else // !KMP_USE_ABT
 
+static void __kmp_abt_create_workers_recursive(kmp_team_t *team, int start_tid,
+                                               int end_tid);
+static void __kmp_abt_join_workers_recursive(kmp_team_t *team, int start_tid,
+                                             int end_tid);
+
 static void __kmp_abt_launch_worker(void *thr) {
   int status, old_type, old_state;
   int gtid;
@@ -620,6 +625,12 @@ static void __kmp_abt_launch_worker(void *thr) {
 #endif
 
   KMP_MB();
+
+  const int start_tid = __kmp_tid_from_gtid(gtid);
+  const int end_tid = this_thr->th.th_creation_group_end_tid;
+
+  if (end_tid - start_tid > 1)
+    __kmp_abt_create_workers_recursive(team, start_tid, end_tid);
 
   if (__kmp_tasking_mode != tskm_immediate_exec) {
     /* It is originally set up in task_team_sync() */
@@ -660,6 +671,11 @@ static void __kmp_abt_launch_worker(void *thr) {
     td->td_task_queue = NULL;
     td->td_tq_max_size = 0;
   }
+
+  if (end_tid - start_tid > 1)
+    __kmp_abt_join_workers_recursive(team, start_tid, end_tid);
+
+  KA_TRACE(10, ("__kmp_abt_launch_worker: T#%d finish\n", gtid));
 }
 
 #endif // KMP_USE_ABT
@@ -1000,9 +1016,28 @@ static inline void __kmp_abt_create_workers_impl(kmp_team_t *team,
   ABT_thread_attr thread_attr = ABT_THREAD_ATTR_NULL;
 #endif
 
+  const int num_ways = __kmp_abt_global.fork_num_ways;
+  const int cutoff = __kmp_abt_global.fork_cutoff;
+  const int inc = ((end_tid - start_tid) < cutoff) ? 1
+                  : ((end_tid - start_tid + num_ways - 1) / num_ways);
+  KMP_DEBUG_ASSERT(inc > 0);
+
   // create / revive workers.
-  for (int f = start_tid + 1; f < end_tid; f++) {
+  for (int f = start_tid + inc; f < end_tid; f += inc) {
     kmp_info_t *th = team->t.t_threads[f];
+
+    // set up recursive division policy.
+    int new_creation_group_end_tid = f + inc;
+    if (f + inc > end_tid)
+      new_creation_group_end_tid = end_tid;
+
+#if KMP_BARRIER_ICV_PUSH
+    // If we create a thread, the master thread eagerly pushes it.
+    // If it has been run, the slave thread reads it from its master.
+    __kmp_init_implicit_task(team->t.t_ident, th, team, f, FALSE);
+    copy_icvs(&team->t.t_implicit_task_taskdata[f].td_icvs,
+              &team->t.t_master_icvs);
+#endif
 
     int gtid = __kmp_gtid_from_tid(f, team);
     // [SM] th->th.th_info.ds.ds_gtid is setup in __kmp_allocate_thread
@@ -1036,6 +1071,7 @@ static inline void __kmp_abt_create_workers_impl(kmp_team_t *team,
     } else {
       target = __kmp_abt_get_pool(gtid);
     }
+    th->th.th_creation_group_end_tid = new_creation_group_end_tid;
 
     if (th->th.th_info.ds.ds_thread == ABT_THREAD_NULL) {
       int status;
@@ -1065,10 +1101,29 @@ static inline void __kmp_abt_create_workers_impl(kmp_team_t *team,
       KMP_ASSERT(status == ABT_SUCCESS);
   }
 #endif /* KMP_THREAD_ATTR */
+
+  if (inc != 1) {
+    // Create threads in a sub group.
+    int rec_start_tid = start_tid;
+    int rec_end_tid = start_tid + inc;
+    if (rec_end_tid > end_tid)
+      rec_end_tid = end_tid;
+    __kmp_abt_create_workers_impl(team, rec_start_tid, rec_end_tid);
+  }
+}
+
+static void __kmp_abt_create_workers_recursive(kmp_team_t *team, int start_tid,
+                                               int end_tid) {
+  __kmp_abt_create_workers_impl(team, start_tid, end_tid);
 }
 
 void __kmp_abt_create_workers(kmp_team_t *team) {
   const int num_threads = team->t.t_nproc;
+#if KMP_BARRIER_ICV_PUSH
+  // set up the master icvs.
+  copy_icvs(&team->t.t_master_icvs,
+            &team->t.t_implicit_task_taskdata[0].td_icvs);
+#endif
   // core.
   __kmp_abt_create_workers_impl(team, 0, num_threads);
 } // __kmp_abt_create_workers
@@ -1077,10 +1132,24 @@ static inline void __kmp_abt_join_workers_impl(kmp_team_t *team, int start_tid,
                                                int end_tid) {
   KMP_MB(); /* Flush all pending memory write invalidates.  */
 
+  const int num_ways = __kmp_abt_global.fork_num_ways;
+  const int cutoff = __kmp_abt_global.fork_cutoff;
+  const int inc = ((end_tid - start_tid) < cutoff) ? 1
+                  : ((end_tid - start_tid + num_ways - 1) / num_ways);
+
+  if (inc != 1) {
+    // Join threads in a sub group first.
+    int rec_start_tid = start_tid;
+    int rec_end_tid = start_tid + inc;
+    if (rec_end_tid > end_tid)
+      rec_end_tid = end_tid;
+    __kmp_abt_join_workers_recursive(team, rec_start_tid, rec_end_tid);
+  }
+
   kmp_info_t **threads = team->t.t_threads;
 
   /* Join Argobots ULTs here */
-  for (int f = start_tid + 1; f < end_tid; f++) {
+  for (int f = start_tid + inc; f < end_tid; f += inc) {
     // t_threads[0] is not joined.
     ABT_thread ds_thread = threads[f]->th.th_info.ds.ds_thread;
     int status = ABT_thread_join(ds_thread);
@@ -1088,6 +1157,11 @@ static inline void __kmp_abt_join_workers_impl(kmp_team_t *team, int start_tid,
   }
   KMP_MB(); /* Flush all pending memory write invalidates.  */
 } // __kmp_abt_join_workers_impl
+
+static void __kmp_abt_join_workers_recursive(kmp_team_t *team, int start_tid,
+                                             int end_tid) {
+  __kmp_abt_join_workers_impl(team, start_tid, end_tid);
+}
 
 void __kmp_abt_join_workers(kmp_team_t *team) {
   const int num_threads = team->t.t_nproc;
@@ -3340,6 +3414,8 @@ static void __kmp_abt_initialize(void) {
   } else {
     num_xstreams = __kmp_xproc;
   }
+  __kmp_abt_global.fork_cutoff = KMP_ABT_FORK_CUTOFF_DEFAULT;
+  __kmp_abt_global.fork_num_ways = KMP_ABT_FORK_NUM_WAYS_DEFAULT;
 
   KA_TRACE(10, ("__kmp_abt_initialize: # of ESs = %d\n", num_xstreams));
 
