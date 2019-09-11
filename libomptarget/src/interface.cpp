@@ -1,8 +1,9 @@
 //===-------- interface.cpp - Target independent OpenMP target RTL --------===//
 //
-// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
-// See https://llvm.org/LICENSE.txt for license information.
-// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+//                     The LLVM Compiler Infrastructure
+//
+// This file is dual licensed under the MIT and the University of Illinois Open
+// Source Licenses. See LICENSE.txt for details.
 //
 //===----------------------------------------------------------------------===//
 //
@@ -33,11 +34,11 @@ static void HandleDefaultTargetOffload() {
   if (TargetOffloadPolicy == tgt_default) {
     if (omp_get_num_devices() > 0) {
       DP("Default TARGET OFFLOAD policy is now mandatory "
-         "(devices were found)\n");
+         "(devicew were found)\n");
       TargetOffloadPolicy = tgt_mandatory;
     } else {
       DP("Default TARGET OFFLOAD policy is now disabled "
-         "(no devices were found)\n");
+         "(devices were not found)\n");
       TargetOffloadPolicy = tgt_disabled;
     }
   }
@@ -57,8 +58,8 @@ static void HandleTargetOutcome(bool success) {
       }
       break;
     case tgt_default:
-      FATAL_MESSAGE0(1, "default offloading policy must be switched to "
-                        "mandatory or disabled");
+        FATAL_MESSAGE0(1, "default offloading policy must switched to " 
+            "mandatory or disabled");
       break;
     case tgt_mandatory:
       if (!success) {
@@ -66,12 +67,6 @@ static void HandleTargetOutcome(bool success) {
       }
       break;
   }
-}
-
-////////////////////////////////////////////////////////////////////////////////
-/// adds requires flags
-EXTERN void __tgt_register_requires(int64_t flags) {
-  RTLs.RegisterRequires(flags);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -128,7 +123,7 @@ EXTERN void __tgt_target_data_begin_nowait(int64_t device_id, int32_t arg_num,
     int32_t depNum, void *depList, int32_t noAliasDepNum,
     void *noAliasDepList) {
   if (depNum + noAliasDepNum > 0)
-    __kmpc_omp_taskwait(NULL, __kmpc_global_thread_num(NULL));
+    __kmpc_omp_taskwait(NULL, 0);
 
   __tgt_target_data_begin(device_id, arg_num, args_base, args, arg_sizes,
                           arg_types);
@@ -181,7 +176,7 @@ EXTERN void __tgt_target_data_end_nowait(int64_t device_id, int32_t arg_num,
     int32_t depNum, void *depList, int32_t noAliasDepNum,
     void *noAliasDepList) {
   if (depNum + noAliasDepNum > 0)
-    __kmpc_omp_taskwait(NULL, __kmpc_global_thread_num(NULL));
+    __kmpc_omp_taskwait(NULL, 0);
 
   __tgt_target_data_end(device_id, arg_num, args_base, args, arg_sizes,
                         arg_types);
@@ -214,7 +209,7 @@ EXTERN void __tgt_target_data_update_nowait(
     int64_t *arg_sizes, int64_t *arg_types, int32_t depNum, void *depList,
     int32_t noAliasDepNum, void *noAliasDepList) {
   if (depNum + noAliasDepNum > 0)
-    __kmpc_omp_taskwait(NULL, __kmpc_global_thread_num(NULL));
+    __kmpc_omp_taskwait(NULL, 0);
 
   __tgt_target_data_update(device_id, arg_num, args_base, args, arg_sizes,
                            arg_types);
@@ -255,7 +250,7 @@ EXTERN int __tgt_target_nowait(int64_t device_id, void *host_ptr,
     int64_t *arg_types, int32_t depNum, void *depList, int32_t noAliasDepNum,
     void *noAliasDepList) {
   if (depNum + noAliasDepNum > 0)
-    __kmpc_omp_taskwait(NULL, __kmpc_global_thread_num(NULL));
+    __kmpc_omp_taskwait(NULL, 0);
 
   return __tgt_target(device_id, host_ptr, arg_num, args_base, args, arg_sizes,
                       arg_types);
@@ -298,12 +293,14 @@ EXTERN int __tgt_target_teams_nowait(int64_t device_id, void *host_ptr,
     int64_t *arg_types, int32_t team_num, int32_t thread_limit, int32_t depNum,
     void *depList, int32_t noAliasDepNum, void *noAliasDepList) {
   if (depNum + noAliasDepNum > 0)
-    __kmpc_omp_taskwait(NULL, __kmpc_global_thread_num(NULL));
+    __kmpc_omp_taskwait(NULL, 0);
 
   return __tgt_target_teams(device_id, host_ptr, arg_num, args_base, args,
                             arg_sizes, arg_types, team_num, thread_limit);
 }
 
+
+// The trip count mechanism will be revised - this scheme is not thread-safe.
 EXTERN void __kmpc_push_target_tripcount(int64_t device_id,
     uint64_t loop_tripcount) {
   if (device_id == OFFLOAD_DEVICE_DEFAULT) {
@@ -318,8 +315,5 @@ EXTERN void __kmpc_push_target_tripcount(int64_t device_id,
 
   DP("__kmpc_push_target_tripcount(%" PRId64 ", %" PRIu64 ")\n", device_id,
       loop_tripcount);
-  TblMapMtx.lock();
-  Devices[device_id].LoopTripCnt.emplace(__kmpc_global_thread_num(NULL),
-                                         loop_tripcount);
-  TblMapMtx.unlock();
+  Devices[device_id].loopTripCnt = loop_tripcount;
 }

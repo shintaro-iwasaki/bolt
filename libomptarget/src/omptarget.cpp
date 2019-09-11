@@ -1,8 +1,9 @@
 //===------ omptarget.cpp - Target independent OpenMP target RTL -- C++ -*-===//
 //
-// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
-// See https://llvm.org/LICENSE.txt for license information.
-// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+//                     The LLVM Compiler Infrastructure
+//
+// This file is dual licensed under the MIT and the University of Illinois Open
+// Source Licenses. See LICENSE.txt for details.
 //
 //===----------------------------------------------------------------------===//
 //
@@ -729,15 +730,8 @@ int target(int64_t device_id, void *host_ptr, int32_t arg_num,
       "Size mismatch in arguments and offsets");
 
   // Pop loop trip count
-  uint64_t ltc = 0;
-  TblMapMtx.lock();
-  auto I = Device.LoopTripCnt.find(__kmpc_global_thread_num(NULL));
-  if (I != Device.LoopTripCnt.end()) {
-    ltc = I->second;
-    Device.LoopTripCnt.erase(I);
-    DP("loop trip count is %lu.\n", ltc);
-  }
-  TblMapMtx.unlock();
+  uint64_t ltc = Device.loopTripCnt;
+  Device.loopTripCnt = 0;
 
   // Launch device execution.
   DP("Launching target execution %s with pointer " DPxMOD " (index=%d).\n",

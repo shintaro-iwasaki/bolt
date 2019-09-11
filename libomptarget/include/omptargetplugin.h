@@ -1,8 +1,9 @@
 //===-- omptargetplugin.h - Target dependent OpenMP Plugin API --*- C++ -*-===//
 //
-// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
-// See https://llvm.org/LICENSE.txt for license information.
-// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+//                     The LLVM Compiler Infrastructure
+//
+// This file is dual licensed under the MIT and the University of Illinois Open
+// Source Licenses. See LICENSE.txt for details.
 //
 //===----------------------------------------------------------------------===//
 //
@@ -30,9 +31,6 @@ int32_t __tgt_rtl_number_of_devices(void);
 // lightweight query to determine if the RTL is suitable for an image without
 // having to load the library, which can be expensive.
 int32_t __tgt_rtl_is_valid_binary(__tgt_device_image *Image);
-
-// Initialize the requires flags for the device.
-int64_t __tgt_rtl_init_requires(int64_t RequiresFlags);
 
 // Initialize the specified device. In case of success return 0; otherwise
 // return an error code.

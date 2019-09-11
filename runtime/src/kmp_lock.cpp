@@ -4,9 +4,10 @@
 
 //===----------------------------------------------------------------------===//
 //
-// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
-// See https://llvm.org/LICENSE.txt for license information.
-// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+//                     The LLVM Compiler Infrastructure
+//
+// This file is dual licensed under the MIT and the University of Illinois Open
+// Source Licenses. See LICENSE.txt for details.
 //
 //===----------------------------------------------------------------------===//
 
@@ -327,12 +328,23 @@ __kmp_acquire_tas_lock_timed_template(kmp_tas_lock_t *lck, kmp_int32 gtid) {
   kmp_uint32 spins;
   KMP_FSYNC_PREPARE(lck);
   KMP_INIT_YIELD(spins);
+  if (TCR_4(__kmp_nth) > (__kmp_avail_proc ? __kmp_avail_proc : __kmp_xproc)) {
+    KMP_YIELD(TRUE);
+  } else {
+    KMP_YIELD_SPIN(spins);
+  }
+
   kmp_backoff_t backoff = __kmp_spin_backoff_params;
-  do {
+  while (KMP_ATOMIC_LD_RLX(&lck->lk.poll) != tas_free ||
+         !__kmp_atomic_compare_store_acq(&lck->lk.poll, tas_free, tas_busy)) {
     __kmp_spin_backoff(&backoff);
-    KMP_YIELD_OVERSUB_ELSE_SPIN(spins);
-  } while (KMP_ATOMIC_LD_RLX(&lck->lk.poll) != tas_free ||
-           !__kmp_atomic_compare_store_acq(&lck->lk.poll, tas_free, tas_busy));
+    if (TCR_4(__kmp_nth) >
+        (__kmp_avail_proc ? __kmp_avail_proc : __kmp_xproc)) {
+      KMP_YIELD(TRUE);
+    } else {
+      KMP_YIELD_SPIN(spins);
+    }
+  }
   KMP_FSYNC_ACQUIRED(lck);
   return KMP_LOCK_ACQUIRED_FIRST;
 }
@@ -385,7 +397,8 @@ int __kmp_release_tas_lock(kmp_tas_lock_t *lck, kmp_int32 gtid) {
   KMP_ATOMIC_ST_REL(&lck->lk.poll, KMP_LOCK_FREE(tas));
   KMP_MB(); /* Flush all pending memory write invalidates.  */
 
-  KMP_YIELD_OVERSUB();
+  KMP_YIELD(TCR_4(__kmp_nth) >
+            (__kmp_avail_proc ? __kmp_avail_proc : __kmp_xproc));
   return KMP_LOCK_RELEASED;
 }
 
@@ -689,7 +702,8 @@ int __kmp_release_futex_lock(kmp_futex_lock_t *lck, kmp_int32 gtid) {
   KA_TRACE(1000, ("__kmp_release_futex_lock: lck:%p(0x%x), T#%d exiting\n", lck,
                   lck->lk.poll, gtid));
 
-  KMP_YIELD_OVERSUB();
+  KMP_YIELD(TCR_4(__kmp_nth) >
+            (__kmp_avail_proc ? __kmp_avail_proc : __kmp_xproc));
   return KMP_LOCK_RELEASED;
 }
 
@@ -865,7 +879,7 @@ __kmp_acquire_ticket_lock_timed_template(kmp_ticket_lock_t *lck,
                                 std::memory_order_acquire) == my_ticket) {
     return KMP_LOCK_ACQUIRED_FIRST;
   }
-  KMP_WAIT_PTR(&lck->lk.now_serving, my_ticket, __kmp_bakery_check, lck);
+  KMP_WAIT_YIELD_PTR(&lck->lk.now_serving, my_ticket, __kmp_bakery_check, lck);
   return KMP_LOCK_ACQUIRED_FIRST;
 }
 
@@ -1463,9 +1477,10 @@ __kmp_acquire_queuing_lock_timed_template(kmp_queuing_lock_t *lck,
                ("__kmp_acquire_queuing_lock: lck:%p, T#%d waiting for lock\n",
                 lck, gtid));
 
+      /* ToDo: May want to consider using __kmp_wait_sleep  or something that
+         sleeps for throughput only here. */
       KMP_MB();
-      // ToDo: Use __kmp_wait_sleep or similar when blocktime != inf
-      KMP_WAIT(spin_here_p, FALSE, KMP_EQ, lck);
+      KMP_WAIT_YIELD(spin_here_p, FALSE, KMP_EQ, lck);
 
 #ifdef DEBUG_QUEUING_LOCKS
       TRACE_LOCK(gtid + 1, "acq spin");
@@ -1495,8 +1510,8 @@ __kmp_acquire_queuing_lock_timed_template(kmp_queuing_lock_t *lck,
     /* Yield if number of threads > number of logical processors */
     /* ToDo: Not sure why this should only be in oversubscription case,
        maybe should be traditional YIELD_INIT/YIELD_WHEN loop */
-    KMP_YIELD_OVERSUB();
-
+    KMP_YIELD(TCR_4(__kmp_nth) >
+              (__kmp_avail_proc ? __kmp_avail_proc : __kmp_xproc));
 #ifdef DEBUG_QUEUING_LOCKS
     TRACE_LOCK(gtid + 1, "acq retry");
 #endif
@@ -1675,8 +1690,8 @@ int __kmp_release_queuing_lock(kmp_queuing_lock_t *lck, kmp_int32 gtid) {
         KMP_MB();
         /* make sure enqueuing thread has time to update next waiting thread
          * field */
-        *head_id_p =
-            KMP_WAIT((volatile kmp_uint32 *)waiting_id_p, 0, KMP_NEQ, NULL);
+        *head_id_p = KMP_WAIT_YIELD((volatile kmp_uint32 *)waiting_id_p, 0,
+                                    KMP_NEQ, NULL);
 #ifdef DEBUG_QUEUING_LOCKS
         TRACE_LOCK(gtid + 1, "rel deq: (h,t)->(h',t)");
 #endif
@@ -2344,7 +2359,7 @@ static void __kmp_acquire_adaptive_lock(kmp_adaptive_lock_t *lck,
       // lock from now on.
       while (!__kmp_is_unlocked_queuing_lock(GET_QLK_PTR(lck))) {
         KMP_INC_STAT(lck, lemmingYields);
-        KMP_YIELD(TRUE);
+        __kmp_yield(TRUE);
       }
 
       if (__kmp_test_adaptive_lock_only(lck, gtid))
@@ -2472,14 +2487,23 @@ __kmp_acquire_drdpa_lock_timed_template(kmp_drdpa_lock_t *lck, kmp_int32 gtid) {
   // polling area has been reconfigured.  Unless it is reconfigured, the
   // reloads stay in L1 cache and are cheap.
   //
-  // Keep this code in sync with KMP_WAIT, in kmp_dispatch.cpp !!!
-  // The current implementation of KMP_WAIT doesn't allow for mask
+  // Keep this code in sync with KMP_WAIT_YIELD, in kmp_dispatch.cpp !!!
+  //
+  // The current implementation of KMP_WAIT_YIELD doesn't allow for mask
   // and poll to be re-read every spin iteration.
   kmp_uint32 spins;
+
   KMP_FSYNC_PREPARE(lck);
   KMP_INIT_YIELD(spins);
   while (polls[ticket & mask] < ticket) { // atomic load
-    KMP_YIELD_OVERSUB_ELSE_SPIN(spins);
+    // If we are oversubscribed,
+    // or have waited a bit (and KMP_LIBRARY=turnaround), then yield.
+    // CPU Pause is in the macros for yield.
+    //
+    KMP_YIELD(TCR_4(__kmp_nth) >
+              (__kmp_avail_proc ? __kmp_avail_proc : __kmp_xproc));
+    KMP_YIELD_SPIN(spins);
+
     // Re-read the mask and the poll pointer from the lock structure.
     //
     // Make certain that "mask" is read before "polls" !!!
@@ -3013,9 +3037,8 @@ static void __kmp_acquire_rtm_lock(kmp_queuing_lock_t *lck, kmp_int32 gtid) {
     }
     if ((status & _XABORT_EXPLICIT) && _XABORT_CODE(status) == 0xff) {
       // Wait until lock becomes free
-      while (!__kmp_is_unlocked_queuing_lock(lck)) {
-        KMP_YIELD(TRUE);
-      }
+      while (!__kmp_is_unlocked_queuing_lock(lck))
+        __kmp_yield(TRUE);
     } else if (!(status & _XABORT_RETRY))
       break;
   } while (retries--);

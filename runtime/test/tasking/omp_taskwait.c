@@ -1,8 +1,4 @@
 // RUN: %libomp-compile-and-run
-
-// This test is known to be fragile on NetBSD kernel at the moment,
-// https://bugs.llvm.org/show_bug.cgi?id=42020.
-// UNSUPPORTED: netbsd
 #include <stdio.h>
 #include <math.h>
 #include "omp_testsuite.h"

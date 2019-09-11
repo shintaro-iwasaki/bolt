@@ -1,5 +1,5 @@
 // RUN: %libomp-compile-and-run
-// REQUIRES: dummy
+// REQUIRES: !abt
 #include "omp_testsuite.h"
 #include <stdio.h>
 

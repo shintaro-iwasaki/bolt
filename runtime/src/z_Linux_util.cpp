@@ -4,9 +4,10 @@
 
 //===----------------------------------------------------------------------===//
 //
-// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
-// See https://llvm.org/LICENSE.txt for license information.
-// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+//                     The LLVM Compiler Infrastructure
+//
+// This file is dual licensed under the MIT and the University of Illinois Open
+// Source Licenses. See LICENSE.txt for details.
 //
 //===----------------------------------------------------------------------===//
 
@@ -470,7 +471,7 @@ void __kmp_terminate_thread(int gtid) {
   }
 #endif // !KMP_USE_ABT
 #endif
-  KMP_YIELD(TRUE);
+  __kmp_yield(TRUE);
 } //
 
 #if !KMP_USE_ABT
@@ -646,7 +647,12 @@ static void __kmp_abt_launch_worker(void *thr) {
                     "invoke microtask = %p\n",
                     gtid, team->t.t_id, __kmp_tid_from_gtid(gtid),
                     team->t.t_pkfn));
-      rc = team->t.t_invoke(gtid);
+      KMP_STOP_DEVELOPER_EXPLICIT_TIMER(USER_launch_thread_loop);
+      {
+          KMP_TIME_DEVELOPER_BLOCK(USER_worker_invoke);
+          rc = team->t.t_invoke(gtid);
+      }
+      KMP_START_DEVELOPER_EXPLICIT_TIMER(USER_launch_thread_loop);
       KMP_ASSERT(rc);
       KMP_MB();
       KA_TRACE(20, ("__kmp_abt_launch_worker: T#%d(%d:%d) "
@@ -659,7 +665,6 @@ static void __kmp_abt_launch_worker(void *thr) {
   KA_TRACE(10, ("__kmp_abt_launch_worker: T#%d done\n", gtid));
 
   __kmp_abt_wait_child_tasks(this_thr, FALSE);
-  this_thr->th.th_task_team = NULL;
 
   /* Below is for the implicit task */
   kmp_taskdata_t *td = this_thr->th.th_current_task;
@@ -687,6 +692,8 @@ static void *__kmp_launch_monitor(void *thr) {
   sigset_t new_set;
 #endif /* KMP_BLOCK_SIGNALS */
   struct timespec interval;
+  int yield_count;
+  int yield_cycles = 0;
 
   KMP_MB(); /* Flush all pending memory write invalidates.  */
 
@@ -770,6 +777,13 @@ static void *__kmp_launch_monitor(void *thr) {
 
   KA_TRACE(10, ("__kmp_launch_monitor: #2 monitor\n"));
 
+  if (__kmp_yield_cycle) {
+    __kmp_yielding_on = 0; /* Start out with yielding shut off */
+    yield_count = __kmp_yield_off_count;
+  } else {
+    __kmp_yielding_on = 1; /* Yielding is on permanently */
+  }
+
   while (!TCR_4(__kmp_global.g.g_done)) {
     struct timespec now;
     struct timeval tval;
@@ -804,6 +818,22 @@ static void *__kmp_launch_monitor(void *thr) {
     }
     status = pthread_mutex_unlock(&__kmp_wait_mx.m_mutex);
     KMP_CHECK_SYSFAIL("pthread_mutex_unlock", status);
+
+    if (__kmp_yield_cycle) {
+      yield_cycles++;
+      if ((yield_cycles % yield_count) == 0) {
+        if (__kmp_yielding_on) {
+          __kmp_yielding_on = 0; /* Turn it off now */
+          yield_count = __kmp_yield_off_count;
+        } else {
+          __kmp_yielding_on = 1; /* Turn it on now */
+          yield_count = __kmp_yield_on_count;
+        }
+        yield_cycles = 0;
+      }
+    } else {
+      __kmp_yielding_on = 1;
+    }
 
     TCW_4(__kmp_global.g.g_time.dt.t_value,
           TCR_4(__kmp_global.g.g_time.dt.t_value) + 1);
@@ -1320,8 +1350,8 @@ retry:
   // Wait for the monitor thread is really started and set its *priority*.
   KMP_DEBUG_ASSERT(sizeof(kmp_uint32) ==
                    sizeof(__kmp_global.g.g_time.dt.t_value));
-  __kmp_wait_4((kmp_uint32 volatile *)&__kmp_global.g.g_time.dt.t_value, -1,
-               &__kmp_neq_4, NULL);
+  __kmp_wait_yield_4((kmp_uint32 volatile *)&__kmp_global.g.g_time.dt.t_value,
+                     -1, &__kmp_neq_4, NULL);
 #endif // KMP_REAL_TIME_FIX
 
 #ifdef KMP_THREAD_ATTR
@@ -1627,9 +1657,11 @@ static void __kmp_atfork_child(void) {
   // over-subscription after the fork and this can improve things for
   // scripting languages that use OpenMP inside process-parallel code).
   __kmp_affinity_type = affinity_none;
+#if OMP_40_ENABLED
   if (__kmp_nested_proc_bind.bind_types != NULL) {
     __kmp_nested_proc_bind.bind_types[0] = proc_bind_false;
   }
+#endif // OMP_40_ENABLED
 #endif // KMP_AFFINITY_SUPPORTED
 
   __kmp_init_runtime = FALSE;
@@ -1717,25 +1749,14 @@ void __kmp_suspend_initialize(void) {
 #endif
 }
 
-void __kmp_suspend_initialize_thread(kmp_info_t *th) {
+static void __kmp_suspend_initialize_thread(kmp_info_t *th) {
   ANNOTATE_HAPPENS_AFTER(&th->th.th_suspend_init_count);
+  if (th->th.th_suspend_init_count <= __kmp_fork_count) {
 #if KMP_USE_ABT
   /* BOLT does not need to initialize them. */
 #else
-  int old_value = KMP_ATOMIC_LD_RLX(&th->th.th_suspend_init_count);
-  int new_value = __kmp_fork_count + 1;
-  // Return if already initialized
-  if (old_value == new_value)
-    return;
-  // Wait, then return if being initialized
-  if (old_value == -1 ||
-      !__kmp_atomic_compare_store(&th->th.th_suspend_init_count, old_value,
-                                  -1)) {
-    while (KMP_ATOMIC_LD_ACQ(&th->th.th_suspend_init_count) != new_value) {
-      KMP_CPU_PAUSE();
-    }
-  } else {
-    // Claim to be the initializer and do initializations
+    /* this means we haven't initialized the suspension pthread objects for this
+       thread in this instance of the process */
     int status;
     status = pthread_cond_init(&th->th.th_suspend_cv.c_cond,
                                &__kmp_suspend_cond_attr);
@@ -1743,17 +1764,17 @@ void __kmp_suspend_initialize_thread(kmp_info_t *th) {
     status = pthread_mutex_init(&th->th.th_suspend_mx.m_mutex,
                                 &__kmp_suspend_mutex_attr);
     KMP_CHECK_SYSFAIL("pthread_mutex_init", status);
-    KMP_ATOMIC_ST_REL(&th->th.th_suspend_init_count, new_value);
+#endif
+    *(volatile int *)&th->th.th_suspend_init_count = __kmp_fork_count + 1;
     ANNOTATE_HAPPENS_BEFORE(&th->th.th_suspend_init_count);
   }
-#endif
 }
 
 void __kmp_suspend_uninitialize_thread(kmp_info_t *th) {
+  if (th->th.th_suspend_init_count > __kmp_fork_count) {
 #if KMP_USE_ABT
   /* BOLT does not need to initialize them. */
 #else
-  if (th->th.th_suspend_init_count > __kmp_fork_count) {
     /* this means we have initialize the suspension pthread objects for this
        thread in this instance of the process */
     int status;
@@ -1766,34 +1787,10 @@ void __kmp_suspend_uninitialize_thread(kmp_info_t *th) {
     if (status != 0 && status != EBUSY) {
       KMP_SYSFAIL("pthread_mutex_destroy", status);
     }
+#endif
     --th->th.th_suspend_init_count;
-    KMP_DEBUG_ASSERT(KMP_ATOMIC_LD_RLX(&th->th.th_suspend_init_count) ==
-                     __kmp_fork_count);
+    KMP_DEBUG_ASSERT(th->th.th_suspend_init_count == __kmp_fork_count);
   }
-#endif
-}
-
-// return true if lock obtained, false otherwise
-int __kmp_try_suspend_mx(kmp_info_t *th) {
-#if KMP_USE_ABT
-  return 1;
-#else
-  return (pthread_mutex_trylock(&th->th.th_suspend_mx.m_mutex) == 0);
-#endif
-}
-
-void __kmp_lock_suspend_mx(kmp_info_t *th) {
-#if !KMP_USE_ABT
-  int status = pthread_mutex_lock(&th->th.th_suspend_mx.m_mutex);
-  KMP_CHECK_SYSFAIL("pthread_mutex_lock", status);
-#endif
-}
-
-void __kmp_unlock_suspend_mx(kmp_info_t *th) {
-#if !KMP_USE_ABT
-  int status = pthread_mutex_unlock(&th->th.th_suspend_mx.m_mutex);
-  KMP_CHECK_SYSFAIL("pthread_mutex_unlock", status);
-#endif
 }
 
 #if !KMP_USE_ABT
@@ -1820,13 +1817,7 @@ static inline void __kmp_suspend_template(int th_gtid, C *flag) {
   /* TODO: shouldn't this use release semantics to ensure that
      __kmp_suspend_initialize_thread gets called first? */
   old_spin = flag->set_sleeping();
-  if (__kmp_dflt_blocktime == KMP_MAX_BLOCKTIME &&
-      __kmp_pause_status != kmp_soft_paused) {
-    flag->unset_sleeping();
-    status = pthread_mutex_unlock(&th->th.th_suspend_mx.m_mutex);
-    KMP_CHECK_SYSFAIL("pthread_mutex_unlock", status);
-    return;
-  }
+
   KF_TRACE(5, ("__kmp_suspend_template: T#%d set sleep bit for spin(%p)==%x,"
                " was %x\n",
                th_gtid, flag->get(), flag->load(), old_spin));
@@ -2057,7 +2048,16 @@ void __kmp_resume_monitor() {
 
 #endif // !KMP_USE_ABT
 
-void __kmp_yield() {
+void __kmp_yield(int cond) {
+  if (!cond)
+    return;
+#if KMP_USE_MONITOR
+  if (!__kmp_yielding_on)
+    return;
+#else
+  if (__kmp_yield_cycle && !KMP_YIELD_NOW())
+    return;
+#endif
 #if KMP_USE_ABT
   ABT_thread_yield();
 #else
@@ -2261,17 +2261,6 @@ void __kmp_runtime_initialize(void) {
 #endif /* KMP_ARCH_X86 || KMP_ARCH_X86_64 */
 
   __kmp_xproc = __kmp_get_xproc();
-
-#if ! KMP_32_BIT_ARCH
-  struct rlimit rlim;
-  // read stack size of calling thread, save it as default for worker threads;
-  // this should be done before reading environment variables
-  status = getrlimit(RLIMIT_STACK, &rlim);
-  if (status == 0) { // success?
-    __kmp_stksize = rlim.rlim_cur;
-    __kmp_check_stksize(&__kmp_stksize); // check value and adjust if needed
-  }
-#endif /* KMP_32_BIT_ARCH */
 
   if (sysconf(_SC_THREADS)) {
 
