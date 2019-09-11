@@ -1,5 +1,6 @@
 // RUN: %libomp-compile && env KMP_ENABLE_TASK_THROTTLING=0 %libomp-run
 // RUN: %libomp-compile && env KMP_ENABLE_TASK_THROTTLING=1 %libomp-run
+// REQUIRES: !abt && !icc
 
 #include<omp.h>
 #include<stdlib.h>
