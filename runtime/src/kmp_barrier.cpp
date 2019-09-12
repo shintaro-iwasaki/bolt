@@ -2119,7 +2119,6 @@ void __kmp_fork_barrier(int gtid, int tid) {
 
 #else // !KMP_USE_ABT
 
-
 #if defined(KMP_GOMP_COMPAT)
 // Returns 1 if cancelled, 0 otherwise
 int __kmp_barrier_gomp_cancel(int gtid) {
