@@ -12,8 +12,9 @@ found at http://www.bolt-omp.org.
 
 1. Getting Started
 2. Testing BOLT
-3. Reporting Problems
-4. Alternate Build Options
+3. BOLT-Specific Environmental Variables
+4. Reporting Problems
+5. Alternate Build Options
 
 
 -------------------------------------------------------------------------------
@@ -186,7 +187,33 @@ below for reporting them to the BOLT developers and other users.
 
 -------------------------------------------------------------------------------
 
-3. Reporting Problems
+3. BOLT-Specific Environmental Variables
+===============
+
+BOLT reveals several environmental variables specific to BOLT.
+
+    KMP_ABT_NUM_ESS=<int>: Set the number of execution streams which are
+                           running on OS-level threads (e.g., Pthreads).
+    KMP_ABT_SCHED_SLEEP=<1|0>: If it is set to 1, sleep a scheduler when the
+                               associate pools are empty.
+    KMP_ABT_VERBOSE=<1|0>: If it is set to 1, print all the BOLT-specific
+                           parameters on runtime initialization.
+    KMP_ABT_FORK_CUTOFF=<int>: Set the cut-off threshold used for a
+                               divide-and-conquer thread creation.
+    KMP_ABT_FORK_NUM_WAYS=<int>: Set the number of ways for a
+                                 divide-and-conquer thread creation.
+    KMP_ABT_SCHED_MIN_SLEEP_NSEC=<int>: Set the minimum scheduler sleep time
+                                        (nanoseconds).
+    KMP_ABT_SCHED_MAX_SLEEP_NSEC=<int>: Set the maximum scheduler sleep time
+                                        (nanoseconds).
+    KMP_ABT_SCHED_EVENT_FREQ=<int>: Set the event-checking frequency of
+                                    schedulers.
+    KMP_ABT_WORK_STEAL_FREQ=<int>: Set the random work stealing frequency of
+                                   schedulers.
+
+-------------------------------------------------------------------------------
+
+4. Reporting Problems
 =====================
 
 If you have problems with the installation or usage of BOLT, please follow
@@ -230,7 +257,7 @@ email to discuss@bolt-omp.org first.
 
 -------------------------------------------------------------------------------
 
-4. Alternate Build Options
+5. Alternate Build Options
 ==============================
 
 BOLT is based on the OpenMP subproject of LLVM for runtime, and thus it uses
