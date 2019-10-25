@@ -3606,8 +3606,6 @@ static void __kmp_abt_initialize(void) {
     env = getenv("KMP_ABT_SCHED_SLEEP");
     if (env) {
       __kmp_abt_global.is_sched_sleep = atoi(env);
-      if (__kmp_abt_global.is_sched_sleep <= 1)
-        __kmp_abt_global.is_sched_sleep = 2;
     } else {
       __kmp_abt_global.is_sched_sleep = KMP_ABT_SCHED_SLEEP_DEFAULT;
     }
