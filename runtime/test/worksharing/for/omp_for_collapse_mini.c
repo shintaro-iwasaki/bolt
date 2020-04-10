@@ -1,5 +1,4 @@
 // RUN: %libomp-compile-and-run
-// REQUIRES: !abt
 #include <stdio.h>
 #include <math.h>
 #include "omp_testsuite.h"
@@ -26,8 +25,8 @@ int test_omp_for_collapse()
     int i,j;
     int my_islarger = 1;
     #pragma omp for private(i,j) schedule(static,1) collapse(2) ordered
-    for (i = 1; i < 100; i++) {
-      for (j =1; j <100; j++) {
+    for (i = 1; i < 5; i++) {
+      for (j =1; j < 5; j++) {
         #pragma omp ordered
         my_islarger = check_i_islarger(i)&&my_islarger;
       }
