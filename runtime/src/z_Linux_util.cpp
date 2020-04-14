@@ -4131,6 +4131,7 @@ kmp_info_t *__kmp_abt_bind_task_to_thread(kmp_team_t *team,
           }
           /* Bind this task as if it is executed by 'th'. */
           th->th.th_current_task = taskdata;
+          th->th.th_task_team = taskdata->td_task_team;
           __kmp_abt_set_self_info(th);
           KA_TRACE(20, ("__kmp_abt_bind_task_to_thread: (exit) task %p"
                         "bound to T#%d\n",
