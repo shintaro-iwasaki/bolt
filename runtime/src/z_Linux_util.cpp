@@ -670,6 +670,9 @@ static void __kmp_abt_launch_worker(void *thr) {
     td->td_tq_max_size = 0;
   }
 
+  /* This thread has been finished. Any task can use this as a parent. */
+  __kmp_abt_release_info(this_thr);
+
   if (end_tid - start_tid > 1)
     __kmp_abt_join_workers_recursive(team, start_tid, end_tid);
 
@@ -1197,6 +1200,11 @@ void __kmp_abt_join_workers(kmp_team_t *team) {
     // is reused in the future. BOLT cannot run tasks on top of implicit tasks,
     // so such an inconsistency problem occurs.
     th->th.th_current_task = &team->t.t_implicit_task_taskdata[tid];
+    // Reset threads so that tasks cannot use these threads.
+    KMP_DEBUG_ASSERT(th->th.th_active == FALSE);
+    if (tid != 0) {
+      th->th.th_active = TRUE;
+    }
   }
 } // __kmp_abt_join_workers
 
@@ -4123,6 +4131,7 @@ kmp_info_t *__kmp_abt_bind_task_to_thread(kmp_team_t *team,
           }
           /* Bind this task as if it is executed by 'th'. */
           th->th.th_current_task = taskdata;
+          th->th.th_task_team = taskdata->td_task_team;
           __kmp_abt_set_self_info(th);
           KA_TRACE(20, ("__kmp_abt_bind_task_to_thread: (exit) task %p"
                         "bound to T#%d\n",
