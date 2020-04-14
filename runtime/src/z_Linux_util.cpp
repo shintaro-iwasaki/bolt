@@ -3958,6 +3958,7 @@ static void __kmp_abt_execute_task(void *arg) {
   KMP_DEBUG_ASSERT(taskdata->td_flags.complete == 0);
   KMP_DEBUG_ASSERT(taskdata->td_flags.freed == 0);
 
+  while (1) {
   // Run __kmp_invoke_task to handle internal counters correctly.
 #ifdef KMP_GOMP_COMPAT
   if (taskdata->td_flags.native) {
@@ -3973,8 +3974,20 @@ static void __kmp_abt_execute_task(void *arg) {
     // may have been changed.
     th = __kmp_abt_get_self_info();
   }
+    // See __kmp_task_finish (untied)
+    if (taskdata->td_flags.tiedness == TASK_UNTIED) {
+      // Check if we can finish this task.
+      kmp_int32 counter = KMP_ATOMIC_DEC(&taskdata->td_untied_count) - 1;
+      if (counter > 0) {
+        // We should keep this ULT.
+        continue;
+      }
+    }
+    // tied or finished untied.
+    break;
+  }
 
-  // See __kmp_task_finish
+  // See __kmp_task_finish (tied/finished untied)
   // KMP_DEBUG_ASSERT(taskdata->td_flags.executing == 0);
   taskdata->td_flags.executing = 0;
   KMP_DEBUG_ASSERT(taskdata->td_flags.complete == 0);
