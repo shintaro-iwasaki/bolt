@@ -3942,17 +3942,15 @@ static inline void __kmp_abt_free_task(kmp_info_t *th, kmp_taskdata_t *taskdata)
 
 static void __kmp_abt_execute_task(void *arg) {
   // It is corresponding to __kmp_execute_tasks_.
-  int gtid;
 
   kmp_task_t *task = (kmp_task_t *)arg;
   kmp_taskdata_t *taskdata = KMP_TASK_TO_TASKDATA(task);
   kmp_info_t *th;
 
   th = __kmp_abt_bind_task_to_thread(taskdata->td_team, taskdata);
-  gtid = __kmp_gtid_from_thread(th);
 
   KA_TRACE(20, ("__kmp_abt_execute_task: T#%d before executing task %p.\n",
-                gtid, task));
+                __kmp_gtid_from_thread(th), task));
 
   // See __kmp_task_start
   taskdata->td_flags.started = 1;
@@ -3967,7 +3965,7 @@ static void __kmp_abt_execute_task(void *arg) {
   } else
 #endif /* KMP_GOMP_COMPAT */
   {
-    (*(task->routine))(gtid, task);
+    (*(task->routine))(__kmp_gtid_from_thread(th), task);
   }
 
   if (!taskdata->td_flags.tiedness) {
