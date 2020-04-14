@@ -3959,21 +3959,21 @@ static void __kmp_abt_execute_task(void *arg) {
   KMP_DEBUG_ASSERT(taskdata->td_flags.freed == 0);
 
   while (1) {
-  // Run __kmp_invoke_task to handle internal counters correctly.
+    // Run __kmp_invoke_task to handle internal counters correctly.
 #ifdef KMP_GOMP_COMPAT
-  if (taskdata->td_flags.native) {
-    ((void (*)(void *))(*(task->routine)))(task->shareds);
-  } else
+    if (taskdata->td_flags.native) {
+      ((void (*)(void *))(*(task->routine)))(task->shareds);
+    } else
 #endif /* KMP_GOMP_COMPAT */
-  {
-    (*(task->routine))(__kmp_gtid_from_thread(th), task);
-  }
+    {
+      (*(task->routine))(__kmp_gtid_from_thread(th), task);
+    }
 
-  if (!taskdata->td_flags.tiedness) {
-    // If this task is an untied one, we need to retrieve kmp_info because it
-    // may have been changed.
-    th = __kmp_abt_get_self_info();
-  }
+    if (!taskdata->td_flags.tiedness) {
+      // If this task is an untied one, we need to retrieve kmp_info because it
+      // may have been changed.
+      th = __kmp_abt_get_self_info();
+    }
     // See __kmp_task_finish (untied)
     if (taskdata->td_flags.tiedness == TASK_UNTIED) {
       // Check if we can finish this task.
