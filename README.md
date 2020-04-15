@@ -81,7 +81,6 @@ assumed to be non-existent or empty.
           -DOPENMP_TEST_C_COMPILER=<C compiler for testing> \
           -DOPENMP_TEST_CXX_COMPILER=<C++ compiler for testing> \
           -DCMAKE_BUILD_TYPE=Release \
-          -DLIBOMP_USE_ITT_NOTIFY=off \
           -DLIBOMP_USE_ARGOBOTS=on \
           |& tee c.txt
 
@@ -94,7 +93,6 @@ assumed to be non-existent or empty.
           -DOPENMP_TEST_C_COMPILER=<C compiler for testing> \
           -DOPENMP_TEST_CXX_COMPILER=<C++ compiler for testing> \
           -DCMAKE_BUILD_TYPE=Release \
-          -DLIBOMP_USE_ITT_NOTIFY=off \
           -DLIBOMP_USE_ARGOBOTS=on \
           2>&1 | tee c.txt
 
@@ -109,7 +107,6 @@ assumed to be non-existent or empty.
           -DOPENMP_TEST_C_COMPILER=<C compiler for testing> \
           -DOPENMP_TEST_CXX_COMPILER=<C++ compiler for testing> \
           -DCMAKE_BUILD_TYPE=Release \
-          -DLIBOMP_USE_ITT_NOTIFY=off \
           -DLIBOMP_USE_ARGOBOTS=on \
           -DLIBOMP_ARGOBOTS_INSTALL_DIR=/home/USERNAME/argobots-install \
           |& tee c.txt
@@ -123,7 +120,6 @@ assumed to be non-existent or empty.
           -DOPENMP_TEST_C_COMPILER=<C compiler for testing> \
           -DOPENMP_TEST_CXX_COMPILER=<C++ compiler for testing> \
           -DCMAKE_BUILD_TYPE=Release \
-          -DLIBOMP_USE_ITT_NOTIFY=off \
           -DLIBOMP_USE_ARGOBOTS=on \
           -DLIBOMP_ARGOBOTS_INSTALL_DIR=/home/USERNAME/argobots-install \
           2>&1 | tee c.txt

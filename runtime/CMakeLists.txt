@@ -197,6 +197,11 @@ endif()
 set(LIBOMP_USE_ITT_NOTIFY TRUE CACHE BOOL
   "Enable ITT notify?")
 
+if(LIBOMP_USE_ARGOBOTS)
+  # BOLT does not support it.
+  set(LIBOMP_USE_ITT_NOTIFY FALSE)
+endif()
+
 # normal, profile, stubs library.
 set(NORMAL_LIBRARY FALSE)
 set(STUBS_LIBRARY FALSE)
