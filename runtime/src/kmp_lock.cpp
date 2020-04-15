@@ -219,8 +219,12 @@ KMP_DEFINE_LOCKS(tas)
 KMP_DEFINE_LOCKS(ticket)
 KMP_DEFINE_LOCKS(queuing)
 KMP_DEFINE_LOCKS(drdpa)
+#if KMP_USE_FUTEX
 KMP_DEFINE_LOCKS(futex)
+#endif
+#if KMP_USE_ADAPTIVE_LOCKS
 KMP_DEFINE_LOCKS(adaptive)
+#endif
 typedef kmp_abt_mutex_lock_t kmp_hle_lock_t;
 KMP_DEFINE_LOCKS(hle)
 typedef kmp_abt_mutex_lock_t kmp_rtm_lock_t;
