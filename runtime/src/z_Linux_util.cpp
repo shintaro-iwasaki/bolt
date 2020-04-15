@@ -3942,17 +3942,15 @@ static inline void __kmp_abt_free_task(kmp_info_t *th, kmp_taskdata_t *taskdata)
 
 static void __kmp_abt_execute_task(void *arg) {
   // It is corresponding to __kmp_execute_tasks_.
-  int gtid;
 
   kmp_task_t *task = (kmp_task_t *)arg;
   kmp_taskdata_t *taskdata = KMP_TASK_TO_TASKDATA(task);
   kmp_info_t *th;
 
   th = __kmp_abt_bind_task_to_thread(taskdata->td_team, taskdata);
-  gtid = __kmp_gtid_from_thread(th);
 
   KA_TRACE(20, ("__kmp_abt_execute_task: T#%d before executing task %p.\n",
-                gtid, task));
+                __kmp_gtid_from_thread(th), task));
 
   // See __kmp_task_start
   taskdata->td_flags.started = 1;
@@ -3960,23 +3958,36 @@ static void __kmp_abt_execute_task(void *arg) {
   KMP_DEBUG_ASSERT(taskdata->td_flags.complete == 0);
   KMP_DEBUG_ASSERT(taskdata->td_flags.freed == 0);
 
-  // Run __kmp_invoke_task to handle internal counters correctly.
+  while (1) {
+    // Run __kmp_invoke_task to handle internal counters correctly.
 #ifdef KMP_GOMP_COMPAT
-  if (taskdata->td_flags.native) {
-    ((void (*)(void *))(*(task->routine)))(task->shareds);
-  } else
+    if (taskdata->td_flags.native) {
+      ((void (*)(void *))(*(task->routine)))(task->shareds);
+    } else
 #endif /* KMP_GOMP_COMPAT */
-  {
-    (*(task->routine))(gtid, task);
+    {
+      (*(task->routine))(__kmp_gtid_from_thread(th), task);
+    }
+
+    if (!taskdata->td_flags.tiedness) {
+      // If this task is an untied one, we need to retrieve kmp_info because it
+      // may have been changed.
+      th = __kmp_abt_get_self_info();
+    }
+    // See __kmp_task_finish (untied)
+    if (taskdata->td_flags.tiedness == TASK_UNTIED) {
+      // Check if we can finish this task.
+      kmp_int32 counter = KMP_ATOMIC_DEC(&taskdata->td_untied_count) - 1;
+      if (counter > 0) {
+        // We should keep this ULT.
+        continue;
+      }
+    }
+    // tied or finished untied.
+    break;
   }
 
-  if (!taskdata->td_flags.tiedness) {
-    // If this task is an untied one, we need to retrieve kmp_info because it
-    // may have been changed.
-    th = __kmp_abt_get_self_info();
-  }
-
-  // See __kmp_task_finish
+  // See __kmp_task_finish (tied/finished untied)
   // KMP_DEBUG_ASSERT(taskdata->td_flags.executing == 0);
   taskdata->td_flags.executing = 0;
   KMP_DEBUG_ASSERT(taskdata->td_flags.complete == 0);

@@ -351,6 +351,13 @@ static kmp_int32 __kmp_push_task(kmp_int32 gtid, kmp_task_t *task) {
   }
 #if KMP_USE_ABT
 
+  if (taskdata->td_flags.tiedness == TASK_UNTIED) {
+    if (taskdata->td_flags.executing == 1) {
+      // Since Argobots can really yield an untied task, we do not need to
+      // finish and recreate a thread to handle it.
+      return TASK_SUCCESSFULLY_PUSHED;
+    }
+  }
   // Because the ABT_tasks are going to be pushed to our internal pools,
   // all those mechanisms should be avoided and directly push the task.
   if (!__kmp_abt_create_task(thread, task)) {
