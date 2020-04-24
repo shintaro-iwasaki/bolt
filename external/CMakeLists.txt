@@ -15,6 +15,25 @@ else()
 endif()
 
 if(${LIBOMP_USE_BUILTIN_ARGOBOTS})
+  # Check if the built-in Argobots exists.
+  if (NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/argobots/configure.ac")
+    if (EXISTS "${PROJECT_SOURCE_DIR}/.git")
+      message(STATUS "Running `git submodule update --init`")
+      execute_process(COMMAND git submodule update --init
+                      WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+                      RESULT_VARIABLE GIT_SUBMOD_RESULT)
+      if (NOT GIT_SUBMOD_RESULT EQUAL "0")
+        message(STATUS "git submodule update --init failed with `${GIT_SUBMOD_RESULT}`. ")
+      else()
+        message(STATUS "Running `git submodule update --init` - Success")
+      endif()
+    endif()
+    if (NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/argobots/configure.ac")
+        message(FATAL_ERROR "The built-in Argobots is not found. "
+                            "Please run `git submodule update --init` if you get BOLT via GitHub, or "
+                            "download Argobots manually and place it at `external/argobots`.")
+    endif()
+  endif()
   # Use the built-in Argobots
   set(ABT_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/argobots)
   set(ABT_BUILD_DIR ${CMAKE_CURRENT_BINARY_DIR}/argobots)
