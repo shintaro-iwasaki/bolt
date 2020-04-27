@@ -1,0 +1,17 @@
+sudo: false
+language: c
+
+dist: bionic
+
+os:
+  - linux
+  - osx
+
+env:
+  - USE_ARGOBOTS=TRUE
+  - USE_ARGOBOTS=FALSE
+
+script:
+  - mkdir build && cd build
+  - cmake ../ -DLIBOMP_USE_ARGOBOTS=${USE_ARGOBOTS}
+  - make -j 2
