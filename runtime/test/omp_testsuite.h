@@ -78,7 +78,7 @@ static int pthread_join(pthread_t thread, void **retval) {
 
 #ifdef BOLT_VERSION
 #  if BOLT_THREAD == BOLT_THREAD_ARGOBOTS
-extern int ABT_thread_yield(void);
+#    include <abt.h>
 #    define THREAD_SCHED_POINT() ABT_thread_yield()
 #  else
 #    define THREAD_SCHED_POINT() do {;} while(0)
