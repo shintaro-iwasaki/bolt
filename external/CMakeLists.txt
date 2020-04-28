@@ -66,3 +66,10 @@ else()
   set(LIBOMP_ARGOBOTS_INSTALL_DIR /usr/local CACHE PATH
     "Install path for Argobots")
 endif()
+
+if(${LIBOMP_USE_ARGOBOTS})
+  # Need to be python-bool.
+  set(LIBOMP_TEST_USE_ARGOBOTS True PARENT_SCOPE)
+else()
+  set(LIBOMP_TEST_USE_ARGOBOTS False PARENT_SCOPE)
+endif()
