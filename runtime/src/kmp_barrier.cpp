@@ -2143,7 +2143,6 @@ int __kmp_barrier(enum barrier_type bt, int gtid, int is_split,
   kmp_info_t *this_thr = __kmp_threads[gtid];
   kmp_team_t *team = this_thr->th.th_team;
   int status = 0;
-  ident_t *loc = this_thr->th.th_ident;
   int ret;
   KA_TRACE(15, ("__kmp_barrier: T#%d(%d:%d) has arrived\n",
                 gtid, __kmp_team_from_gtid(gtid)->t.t_id,
@@ -2174,13 +2173,13 @@ int __kmp_barrier(enum barrier_type bt, int gtid, int is_split,
 }
 
 void __kmp_end_split_barrier(enum barrier_type bt, int gtid) {
-  int tid = __kmp_tid_from_gtid(gtid);
   kmp_info_t *this_thr = __kmp_threads[gtid];
   kmp_team_t *team = this_thr->th.th_team;
   if (!team->t.t_serialized) {
     if (KMP_MASTER_GTID(gtid)) {
       int ret = ABT_barrier_wait(team->t.t_team_bar);
       KMP_DEBUG_ASSERT(ret == ABT_SUCCESS);
+      (void)ret;
     }
   }
 }

@@ -639,7 +639,6 @@ static void __kmp_abt_join_workers_recursive(kmp_team_t *team, int start_tid,
                                              int end_tid);
 
 static void __kmp_abt_launch_worker(void *thr) {
-  int status, old_type, old_state;
   int gtid;
   kmp_info_t *this_thr = (kmp_info_t *)thr;
   kmp_team_t *team = this_thr->th.th_team;
@@ -1055,13 +1054,14 @@ static inline void __kmp_abt_create_workers_impl(kmp_team_t *team,
               &team->t.t_master_icvs);
 #endif
 
-    int gtid = __kmp_gtid_from_tid(f, team);
     // [SM] th->th.th_info.ds.ds_gtid is setup in __kmp_allocate_thread
-    KMP_DEBUG_ASSERT(th->th.th_info.ds.ds_gtid == gtid);
+    KMP_DEBUG_ASSERT(th->th.th_info.ds.ds_gtid == __kmp_gtid_from_tid(f, team));
     // uber thread is created in __kmp_abt_create_uber().
-    KMP_DEBUG_ASSERT(!KMP_UBER_GTID(gtid));
+    KMP_DEBUG_ASSERT(!KMP_UBER_GTID(__kmp_gtid_from_tid(f, team)));
 
 #if KMP_STATS_ENABLED
+    int gtid = __kmp_gtid_from_tid(f, team);
+
     // sets up worker thread stats
     __kmp_acquire_tas_lock(&__kmp_stats_lock, gtid);
 
@@ -1214,6 +1214,7 @@ static inline void __kmp_abt_join_workers_impl(kmp_team_t *team, int start_tid,
     ABT_thread ds_thread = threads[f]->th.th_info.ds.ds_thread;
     int status = ABT_thread_join(ds_thread);
     KMP_DEBUG_ASSERT(status == ABT_SUCCESS);
+    (void)status;
   }
   KMP_MB(); /* Flush all pending memory write invalidates.  */
 } // __kmp_abt_join_workers_impl
@@ -1454,7 +1455,9 @@ void __kmp_reap_monitor(kmp_info_t *th) {
 
 void __kmp_reap_worker(kmp_info_t *th) {
   int status;
+#if !KMP_USE_ABT
   void *exit_val;
+#endif
 
   KMP_MB(); /* Flush all pending memory write invalidates.  */
 
@@ -4101,11 +4104,10 @@ static void __kmp_abt_execute_task(void *arg) {
 
 int __kmp_abt_create_task(kmp_info_t *th, kmp_task_t *task) {
   int status;
-  int gtid = __kmp_gtid_from_thread(th);
   ABT_pool dest = __kmp_abt_get_pool_task();
 
   KA_TRACE(20, ("__kmp_abt_create_task: T#%d before creating task %p into the "
-                "pool %p.\n", gtid, task, dest));
+                "pool %p.\n", __kmp_gtid_from_thread(th), task, dest));
 
   /* Check if the task queue has an empty slot. */
   kmp_taskdata_t *td = th->th.th_current_task;
@@ -4131,7 +4133,7 @@ int __kmp_abt_create_task(kmp_info_t *th, kmp_task_t *task) {
   KMP_ASSERT(status == ABT_SUCCESS);
 
   KA_TRACE(20, ("__kmp_abt_create_task: T#%d after creating task %p into the "
-                "pool %p.\n", gtid, task, dest));
+                "pool %p.\n", __kmp_gtid_from_thread(th), task, dest));
 
   return TRUE;
 }
@@ -4155,7 +4157,7 @@ void __kmp_abt_wait_child_tasks(kmp_info_t *th, int yield) {
       if (taskdata->td_flags.tiedness) {
         __kmp_abt_acquire_info_for_task(th, taskdata, team);
       } else {
-        kmp_info_t *new_th = __kmp_abt_bind_task_to_thread(team, taskdata);
+        th = __kmp_abt_bind_task_to_thread(team, taskdata);
       }
     }
     KA_TRACE(20, ("__kmp_abt_wait_child_tasks: T#%d done\n",

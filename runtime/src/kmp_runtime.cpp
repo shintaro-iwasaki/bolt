@@ -102,12 +102,14 @@ kmp_info_t *__kmp_thread_pool_insert_pt = NULL;
 /* fast (and somewhat portable) way to get unique identifier of executing
    thread. Returns KMP_GTID_DNE if we haven't been assigned a gtid. */
 int __kmp_get_global_thread_id() {
+#if !KMP_USE_ABT
   int i;
   kmp_info_t **other_threads;
   size_t stack_data;
   char *stack_addr;
   size_t stack_size;
   char *stack_base;
+#endif
 
   KA_TRACE(
       1000,
@@ -8519,13 +8521,15 @@ __kmp_determine_reduction_method(
   // method and stay with the unsynchronized method (empty_reduce_block)
   if (__kmp_force_reduction_method != reduction_method_not_defined &&
       team_size != 1) {
+#if KMP_USE_ABT
+      KMP_ASSERT(0); // "unsupported method specified"
+#else // !KMP_USE_ABT
 
     PACKED_REDUCTION_METHOD_T forced_retval = critical_reduce_block;
 
     int atomic_available, tree_available;
 
     switch ((forced_retval = __kmp_force_reduction_method)) {
-#if !KMP_USE_ABT
     case critical_reduce_block:
       KMP_ASSERT(lck); // lck should be != 0
       break;
@@ -8549,13 +8553,13 @@ __kmp_determine_reduction_method(
 #endif
       }
       break;
-#endif // !KMP_USE_ABT
 
     default:
       KMP_ASSERT(0); // "unsupported method specified"
     }
 
     retval = forced_retval;
+#endif // !KMP_USE_ABT
   }
 
   KA_TRACE(10, ("reduction method selected=%08x\n", retval));

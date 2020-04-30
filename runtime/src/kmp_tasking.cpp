@@ -247,6 +247,7 @@ static void __kmp_pop_task_stack(kmp_int32 gtid, kmp_info_t *thread,
 }
 #endif /* BUILD_TIED_TASK_STACK */
 
+#if !KMP_USE_ABT
 // returns 1 if new task is allowed to execute, 0 otherwise
 // checks Task Scheduling constraint (if requested) and
 // mutexinoutset dependencies if any
@@ -290,6 +291,7 @@ static bool __kmp_task_is_allowed(int gtid, const kmp_int32 is_constrained,
   }
   return true;
 }
+#endif // !KMP_USE_ABT
 
 // __kmp_realloc_task_deque:
 // Re-allocates a task deque for a particular thread, copies the content from
@@ -325,8 +327,10 @@ static kmp_int32 __kmp_push_task(kmp_int32 gtid, kmp_task_t *task) {
   kmp_info_t *thread = __kmp_threads[gtid];
   kmp_taskdata_t *taskdata = KMP_TASK_TO_TASKDATA(task);
   kmp_task_team_t *task_team = thread->th.th_task_team;
+#if !KMP_USE_ABT
   kmp_int32 tid = __kmp_tid_from_gtid(gtid);
   kmp_thread_data_t *thread_data;
+#endif
 
   KA_TRACE(20,
            ("__kmp_push_task: T#%d trying to push task %p.\n", gtid, taskdata));
@@ -349,6 +353,16 @@ static kmp_int32 __kmp_push_task(kmp_int32 gtid, kmp_task_t *task) {
                   gtid, taskdata));
     return TASK_NOT_PUSHED;
   }
+
+  // Now that serialized tasks have returned, we can assume that we are not in
+  // immediate exec mode
+  KMP_DEBUG_ASSERT(__kmp_tasking_mode != tskm_immediate_exec);
+  if (!KMP_TASKING_ENABLED(task_team)) {
+    __kmp_enable_tasking(task_team, thread);
+  }
+  KMP_DEBUG_ASSERT(TCR_4(task_team->tt.tt_found_tasks) == TRUE);
+  KMP_DEBUG_ASSERT(TCR_PTR(task_team->tt.tt_threads_data) != NULL);
+
 #if KMP_USE_ABT
 
   if (taskdata->td_flags.tiedness == TASK_UNTIED) {
@@ -368,15 +382,6 @@ static kmp_int32 __kmp_push_task(kmp_int32 gtid, kmp_task_t *task) {
   return TASK_SUCCESSFULLY_PUSHED;
 
 #else // KMP_USE_ABT
-
-  // Now that serialized tasks have returned, we can assume that we are not in
-  // immediate exec mode
-  KMP_DEBUG_ASSERT(__kmp_tasking_mode != tskm_immediate_exec);
-  if (!KMP_TASKING_ENABLED(task_team)) {
-    __kmp_enable_tasking(task_team, thread);
-  }
-  KMP_DEBUG_ASSERT(TCR_4(task_team->tt.tt_found_tasks) == TRUE);
-  KMP_DEBUG_ASSERT(TCR_PTR(task_team->tt.tt_threads_data) != NULL);
 
   // Find tasking deque specific to encountering thread
   thread_data = &task_team->tt.tt_threads_data[tid];
@@ -1825,9 +1830,13 @@ template <bool ompt>
 static kmp_int32 __kmpc_omp_taskwait_template(ident_t *loc_ref, kmp_int32 gtid,
                                               void *frame_address,
                                               void *return_address) {
+#if !KMP_USE_ABT
   kmp_taskdata_t *taskdata;
+#endif
   kmp_info_t *thread;
+#if !KMP_USE_ABT
   int thread_finished = FALSE;
+#endif
   KMP_SET_THREAD_STATE_BLOCK(TASKWAIT);
 
   KA_TRACE(10, ("__kmpc_omp_taskwait(enter): T#%d loc=%p\n", gtid, loc_ref));
@@ -1965,7 +1974,9 @@ kmp_int32 __kmpc_omp_taskwait(ident_t *loc_ref, kmp_int32 gtid) {
 kmp_int32 __kmpc_omp_taskyield(ident_t *loc_ref, kmp_int32 gtid, int end_part) {
   kmp_taskdata_t *taskdata;
   kmp_info_t *thread;
+#if !KMP_USE_ABT
   int thread_finished = FALSE;
+#endif
 
   KMP_COUNT_BLOCK(OMP_TASKYIELD);
   KMP_SET_THREAD_STATE_BLOCK(TASKYIELD);
@@ -2498,7 +2509,9 @@ void __kmpc_end_taskgroup(ident_t *loc, int gtid) {
   kmp_info_t *thread = __kmp_threads[gtid];
   kmp_taskdata_t *taskdata = thread->th.th_current_task;
   kmp_taskgroup_t *taskgroup = taskdata->td_taskgroup;
+#if !KMP_USE_ABT
   int thread_finished = FALSE;
+#endif
 
 #if OMPT_SUPPORT && OMPT_OPTIONAL
   kmp_team_t *team;
@@ -3158,6 +3171,8 @@ static void __kmp_enable_tasking(kmp_task_team_t *task_team,
       }
     }
   }
+#else
+  (void)i; // Suppress an unused warning
 #endif // !KMP_USE_ABT
 
   KA_TRACE(10, ("__kmp_enable_tasking(exit): T#%d\n",
@@ -3670,13 +3685,13 @@ void __kmp_task_team_wait(
 // barrier. It is a full barrier itself, which unfortunately turns regular
 // barriers into double barriers and join barriers into 1 1/2 barriers.
 void __kmp_tasking_barrier(kmp_team_t *team, kmp_info_t *thread, int gtid) {
+#if !KMP_USE_ABT
   std::atomic<kmp_uint32> *spin = RCAST(
       std::atomic<kmp_uint32> *,
       &team->t.t_task_team[thread->th.th_task_state]->tt.tt_unfinished_threads);
   int flag = FALSE;
   KMP_DEBUG_ASSERT(__kmp_tasking_mode == tskm_extra_barrier);
 
-#if !KMP_USE_ABT
 #if USE_ITT_BUILD
   KMP_FSYNC_SPIN_INIT(spin, NULL);
 #endif /* USE_ITT_BUILD */
