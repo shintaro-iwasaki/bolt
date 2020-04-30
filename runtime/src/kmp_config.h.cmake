@@ -98,7 +98,7 @@
 #  define USE_ITT_BUILD 0
 #endif
 #define INTEL_ITTNOTIFY_PREFIX __kmp_itt_
-#if ! KMP_MIC
+#if ! KMP_MIC && ! KMP_USE_ABT
 # define USE_LOAD_BALANCE 1
 #endif
 #if ! (KMP_OS_WINDOWS || KMP_OS_DARWIN)
