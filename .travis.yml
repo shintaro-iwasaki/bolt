@@ -13,5 +13,5 @@ env:
 
 script:
   - mkdir build && cd build
-  - cmake ../ -DLIBOMP_USE_ARGOBOTS=${USE_ARGOBOTS}
+  - cmake ../ -DLIBOMP_USE_ARGOBOTS=${USE_ARGOBOTS} -DOPENMP_ENABLE_WERROR=TRUE
   - make -j 2
