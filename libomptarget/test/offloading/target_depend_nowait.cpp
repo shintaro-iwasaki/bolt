@@ -2,7 +2,6 @@
 // RUN: %libomptarget-compilexx-run-and-check-powerpc64-ibm-linux-gnu
 // RUN: %libomptarget-compilexx-run-and-check-powerpc64le-ibm-linux-gnu
 // RUN: %libomptarget-compilexx-run-and-check-x86_64-pc-linux-gnu
-// REQUIRES: !abt
 
 #include <omp.h>
 #include <stdio.h>
