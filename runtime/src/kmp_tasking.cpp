@@ -1844,7 +1844,7 @@ static kmp_int32 __kmpc_omp_taskwait_template(ident_t *loc_ref, kmp_int32 gtid,
 #if KMP_USE_ABT
 
   thread = __kmp_threads[gtid];
-  __kmp_abt_wait_child_tasks(thread, TRUE);
+  __kmp_abt_wait_child_tasks(thread, true, TRUE);
 
   KA_TRACE(10, ("__kmpc_omp_taskwait(exit): T#%d finished waiting, "
                 "returning TASK_CURRENT_NOT_QUEUED\n", gtid));
@@ -2558,7 +2558,7 @@ void __kmpc_end_taskgroup(ident_t *loc, int gtid) {
         (thread->th.th_task_team != NULL &&
          thread->th.th_task_team->tt.tt_found_proxy_tasks)) {
 #if KMP_USE_ABT
-      __kmp_abt_wait_child_tasks(thread, 0);
+      __kmp_abt_wait_child_tasks(thread, true, 0);
       // Since BOLT manages tasks by task queue owned by every task,
       // taskgroup->count is not modified at the end of tasks.
       // FIXME: it assumes parent-child relationship between parent tasks and

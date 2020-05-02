@@ -3660,7 +3660,8 @@ extern void __kmp_abt_global_destroy(void);
 extern void __kmp_abt_create_uber(int gtid, kmp_info_t *th, size_t stack_size);
 extern void __kmp_abt_join_workers(kmp_team_t *team);
 extern int __kmp_abt_create_task(kmp_info_t *th, kmp_task_t *task);
-extern void __kmp_abt_wait_child_tasks(kmp_info_t *th, int yield);
+extern kmp_info_t *__kmp_abt_wait_child_tasks(kmp_info_t *th, bool thread_bind,
+                                              int yield);
 extern kmp_info_t *__kmp_abt_bind_task_to_thread(kmp_team_t *team,
                                                  kmp_taskdata_t *taskdata);
 extern void __kmp_abt_set_self_info(kmp_info_t *th);
