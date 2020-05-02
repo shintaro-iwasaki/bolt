@@ -2148,7 +2148,7 @@ int __kmp_barrier(enum barrier_type bt, int gtid, int is_split,
                 gtid, __kmp_team_from_gtid(gtid)->t.t_id,
                 __kmp_tid_from_gtid(gtid)));
   // Complete and free all child tasks.
-  __kmp_abt_wait_child_tasks(this_thr, FALSE);
+  __kmp_abt_wait_child_tasks(this_thr, true, FALSE);
   if (!team->t.t_serialized) {
     KMP_MB();
     kmp_taskdata_t *taskdata = this_thr->th.th_current_task;

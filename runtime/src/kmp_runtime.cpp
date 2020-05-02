@@ -5636,7 +5636,7 @@ void __kmp_free_team(kmp_root_t *root,
       for (f = 1; f < team->t.t_nproc; ++f) {
         KMP_DEBUG_ASSERT(team->t.t_threads[f]);
         kmp_info_t *th = team->t.t_threads[f];
-        __kmp_abt_wait_child_tasks(th, 0);
+        __kmp_abt_wait_child_tasks(th, true, 0);
         // Now it is safe to reap this thread.
         th->th.th_reap_state = KMP_SAFE_TO_REAP;
       }
@@ -7622,7 +7622,7 @@ void __kmp_internal_join(ident_t *id, int gtid, kmp_team_t *team) {
 #if KMP_USE_ABT
   {
     /* The master thread executes the remaining tasks*/
-    __kmp_abt_wait_child_tasks(this_thr, FALSE);
+    __kmp_abt_wait_child_tasks(this_thr, true, FALSE);
 
     kmp_taskdata_t *taskdata = this_thr->th.th_current_task;
 

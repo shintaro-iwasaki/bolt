@@ -682,7 +682,7 @@ static void __kmp_abt_launch_worker(void *thr) {
 
   KA_TRACE(10, ("__kmp_abt_launch_worker: T#%d done\n", gtid));
 
-  __kmp_abt_wait_child_tasks(this_thr, FALSE);
+  __kmp_abt_wait_child_tasks(this_thr, true, FALSE);
   this_thr->th.th_task_team = NULL;
 
   /* Below is for the implicit task */
@@ -4015,7 +4015,7 @@ static inline void __kmp_abt_free_task(kmp_info_t *th, kmp_taskdata_t *taskdata)
   taskdata->td_flags.executing = 0; // suspend the finishing task
 
   // Wait for all tasks after releasing (=pushing) dependent tasks
-  __kmp_abt_wait_child_tasks(th, FALSE);
+  __kmp_abt_wait_child_tasks(th, true, FALSE);
 
   taskdata->td_flags.freed = 1;
 
@@ -4138,7 +4138,8 @@ int __kmp_abt_create_task(kmp_info_t *th, kmp_task_t *task) {
   return TRUE;
 }
 
-void __kmp_abt_wait_child_tasks(kmp_info_t *th, int yield) {
+kmp_info_t *__kmp_abt_wait_child_tasks(kmp_info_t *th, bool thread_bind,
+                                       int yield) {
   KA_TRACE(20, ("__kmp_abt_wait_child_tasks: T#%d enter\n",
                 __kmp_gtid_from_thread(th)));
 
@@ -4146,6 +4147,7 @@ void __kmp_abt_wait_child_tasks(kmp_info_t *th, int yield) {
   kmp_taskdata_t *taskdata = th->th.th_current_task;
   // Get the associated team before releasing the ownership of th.
   kmp_team_t *team = th->th.th_team;
+  kmp_info_t *new_th = th;
 
   if (taskdata->td_tq_cur_size == 0) {
     /* leaf task case */
@@ -4154,15 +4156,15 @@ void __kmp_abt_wait_child_tasks(kmp_info_t *th, int yield) {
 
       ABT_thread_yield();
 
-      if (taskdata->td_flags.tiedness) {
+      if (thread_bind || taskdata->td_flags.tiedness) {
         __kmp_abt_acquire_info_for_task(th, taskdata, team);
       } else {
-        th = __kmp_abt_bind_task_to_thread(team, taskdata);
+        new_th = __kmp_abt_bind_task_to_thread(team, taskdata);
       }
     }
     KA_TRACE(20, ("__kmp_abt_wait_child_tasks: T#%d done\n",
-                  __kmp_gtid_from_thread(th)));
-    return;
+                  __kmp_gtid_from_thread(new_th)));
+    return new_th;
   }
 
   /* Let others, e.g., tasks, can use this kmp_info */
@@ -4179,15 +4181,16 @@ void __kmp_abt_wait_child_tasks(kmp_info_t *th, int yield) {
   }
   taskdata->td_tq_cur_size = 0;
 
-  if (taskdata->td_flags.tiedness) {
+  if (thread_bind || taskdata->td_flags.tiedness) {
     /* Obtain kmp_info to continue the original task. */
     __kmp_abt_acquire_info_for_task(th, taskdata, team);
   } else {
-    th = __kmp_abt_bind_task_to_thread(team, taskdata);
+    new_th = __kmp_abt_bind_task_to_thread(team, taskdata);
   }
 
   KA_TRACE(20, ("__kmp_abt_wait_child_tasks: T#%d done\n",
-                __kmp_gtid_from_thread(th)));
+                __kmp_gtid_from_thread(new_th)));
+  return new_th;
 }
 
 kmp_info_t *__kmp_abt_bind_task_to_thread(kmp_team_t *team,
