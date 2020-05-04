@@ -367,9 +367,9 @@ endif()
 set(LIBOMP_LIB_FILE ${LIBOMP_LIB_NAME}${LIBOMP_LIBRARY_SUFFIX})
 
 # Set BOLT version, release date, and build information
-set(BOLT_VERSION "1.0rc3")
-set(BOLT_NUMVERSION "10000203")
-set(BOLT_RELEASE_DATE "Mon Nov 18 6:00:00 UTC 2019")
+set(BOLT_VERSION "1.0")
+set(BOLT_NUMVERSION "10000300")
+set(BOLT_RELEASE_DATE "Tue May 5 6:00:00 UTC 2020")
 set(BOLT_COMPILER_CC ${CMAKE_C_COMPILER})
 set(BOLT_COMPILER_CXX ${CMAKE_CXX_COMPILER})
 if("${libomp_build_type_lowercase}" STREQUAL "release")
