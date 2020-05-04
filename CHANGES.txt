@@ -1,4 +1,14 @@
 ===============================================================================
+                               Changes in 1.0
+===============================================================================
+
+- Upgraded to LLVM OpenMP 10.0
+- Upgraded Argobots to 1.0
+- Fixed support for untied tasks
+- Added tests for OpenMP task and thread scheduling
+- Support several platforms including OSX and POWER9.
+
+===============================================================================
                                Changes in 1.0rc3
 ===============================================================================
 
