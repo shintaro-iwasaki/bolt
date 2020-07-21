@@ -1,5 +1,4 @@
 // RUN: %libomp-compile-and-run
-// REQUIRES: !(abt && (clang || gcc))
 #include <stdio.h>
 #include "omp_testsuite.h"
 

@@ -2,7 +2,6 @@
 // RUN: %libomp-compile && env OMP_NUM_THREADS='1' %libomp-run
 // The runtime currently does not get dependency information from GCC.
 // UNSUPPORTED: gcc
-// REQUIRES: !abt
 
 #include <stdio.h>
 #include <omp.h>

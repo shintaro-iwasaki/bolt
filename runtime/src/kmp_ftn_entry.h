@@ -530,12 +530,8 @@ int FTN_STDCALL KMP_EXPAND_NAME(FTN_GET_THREAD_NUM)(void) {
 #else
   int gtid;
 
-#if KMP_USE_ABT
-  if (!__kmp_init_parallel)
-    return 0;
-  gtid = __kmp_gtid_get_specific();
-#elif KMP_OS_DARWIN || KMP_OS_DRAGONFLY || KMP_OS_FREEBSD || KMP_OS_NETBSD ||  \
-      KMP_OS_HURD|| KMP_OS_OPENBSD
+#if KMP_OS_DARWIN || KMP_OS_DRAGONFLY || KMP_OS_FREEBSD || KMP_OS_NETBSD ||    \
+        KMP_OS_HURD|| KMP_OS_OPENBSD
   gtid = __kmp_entry_gtid();
 #elif KMP_OS_WINDOWS
   if (!__kmp_init_parallel ||
@@ -658,7 +654,7 @@ int FTN_STDCALL KMP_EXPAND_NAME(FTN_IN_PARALLEL)(void) {
     // The solution is to use per-team nesting level
     return (th->th.th_team->t.t_active_level ? 1 : 0);
   } else
-    return (th->th.th_root->r.r_active ? FTN_TRUE : FTN_FALSE);
+    return (th->th.th_root->r.r_in_parallel ? FTN_TRUE : FTN_FALSE);
 #endif
 }
 

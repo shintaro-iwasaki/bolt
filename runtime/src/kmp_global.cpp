@@ -16,11 +16,7 @@
 #include "kmp_dispatch_hier.h"
 #endif
 
-#if KMP_USE_ABT
-kmp_pth_key_t __kmp_gtid_threadprivate_key;
-#else
 kmp_key_t __kmp_gtid_threadprivate_key;
-#endif
 
 #if KMP_ARCH_X86 || KMP_ARCH_X86_64
 kmp_cpuinfo_t __kmp_cpuinfo = {0}; // Not initialized
@@ -412,11 +408,6 @@ kmp_int32 __kmp_use_yield_exp_set = 0;
 kmp_uint32 __kmp_yield_init = KMP_INIT_WAIT;
 kmp_uint32 __kmp_yield_next = KMP_NEXT_WAIT;
 
-#if KMP_USE_ABT
-KMP_ALIGN_CACHE
-kmp_abt_global_t __kmp_abt_global;
-#endif
-
 /* ------------------------------------------------------ */
 /* STATE mostly syncronized with global lock */
 /* data written to rarely by masters, read often by workers */
@@ -424,9 +415,6 @@ kmp_abt_global_t __kmp_abt_global;
    of declaration is not necessarily correlated to storage order. To fix this,
    all the important globals must be put in a big structure instead. */
 KMP_ALIGN_CACHE
-#if KMP_REMOVE_FORKJOIN_LOCK
-kmp_bootstrap_lock_t __kmp_threads_lock;
-#endif
 kmp_info_t **__kmp_threads = NULL;
 kmp_root_t **__kmp_root = NULL;
 
@@ -434,17 +422,7 @@ kmp_root_t **__kmp_root = NULL;
 KMP_ALIGN_CACHE
 volatile int __kmp_nth = 0;
 volatile int __kmp_all_nth = 0;
-
-#if KMP_REMOVE_FORKJOIN_LOCK
-KMP_ALIGN_CACHE
-kmp_bootstrap_lock_t __kmp_thread_pool_lock;
-#endif
 volatile kmp_info_t *__kmp_thread_pool = NULL;
-
-#if KMP_REMOVE_FORKJOIN_LOCK
-KMP_ALIGN_CACHE
-kmp_bootstrap_lock_t __kmp_team_pool_lock;
-#endif
 volatile kmp_team_t *__kmp_team_pool = NULL;
 
 KMP_ALIGN_CACHE

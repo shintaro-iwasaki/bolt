@@ -1,7 +1,6 @@
 // RUN: %libomp-compile-and-run
 // The runtime currently does not get dependency information from GCC.
-// UNSUPPORTED: gcc, icc-16
-// REQUIRES: !abt
+// UNSUPPORTED: gcc
 
 #include <stdio.h>
 #include <omp.h>

@@ -71,12 +71,6 @@
 #cmakedefine01 MSVC
 #define KMP_MSVC_COMPAT MSVC
 
-#cmakedefine01 LIBOMP_USE_ARGOBOTS
-#define KMP_USE_ABT LIBOMP_USE_ARGOBOTS
-
-#cmakedefine01 LIBOMP_REMOVE_FORKJOIN_LOCK
-#define KMP_REMOVE_FORKJOIN_LOCK LIBOMP_REMOVE_FORKJOIN_LOCK
-
 // Configured cache line based on architecture
 #if KMP_ARCH_PPC64
 # define CACHE_LINE 128
@@ -92,13 +86,9 @@
 #define KMP_ADJUST_BLOCKTIME 1
 #define BUILD_PARALLEL_ORDERED 1
 #define KMP_ASM_INTRINS 1
-#if !KMP_USE_ABT
-#  define USE_ITT_BUILD LIBOMP_USE_ITT_NOTIFY
-#else
-#  define USE_ITT_BUILD 0
-#endif
+#define USE_ITT_BUILD LIBOMP_USE_ITT_NOTIFY
 #define INTEL_ITTNOTIFY_PREFIX __kmp_itt_
-#if ! KMP_MIC && ! KMP_USE_ABT
+#if ! KMP_MIC
 # define USE_LOAD_BALANCE 1
 #endif
 #if ! (KMP_OS_WINDOWS || KMP_OS_DARWIN)

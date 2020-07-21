@@ -1,6 +1,5 @@
 // RUN: %libomp-compile-and-run
 // RUN: %libomp-run | %python %S/check.py -c 'CHECK' %s
-// REQUIRES: !abt
 
 #include <stdio.h>
 #include <stdlib.h>

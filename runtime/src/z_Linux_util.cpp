@@ -21,10 +21,6 @@
 #include "kmp_wait_release.h"
 #include "kmp_wrapper_getpid.h"
 
-#if KMP_USE_ABT
-#include "kmp_taskdeps.h"
-#endif
-
 #if !KMP_OS_DRAGONFLY && !KMP_OS_FREEBSD && !KMP_OS_NETBSD && !KMP_OS_OPENBSD
 #include <alloca.h>
 #endif
@@ -88,13 +84,11 @@ static int __kmp_init_runtime = FALSE;
 
 static int __kmp_fork_count = 0;
 
-#if !KMP_USE_ABT
 static pthread_condattr_t __kmp_suspend_cond_attr;
 static pthread_mutexattr_t __kmp_suspend_mutex_attr;
 
 static kmp_cond_align_t __kmp_wait_cv;
 static kmp_mutex_align_t __kmp_wait_mx;
-#endif
 
 kmp_uint64 __kmp_ticks_per_msec = 1000000;
 
@@ -104,21 +98,6 @@ static void __kmp_print_cond(char *buffer, kmp_cond_align_t *cond) {
                cond->c_cond.__c_lock.__status, cond->c_cond.__c_lock.__spinlock,
                cond->c_cond.__c_waiting);
 }
-#endif
-
-#if KMP_USE_ABT
-static inline ABT_pool __kmp_abt_get_pool_thread(int self_rank,
-                                                 int master_place_id, int tid,
-                                                 int num_threads, int level,
-                                                 kmp_proc_bind_t proc_bind,
-                                                 int *p_place_id);
-static inline ABT_pool __kmp_abt_get_pool_task();
-static int __kmp_abt_sched_init(ABT_sched sched, ABT_sched_config config);
-static void __kmp_abt_sched_run(ABT_sched sched);
-static int __kmp_abt_sched_free(ABT_sched sched);
-static void __kmp_abt_initialize(void);
-static void __kmp_abt_finalize(void);
-
 #endif
 
 #if ((KMP_OS_LINUX || KMP_OS_FREEBSD) && KMP_AFFINITY_SUPPORTED)
@@ -336,9 +315,6 @@ void __kmp_affinity_determine_capable(const char *env_var) {
 #if KMP_USE_FUTEX
 
 int __kmp_futex_determine_capable() {
-#if KMP_USE_ABT
-  return 0; // Not supported.
-#else
   int loc = 0;
   int rc = syscall(__NR_futex, &loc, FUTEX_WAKE, 1, NULL, NULL, 0);
   int retval = (rc == 0) || (errno != ENOSYS);
@@ -349,7 +325,6 @@ int __kmp_futex_determine_capable() {
                 retval ? "" : " not"));
 
   return retval;
-#endif
 }
 
 #endif // KMP_USE_FUTEX
@@ -481,24 +456,14 @@ void __kmp_terminate_thread(int gtid) {
 
 #ifdef KMP_CANCEL_THREADS
   KA_TRACE(10, ("__kmp_terminate_thread: kill (%d)\n", gtid));
-#if KMP_USE_ABT
-  status = ABT_thread_cancel(th->th.th_info.ds.ds_thread);
-  if (status != ABT_SUCCESS) {
-    __kmp_fatal(KMP_MSG(CantTerminateWorkerThread), KMP_ERR(status),
-                __kmp_msg_null);
-  }
-#else // KMP_USE_ABT
   status = pthread_cancel(th->th.th_info.ds.ds_thread);
   if (status != 0 && status != ESRCH) {
     __kmp_fatal(KMP_MSG(CantTerminateWorkerThread), KMP_ERR(status),
                 __kmp_msg_null);
   }
-#endif // !KMP_USE_ABT
 #endif
   KMP_YIELD(TRUE);
 } //
-
-#if !KMP_USE_ABT
 
 /* Set thread stack info according to values returned by pthread_getattr_np().
    If values are unreasonable, assume call failed and use incremental stack
@@ -630,80 +595,6 @@ static void *__kmp_launch_worker(void *thr) {
 
   return exit_val;
 }
-
-#else // !KMP_USE_ABT
-
-static void __kmp_abt_create_workers_recursive(kmp_team_t *team, int start_tid,
-                                               int end_tid);
-static void __kmp_abt_join_workers_recursive(kmp_team_t *team, int start_tid,
-                                             int end_tid);
-
-static void __kmp_abt_launch_worker(void *thr) {
-  int gtid;
-  kmp_info_t *this_thr = (kmp_info_t *)thr;
-  kmp_team_t *team = this_thr->th.th_team;
-
-  gtid = this_thr->th.th_info.ds.ds_gtid;
-  KMP_DEBUG_ASSERT(this_thr == __kmp_threads[gtid]);
-
-#if KMP_AFFINITY_SUPPORTED
-  __kmp_affinity_set_init_mask(gtid, FALSE);
-#endif
-
-  KMP_MB();
-
-  const int start_tid = __kmp_tid_from_gtid(gtid);
-  const int end_tid = this_thr->th.th_creation_group_end_tid;
-
-  if (end_tid - start_tid > 1)
-    __kmp_abt_create_workers_recursive(team, start_tid, end_tid);
-
-  if (__kmp_tasking_mode != tskm_immediate_exec) {
-    /* It is originally set up in task_team_sync() */
-    this_thr->th.th_task_team = team->t.t_task_team[this_thr->th.th_task_state];
-  }
-  if (team && !TCR_4(__kmp_global.g.g_done)) {
-    /* run our new task */
-    if ((team->t.t_pkfn) != NULL) {
-      int rc;
-      KA_TRACE(20, ("__kmp_abt_launch_worker: T#%d(%d:%d) "
-                    "invoke microtask = %p\n",
-                    gtid, team->t.t_id, __kmp_tid_from_gtid(gtid),
-                    team->t.t_pkfn));
-      rc = team->t.t_invoke(gtid);
-      KMP_ASSERT(rc);
-      KMP_MB();
-      KA_TRACE(20, ("__kmp_abt_launch_worker: T#%d(%d:%d) "
-                    "done microtask = %p\n",
-                    gtid, team->t.t_id, __kmp_tid_from_gtid(gtid),
-                    team->t.t_pkfn));
-    }
-  }
-
-  KA_TRACE(10, ("__kmp_abt_launch_worker: T#%d done\n", gtid));
-
-  __kmp_abt_wait_child_tasks(this_thr, true, FALSE);
-  this_thr->th.th_task_team = NULL;
-
-  /* Below is for the implicit task */
-  kmp_taskdata_t *td = this_thr->th.th_current_task;
-  if (td->td_task_queue) {
-    KMP_DEBUG_ASSERT(td->td_tq_cur_size == 0);
-    KMP_INTERNAL_FREE(td->td_task_queue);
-    td->td_task_queue = NULL;
-    td->td_tq_max_size = 0;
-  }
-
-  /* This thread has been finished. Any task can use this as a parent. */
-  __kmp_abt_release_info(this_thr);
-
-  if (end_tid - start_tid > 1)
-    __kmp_abt_join_workers_recursive(team, start_tid, end_tid);
-
-  KA_TRACE(10, ("__kmp_abt_launch_worker: T#%d finish\n", gtid));
-}
-
-#endif // KMP_USE_ABT
 
 #if KMP_USE_MONITOR
 /* The monitor thread controls all of the threads in the complex */
@@ -879,8 +770,6 @@ static void *__kmp_launch_monitor(void *thr) {
 }
 #endif // KMP_USE_MONITOR
 
-#if !KMP_USE_ABT
-
 void __kmp_create_worker(int gtid, kmp_info_t *th, size_t stack_size) {
   pthread_t handle;
   pthread_attr_t thread_attr;
@@ -920,7 +809,6 @@ void __kmp_create_worker(int gtid, kmp_info_t *th, size_t stack_size) {
   KMP_MB(); /* Flush all pending memory write invalidates.  */
 
 #ifdef KMP_THREAD_ATTR
-
   status = pthread_attr_init(&thread_attr);
   if (status != 0) {
     __kmp_fatal(KMP_MSG(CantInitThreadAttrs), KMP_ERR(status), __kmp_msg_null);
@@ -1013,239 +901,8 @@ void __kmp_create_worker(int gtid, kmp_info_t *th, size_t stack_size) {
 
 } // __kmp_create_worker
 
-#else // KMP_USE_ABT
-
-static inline void __kmp_abt_create_workers_impl(kmp_team_t *team,
-                                                 const int self_rank,
-                                                 int start_tid, int end_tid) {
-  // tid must be start_tid.
-
-#ifdef KMP_THREAD_ATTR
-  ABT_thread_attr thread_attr = ABT_THREAD_ATTR_NULL;
-#endif
-
-  const kmp_proc_bind_t proc_bind = team->t.t_proc_bind_applied;
-  const int master_place_id = team->t.t_master_place_id;
-  const int team_level = team->t.t_level;
-  const int num_threads = team->t.t_nproc;
-
-  const int num_ways = __kmp_abt_global.fork_num_ways;
-  const int cutoff = __kmp_abt_global.fork_cutoff;
-  const int inc = ((end_tid - start_tid) < cutoff) ? 1
-                  : ((end_tid - start_tid + num_ways - 1) / num_ways);
-  KMP_DEBUG_ASSERT(self_rank != -1);
-  KMP_DEBUG_ASSERT(master_place_id != -1);
-  KMP_DEBUG_ASSERT(inc > 0);
-
-  // create / revive workers.
-  for (int f = start_tid + inc; f < end_tid; f += inc) {
-    kmp_info_t *th = team->t.t_threads[f];
-
-    // set up recursive division policy.
-    int new_creation_group_end_tid = f + inc;
-    if (f + inc > end_tid)
-      new_creation_group_end_tid = end_tid;
-
-#if KMP_BARRIER_ICV_PUSH
-    // If we create a thread, the master thread eagerly pushes it.
-    // If it has been run, the slave thread reads it from its master.
-    __kmp_init_implicit_task(team->t.t_ident, th, team, f, FALSE);
-    copy_icvs(&team->t.t_implicit_task_taskdata[f].td_icvs,
-              &team->t.t_master_icvs);
-#endif
-
-    // [SM] th->th.th_info.ds.ds_gtid is setup in __kmp_allocate_thread
-    KMP_DEBUG_ASSERT(th->th.th_info.ds.ds_gtid == __kmp_gtid_from_tid(f, team));
-    // uber thread is created in __kmp_abt_create_uber().
-    KMP_DEBUG_ASSERT(!KMP_UBER_GTID(__kmp_gtid_from_tid(f, team)));
-
-#if KMP_STATS_ENABLED
-    int gtid = __kmp_gtid_from_tid(f, team);
-
-    // sets up worker thread stats
-    __kmp_acquire_tas_lock(&__kmp_stats_lock, gtid);
-
-    // th->th.th_stats is used to transfer thread-specific stats-pointer to
-    // __kmp_launch_worker. So when thread is created (goes into
-    // __kmp_launch_worker) it will set its thread local pointer to
-    // th->th.th_stats
-    if (!KMP_UBER_GTID(gtid)) {
-      th->th.th_stats = __kmp_stats_list->push_back(gtid);
-    } else {
-      // For root threads, __kmp_stats_thread_ptr is set in
-      // __kmp_register_root(), so set the th->th.th_stats field to it.
-      th->th.th_stats = __kmp_stats_thread_ptr;
-    }
-    __kmp_release_tas_lock(&__kmp_stats_lock, gtid);
-#endif // KMP_STATS_ENABLED
-
-    ABT_pool target;
-    int place_id = 0;
-    target = __kmp_abt_get_pool_thread(self_rank, master_place_id, f,
-                                       num_threads, team_level, proc_bind,
-                                       &place_id);
-    th->th.th_current_place_id = place_id;
-    th->th.th_creation_group_end_tid = new_creation_group_end_tid;
-
-    if (th->th.th_info.ds.ds_thread == ABT_THREAD_NULL) {
-      int status;
-      // Create threads.
-#ifdef KMP_THREAD_ATTR
-      if (thread_attr == ABT_THREAD_ATTR_NULL) {
-        status = ABT_thread_attr_create(&thread_attr);
-        KMP_ASSERT(status == ABT_SUCCESS);
-        status = ABT_thread_attr_set_stacksize(thread_attr, __kmp_stksize);
-        KMP_ASSERT(status == ABT_SUCCESS);
-      }
-#endif
-      status = ABT_thread_create(target, __kmp_abt_launch_worker, (void *)th,
-                                 thread_attr, &th->th.th_info.ds.ds_thread);
-      KMP_ASSERT(status == ABT_SUCCESS);
-    } else {
-      // Revive thread.
-      int status = ABT_thread_revive(target, __kmp_abt_launch_worker,
-                                     (void *)th, &th->th.th_info.ds.ds_thread);
-      KMP_ASSERT(status == ABT_SUCCESS);
-    }
-  }
-
-#ifdef KMP_THREAD_ATTR
-  if (thread_attr != ABT_THREAD_ATTR_NULL) {
-      int status = ABT_thread_attr_free(&thread_attr);
-      KMP_ASSERT(status == ABT_SUCCESS);
-  }
-#endif /* KMP_THREAD_ATTR */
-
-  if (inc != 1) {
-    // Create threads in a sub group.
-    int rec_start_tid = start_tid;
-    int rec_end_tid = start_tid + inc;
-    if (rec_end_tid > end_tid)
-      rec_end_tid = end_tid;
-    __kmp_abt_create_workers_impl(team, self_rank, rec_start_tid, rec_end_tid);
-  }
-}
-
-static void __kmp_abt_create_workers_recursive(kmp_team_t *team, int start_tid,
-                                               int end_tid) {
-  int self_rank;
-  ABT_xstream_self_rank(&self_rank);
-  __kmp_abt_create_workers_impl(team, self_rank, start_tid, end_tid);
-}
-
-void __kmp_abt_create_workers(kmp_team_t *team) {
-  const int team_level = team->t.t_level;
-  const int num_threads = team->t.t_nproc;
-#if KMP_BARRIER_ICV_PUSH
-  // set up the master icvs.
-  copy_icvs(&team->t.t_master_icvs,
-            &team->t.t_implicit_task_taskdata[0].td_icvs);
-#endif
-
-  // Get self_rank
-  int self_rank;
-  ABT_xstream_self_rank(&self_rank);
-
-  // Set up proc bind.
-  kmp_proc_bind_t proc_bind = proc_bind_false;
-#if OMP_40_ENABLED
-  // Set up the affinity of the master thread.
-  kmp_proc_bind_t team_proc_bind = team->t.t_proc_bind;
-  if (team_proc_bind == proc_bind_default) {
-    // Use global setting.
-    int size = __kmp_nested_proc_bind.size;
-    if (size > (team_level - 1))
-      proc_bind = __kmp_nested_proc_bind.bind_types[team_level - 1];
-  } else if (team_proc_bind != proc_bind_intel) {
-    proc_bind = team_proc_bind;
-  }
-#endif
-  team->t.t_proc_bind_applied = proc_bind;
-
-  // Obtain master place id.
-  int master_tid = team->t.t_master_tid;
-  int master_place_id;
-  if (team_level <= 1) {
-    master_place_id = 0; // master place is set to 0.
-  } else {
-    kmp_team_t *parent_team = team->t.t_parent;
-    master_place_id
-        = parent_team->t.t_threads[master_tid]->th.th_current_place_id;
-    if (master_place_id == -1) {
-      // master thread is not bound to any place.
-      // Use the current place.
-      master_place_id = __kmp_abt_global.locals[self_rank].place_id;
-    }
-  }
-  team->t.t_master_place_id = master_place_id;
-
-  int place_id;
-  __kmp_abt_get_pool_thread(self_rank, master_place_id, master_tid, num_threads,
-                            team_level, proc_bind, &place_id);
-  team->t.t_threads[0]->th.th_current_place_id = place_id;
-
-  // core.
-  __kmp_abt_create_workers_impl(team, self_rank, 0, num_threads);
-} // __kmp_abt_create_workers
-
-static inline void __kmp_abt_join_workers_impl(kmp_team_t *team, int start_tid,
-                                               int end_tid) {
-  KMP_MB(); /* Flush all pending memory write invalidates.  */
-
-  const int num_ways = __kmp_abt_global.fork_num_ways;
-  const int cutoff = __kmp_abt_global.fork_cutoff;
-  const int inc = ((end_tid - start_tid) < cutoff) ? 1
-                  : ((end_tid - start_tid + num_ways - 1) / num_ways);
-
-  if (inc != 1) {
-    // Join threads in a sub group first.
-    int rec_start_tid = start_tid;
-    int rec_end_tid = start_tid + inc;
-    if (rec_end_tid > end_tid)
-      rec_end_tid = end_tid;
-    __kmp_abt_join_workers_recursive(team, rec_start_tid, rec_end_tid);
-  }
-
-  kmp_info_t **threads = team->t.t_threads;
-
-  /* Join Argobots ULTs here */
-  for (int f = start_tid + inc; f < end_tid; f += inc) {
-    // t_threads[0] is not joined.
-    ABT_thread ds_thread = threads[f]->th.th_info.ds.ds_thread;
-    int status = ABT_thread_join(ds_thread);
-    KMP_DEBUG_ASSERT(status == ABT_SUCCESS);
-    (void)status;
-  }
-  KMP_MB(); /* Flush all pending memory write invalidates.  */
-} // __kmp_abt_join_workers_impl
-
-static void __kmp_abt_join_workers_recursive(kmp_team_t *team, int start_tid,
-                                             int end_tid) {
-  __kmp_abt_join_workers_impl(team, start_tid, end_tid);
-}
-
-void __kmp_abt_join_workers(kmp_team_t *team) {
-  const int num_threads = team->t.t_nproc;
-  __kmp_abt_join_workers_impl(team, 0, num_threads);
-  for (int tid = 0; tid < num_threads; tid++) {
-    kmp_info_t *th = team->t.t_threads[tid];
-    // Reset th_current_task; th_current_task must be consistent when the team
-    // is reused in the future. BOLT cannot run tasks on top of implicit tasks,
-    // so such an inconsistency problem occurs.
-    th->th.th_current_task = &team->t.t_implicit_task_taskdata[tid];
-    // Reset threads so that tasks cannot use these threads.
-    KMP_DEBUG_ASSERT(th->th.th_active == FALSE);
-    if (tid != 0) {
-      th->th.th_active = TRUE;
-    }
-  }
-} // __kmp_abt_join_workers
-
-#endif /* KMP_USE_ABT */
-
 #if KMP_USE_MONITOR
 void __kmp_create_monitor(kmp_info_t *th) {
-#if !KMP_USE_ABT
   pthread_t handle;
   pthread_attr_t thread_attr;
   size_t size;
@@ -1382,28 +1039,17 @@ retry:
   KA_TRACE(10, ("__kmp_create_monitor: monitor created %#.8lx\n",
                 th->th.th_info.ds.ds_thread));
 
-#else // !KMP_USE_ABT
-
-  return; // Nothing to do
-
-#endif // KMP_USE_ABT
 } // __kmp_create_monitor
 #endif // KMP_USE_MONITOR
 
 void __kmp_exit_thread(int exit_status) {
-#if KMP_USE_ABT
-  ABT_thread_exit();
-#else
   pthread_exit((void *)(intptr_t)exit_status);
-#endif
 } // __kmp_exit_thread
 
 #if KMP_USE_MONITOR
 void __kmp_resume_monitor();
 
 void __kmp_reap_monitor(kmp_info_t *th) {
-#if !KMP_USE_ABT
-
   int status;
   void *exit_val;
 
@@ -1444,35 +1090,17 @@ void __kmp_reap_monitor(kmp_info_t *th) {
                 th->th.th_info.ds.ds_thread));
 
   KMP_MB(); /* Flush all pending memory write invalidates.  */
-
-#else // !KMP_USE_ABT
-
-  return; // Nothing to do.
-
-#endif // KMP_USE_ABT
 }
 #endif // KMP_USE_MONITOR
 
 void __kmp_reap_worker(kmp_info_t *th) {
   int status;
-#if !KMP_USE_ABT
   void *exit_val;
-#endif
 
   KMP_MB(); /* Flush all pending memory write invalidates.  */
 
   KA_TRACE(
       10, ("__kmp_reap_worker: try to reap T#%d\n", th->th.th_info.ds.ds_gtid));
-
-#if KMP_USE_ABT
-
-  ABT_thread ds_thread = th->th.th_info.ds.ds_thread;
-  if (ds_thread != ABT_THREAD_NULL) {
-    status = ABT_thread_free(&ds_thread);
-    KMP_ASSERT(status == ABT_SUCCESS);
-  }
-
-#else // KMP_USE_ABT
 
   status = pthread_join(th->th.th_info.ds.ds_thread, &exit_val);
 #ifdef KMP_DEBUG
@@ -1491,8 +1119,6 @@ void __kmp_reap_worker(kmp_info_t *th) {
                 th->th.th_info.ds.ds_gtid));
 
   KMP_MB(); /* Flush all pending memory write invalidates.  */
-
-#endif // !KMP_USE_ABT
 }
 
 #if KMP_HANDLE_SIGNALS
@@ -1749,22 +1375,15 @@ void __kmp_register_atfork(void) {
 }
 
 void __kmp_suspend_initialize(void) {
-#if KMP_USE_ABT
-  /* BOLT does not need to initialize them. */
-#else
   int status;
   status = pthread_mutexattr_init(&__kmp_suspend_mutex_attr);
   KMP_CHECK_SYSFAIL("pthread_mutexattr_init", status);
   status = pthread_condattr_init(&__kmp_suspend_cond_attr);
   KMP_CHECK_SYSFAIL("pthread_condattr_init", status);
-#endif
 }
 
 void __kmp_suspend_initialize_thread(kmp_info_t *th) {
   ANNOTATE_HAPPENS_AFTER(&th->th.th_suspend_init_count);
-#if KMP_USE_ABT
-  /* BOLT does not need to initialize them. */
-#else
   int old_value = KMP_ATOMIC_LD_RLX(&th->th.th_suspend_init_count);
   int new_value = __kmp_fork_count + 1;
   // Return if already initialized
@@ -1789,14 +1408,10 @@ void __kmp_suspend_initialize_thread(kmp_info_t *th) {
     KMP_ATOMIC_ST_REL(&th->th.th_suspend_init_count, new_value);
     ANNOTATE_HAPPENS_BEFORE(&th->th.th_suspend_init_count);
   }
-#endif
 }
 
 void __kmp_suspend_uninitialize_thread(kmp_info_t *th) {
-#if KMP_USE_ABT
-  /* BOLT does not need to initialize them. */
-#else
-  if (th->th.th_suspend_init_count > __kmp_fork_count) {
+  if (KMP_ATOMIC_LD_ACQ(&th->th.th_suspend_init_count) > __kmp_fork_count) {
     /* this means we have initialize the suspension pthread objects for this
        thread in this instance of the process */
     int status;
@@ -1813,33 +1428,23 @@ void __kmp_suspend_uninitialize_thread(kmp_info_t *th) {
     KMP_DEBUG_ASSERT(KMP_ATOMIC_LD_RLX(&th->th.th_suspend_init_count) ==
                      __kmp_fork_count);
   }
-#endif
 }
 
 // return true if lock obtained, false otherwise
 int __kmp_try_suspend_mx(kmp_info_t *th) {
-#if KMP_USE_ABT
-  return 1;
-#else
   return (pthread_mutex_trylock(&th->th.th_suspend_mx.m_mutex) == 0);
-#endif
 }
 
 void __kmp_lock_suspend_mx(kmp_info_t *th) {
-#if !KMP_USE_ABT
   int status = pthread_mutex_lock(&th->th.th_suspend_mx.m_mutex);
   KMP_CHECK_SYSFAIL("pthread_mutex_lock", status);
-#endif
 }
 
 void __kmp_unlock_suspend_mx(kmp_info_t *th) {
-#if !KMP_USE_ABT
   int status = pthread_mutex_unlock(&th->th.th_suspend_mx.m_mutex);
   KMP_CHECK_SYSFAIL("pthread_mutex_unlock", status);
-#endif
 }
 
-#if !KMP_USE_ABT
 /* This routine puts the calling thread to sleep after setting the
    sleep bit for the indicated flag variable to true. */
 template <class C>
@@ -2098,31 +1703,9 @@ void __kmp_resume_monitor() {
 }
 #endif // KMP_USE_MONITOR
 
-#endif // !KMP_USE_ABT
-
-void __kmp_yield() {
-#if KMP_USE_ABT
-  ABT_thread_yield();
-#else
-  sched_yield();
-#endif
-}
+void __kmp_yield() { sched_yield(); }
 
 void __kmp_gtid_set_specific(int gtid) {
-#if KMP_USE_ABT
-  ABT_thread self;
-  kmp_info_t *th;
-  KMP_ASSERT(__kmp_init_runtime);
-  ABT_thread_self(&self);
-
-  if (self != ABT_THREAD_NULL) {
-    ABT_thread_get_arg(self, (void **)&th);
-    KMP_ASSERT(th != NULL);
-    th->th.th_info.ds.ds_gtid = gtid;
-    KMP_ASSERT(__kmp_init_gtid);
-    return;
-  }
-#endif // KMP_USE_ABT
   if (__kmp_init_gtid) {
     int status;
     status = pthread_setspecific(__kmp_gtid_threadprivate_key,
@@ -2135,29 +1718,6 @@ void __kmp_gtid_set_specific(int gtid) {
 
 int __kmp_gtid_get_specific() {
   int gtid;
-#if KMP_USE_ABT
-
-  ABT_thread self;
-  ABT_thread_self(&self);
-  if (self == ABT_THREAD_NULL) {
-    KMP_ASSERT(__kmp_init_gtid);
-    /* External threads might call OpenMP functions. */
-    gtid = (int)(size_t)pthread_getspecific(__kmp_gtid_threadprivate_key);
-    KA_TRACE(50, ("__kmp_gtid_get_specific: key:%d gtid:%d\n",
-                  __kmp_gtid_threadprivate_key, gtid));
-  } else {
-    kmp_info_t *th;
-    ABT_thread_get_arg(self, (void **)&th);
-    if (th == NULL) {
-      gtid = KMP_GTID_DNE;
-    } else {
-      gtid = th->th.th_info.ds.ds_gtid;
-    }
-    KA_TRACE(50, ("__kmp_gtid_get_specific: ULT:%p gtid:%d\n", self, gtid));
-  }
-
-#else // KMP_USE_ABT
-
   if (!__kmp_init_gtid) {
     KA_TRACE(50, ("__kmp_gtid_get_specific: runtime shutdown, returning "
                   "KMP_GTID_SHUTDOWN\n"));
@@ -2171,8 +1731,6 @@ int __kmp_gtid_get_specific() {
   }
   KA_TRACE(50, ("__kmp_gtid_get_specific: key:%d gtid:%d\n",
                 __kmp_gtid_threadprivate_key, gtid));
-
-#endif // !KMP_USE_ABT
   return gtid;
 }
 
@@ -2288,10 +1846,8 @@ int __kmp_read_from_file(char const *path, char const *format, ...) {
 
 void __kmp_runtime_initialize(void) {
   int status;
-#if !KMP_USE_ABT
   pthread_mutexattr_t mutex_attr;
   pthread_condattr_t cond_attr;
-#endif
 
   if (__kmp_init_runtime) {
     return;
@@ -2341,9 +1897,6 @@ void __kmp_runtime_initialize(void) {
   status = pthread_key_create(&__kmp_gtid_threadprivate_key,
                               __kmp_internal_end_dest);
   KMP_CHECK_SYSFAIL("pthread_key_create", status);
-#if KMP_USE_ABT
-  __kmp_abt_initialize();
-#else
   status = pthread_mutexattr_init(&mutex_attr);
   KMP_CHECK_SYSFAIL("pthread_mutexattr_init", status);
   status = pthread_mutex_init(&__kmp_wait_mx.m_mutex, &mutex_attr);
@@ -2352,7 +1905,6 @@ void __kmp_runtime_initialize(void) {
   KMP_CHECK_SYSFAIL("pthread_condattr_init", status);
   status = pthread_cond_init(&__kmp_wait_cv.c_cond, &cond_attr);
   KMP_CHECK_SYSFAIL("pthread_cond_init", status);
-#endif
 #if USE_ITT_BUILD
   __kmp_itt_initialize();
 #endif /* USE_ITT_BUILD */
@@ -2374,9 +1926,6 @@ void __kmp_runtime_destroy(void) {
   status = pthread_key_delete(__kmp_gtid_threadprivate_key);
   KMP_CHECK_SYSFAIL("pthread_key_delete", status);
 
-#if KMP_USE_ABT
-  __kmp_abt_finalize();
-#else
   status = pthread_mutex_destroy(&__kmp_wait_mx.m_mutex);
   if (status != 0 && status != EBUSY) {
     KMP_SYSFAIL("pthread_mutex_destroy", status);
@@ -2385,7 +1934,6 @@ void __kmp_runtime_destroy(void) {
   if (status != 0 && status != EBUSY) {
     KMP_SYSFAIL("pthread_cond_destroy", status);
   }
-#endif
 #if KMP_AFFINITY_SUPPORTED
   __kmp_affinity_uninitialize();
 #endif
@@ -2879,7 +2427,7 @@ finish: // Clean up and exit.
 
 #endif // USE_LOAD_BALANCE
 
-#if KMP_USE_ABT || !(KMP_ARCH_X86 || KMP_ARCH_X86_64 || KMP_MIC ||             \
+#if !(KMP_ARCH_X86 || KMP_ARCH_X86_64 || KMP_MIC ||                            \
       ((KMP_OS_LINUX || KMP_OS_DARWIN) && KMP_ARCH_AARCH64) ||                 \
       KMP_ARCH_PPC64 || KMP_ARCH_RISCV64)
 
@@ -2963,1315 +2511,11 @@ int __kmp_invoke_microtask(microtask_t pkfn, int gtid, int tid, int argc,
             p_argv[5], p_argv[6], p_argv[7], p_argv[8], p_argv[9], p_argv[10],
             p_argv[11], p_argv[12], p_argv[13], p_argv[14]);
     break;
-  case 16:
-    (*pkfn)(&gtid, &tid, p_argv[0], p_argv[1], p_argv[2], p_argv[3], p_argv[4],
-            p_argv[5], p_argv[6], p_argv[7], p_argv[8], p_argv[9], p_argv[10],
-            p_argv[11], p_argv[12], p_argv[13], p_argv[14], p_argv[15]);
-    break;
-  case 17:
-    (*pkfn)(&gtid, &tid, p_argv[0], p_argv[1], p_argv[2], p_argv[3], p_argv[4],
-            p_argv[5], p_argv[6], p_argv[7], p_argv[8], p_argv[9], p_argv[10],
-            p_argv[11], p_argv[12], p_argv[13], p_argv[14], p_argv[15],
-            p_argv[16]);
-    break;
-  case 18:
-    (*pkfn)(&gtid, &tid, p_argv[0], p_argv[1], p_argv[2], p_argv[3], p_argv[4],
-            p_argv[5], p_argv[6], p_argv[7], p_argv[8], p_argv[9], p_argv[10],
-            p_argv[11], p_argv[12], p_argv[13], p_argv[14], p_argv[15],
-            p_argv[16], p_argv[17]);
-    break;
-  case 19:
-    (*pkfn)(&gtid, &tid, p_argv[0], p_argv[1], p_argv[2], p_argv[3], p_argv[4],
-            p_argv[5], p_argv[6], p_argv[7], p_argv[8], p_argv[9], p_argv[10],
-            p_argv[11], p_argv[12], p_argv[13], p_argv[14], p_argv[15],
-            p_argv[16], p_argv[17], p_argv[18]);
-    break;
-  case 20:
-    (*pkfn)(&gtid, &tid, p_argv[0], p_argv[1], p_argv[2], p_argv[3], p_argv[4],
-            p_argv[5], p_argv[6], p_argv[7], p_argv[8], p_argv[9], p_argv[10],
-            p_argv[11], p_argv[12], p_argv[13], p_argv[14], p_argv[15],
-            p_argv[16], p_argv[17], p_argv[18], p_argv[19]);
-    break;
-  case 21:
-    (*pkfn)(&gtid, &tid, p_argv[0], p_argv[1], p_argv[2], p_argv[3], p_argv[4],
-            p_argv[5], p_argv[6], p_argv[7], p_argv[8], p_argv[9], p_argv[10],
-            p_argv[11], p_argv[12], p_argv[13], p_argv[14], p_argv[15],
-            p_argv[16], p_argv[17], p_argv[18], p_argv[19], p_argv[20]);
-    break;
-  case 22:
-    (*pkfn)(&gtid, &tid, p_argv[0], p_argv[1], p_argv[2], p_argv[3], p_argv[4],
-            p_argv[5], p_argv[6], p_argv[7], p_argv[8], p_argv[9], p_argv[10],
-            p_argv[11], p_argv[12], p_argv[13], p_argv[14], p_argv[15],
-            p_argv[16], p_argv[17], p_argv[18], p_argv[19], p_argv[20],
-            p_argv[21]);
-    break;
-  case 23:
-    (*pkfn)(&gtid, &tid, p_argv[0], p_argv[1], p_argv[2], p_argv[3], p_argv[4],
-            p_argv[5], p_argv[6], p_argv[7], p_argv[8], p_argv[9], p_argv[10],
-            p_argv[11], p_argv[12], p_argv[13], p_argv[14], p_argv[15],
-            p_argv[16], p_argv[17], p_argv[18], p_argv[19], p_argv[20],
-            p_argv[21], p_argv[22]);
-    break;
-  case 24:
-    (*pkfn)(&gtid, &tid, p_argv[0], p_argv[1], p_argv[2], p_argv[3], p_argv[4],
-            p_argv[5], p_argv[6], p_argv[7], p_argv[8], p_argv[9], p_argv[10],
-            p_argv[11], p_argv[12], p_argv[13], p_argv[14], p_argv[15],
-            p_argv[16], p_argv[17], p_argv[18], p_argv[19], p_argv[20],
-            p_argv[21], p_argv[22], p_argv[23]);
-    break;
-  case 25:
-    (*pkfn)(&gtid, &tid, p_argv[0], p_argv[1], p_argv[2], p_argv[3], p_argv[4],
-            p_argv[5], p_argv[6], p_argv[7], p_argv[8], p_argv[9], p_argv[10],
-            p_argv[11], p_argv[12], p_argv[13], p_argv[14], p_argv[15],
-            p_argv[16], p_argv[17], p_argv[18], p_argv[19], p_argv[20],
-            p_argv[21], p_argv[22], p_argv[23], p_argv[24]);
-    break;
-  case 26:
-    (*pkfn)(&gtid, &tid, p_argv[0], p_argv[1], p_argv[2], p_argv[3], p_argv[4],
-            p_argv[5], p_argv[6], p_argv[7], p_argv[8], p_argv[9], p_argv[10],
-            p_argv[11], p_argv[12], p_argv[13], p_argv[14], p_argv[15],
-            p_argv[16], p_argv[17], p_argv[18], p_argv[19], p_argv[20],
-            p_argv[21], p_argv[22], p_argv[23], p_argv[24], p_argv[25]);
-    break;
-  case 27:
-    (*pkfn)(&gtid, &tid, p_argv[0], p_argv[1], p_argv[2], p_argv[3], p_argv[4],
-            p_argv[5], p_argv[6], p_argv[7], p_argv[8], p_argv[9], p_argv[10],
-            p_argv[11], p_argv[12], p_argv[13], p_argv[14], p_argv[15],
-            p_argv[16], p_argv[17], p_argv[18], p_argv[19], p_argv[20],
-            p_argv[21], p_argv[22], p_argv[23], p_argv[24], p_argv[25],
-            p_argv[26]);
-    break;
-  case 28:
-    (*pkfn)(&gtid, &tid, p_argv[0], p_argv[1], p_argv[2], p_argv[3], p_argv[4],
-            p_argv[5], p_argv[6], p_argv[7], p_argv[8], p_argv[9], p_argv[10],
-            p_argv[11], p_argv[12], p_argv[13], p_argv[14], p_argv[15],
-            p_argv[16], p_argv[17], p_argv[18], p_argv[19], p_argv[20],
-            p_argv[21], p_argv[22], p_argv[23], p_argv[24], p_argv[25],
-            p_argv[26], p_argv[27]);
-    break;
-  case 29:
-    (*pkfn)(&gtid, &tid, p_argv[0], p_argv[1], p_argv[2], p_argv[3], p_argv[4],
-            p_argv[5], p_argv[6], p_argv[7], p_argv[8], p_argv[9], p_argv[10],
-            p_argv[11], p_argv[12], p_argv[13], p_argv[14], p_argv[15],
-            p_argv[16], p_argv[17], p_argv[18], p_argv[19], p_argv[20],
-            p_argv[21], p_argv[22], p_argv[23], p_argv[24], p_argv[25],
-            p_argv[26], p_argv[27], p_argv[28]);
-    break;
-  case 30:
-    (*pkfn)(&gtid, &tid, p_argv[0], p_argv[1], p_argv[2], p_argv[3], p_argv[4],
-            p_argv[5], p_argv[6], p_argv[7], p_argv[8], p_argv[9], p_argv[10],
-            p_argv[11], p_argv[12], p_argv[13], p_argv[14], p_argv[15],
-            p_argv[16], p_argv[17], p_argv[18], p_argv[19], p_argv[20],
-            p_argv[21], p_argv[22], p_argv[23], p_argv[24], p_argv[25],
-            p_argv[26], p_argv[27], p_argv[28], p_argv[29]);
-    break;
-  case 31:
-    (*pkfn)(&gtid, &tid, p_argv[0], p_argv[1], p_argv[2], p_argv[3], p_argv[4],
-            p_argv[5], p_argv[6], p_argv[7], p_argv[8], p_argv[9], p_argv[10],
-            p_argv[11], p_argv[12], p_argv[13], p_argv[14], p_argv[15],
-            p_argv[16], p_argv[17], p_argv[18], p_argv[19], p_argv[20],
-            p_argv[21], p_argv[22], p_argv[23], p_argv[24], p_argv[25],
-            p_argv[26], p_argv[27], p_argv[28], p_argv[29], p_argv[30]);
-    break;
-  case 32:
-    (*pkfn)(&gtid, &tid, p_argv[0], p_argv[1], p_argv[2], p_argv[3], p_argv[4],
-            p_argv[5], p_argv[6], p_argv[7], p_argv[8], p_argv[9], p_argv[10],
-            p_argv[11], p_argv[12], p_argv[13], p_argv[14], p_argv[15],
-            p_argv[16], p_argv[17], p_argv[18], p_argv[19], p_argv[20],
-            p_argv[21], p_argv[22], p_argv[23], p_argv[24], p_argv[25],
-            p_argv[26], p_argv[27], p_argv[28], p_argv[29], p_argv[30],
-            p_argv[31]);
-    break;
-  case 33:
-    (*pkfn)(&gtid, &tid, p_argv[0], p_argv[1], p_argv[2], p_argv[3], p_argv[4],
-            p_argv[5], p_argv[6], p_argv[7], p_argv[8], p_argv[9], p_argv[10],
-            p_argv[11], p_argv[12], p_argv[13], p_argv[14], p_argv[15],
-            p_argv[16], p_argv[17], p_argv[18], p_argv[19], p_argv[20],
-            p_argv[21], p_argv[22], p_argv[23], p_argv[24], p_argv[25],
-            p_argv[26], p_argv[27], p_argv[28], p_argv[29], p_argv[30],
-            p_argv[31], p_argv[32]);
-    break;
-  case 34:
-    (*pkfn)(&gtid, &tid, p_argv[0], p_argv[1], p_argv[2], p_argv[3], p_argv[4],
-            p_argv[5], p_argv[6], p_argv[7], p_argv[8], p_argv[9], p_argv[10],
-            p_argv[11], p_argv[12], p_argv[13], p_argv[14], p_argv[15],
-            p_argv[16], p_argv[17], p_argv[18], p_argv[19], p_argv[20],
-            p_argv[21], p_argv[22], p_argv[23], p_argv[24], p_argv[25],
-            p_argv[26], p_argv[27], p_argv[28], p_argv[29], p_argv[30],
-            p_argv[31], p_argv[32], p_argv[33]);
-    break;
-  case 35:
-    (*pkfn)(&gtid, &tid, p_argv[0], p_argv[1], p_argv[2], p_argv[3], p_argv[4],
-            p_argv[5], p_argv[6], p_argv[7], p_argv[8], p_argv[9], p_argv[10],
-            p_argv[11], p_argv[12], p_argv[13], p_argv[14], p_argv[15],
-            p_argv[16], p_argv[17], p_argv[18], p_argv[19], p_argv[20],
-            p_argv[21], p_argv[22], p_argv[23], p_argv[24], p_argv[25],
-            p_argv[26], p_argv[27], p_argv[28], p_argv[29], p_argv[30],
-            p_argv[31], p_argv[32], p_argv[33], p_argv[34]);
-    break;
-  case 36:
-    (*pkfn)(&gtid, &tid, p_argv[0], p_argv[1], p_argv[2], p_argv[3], p_argv[4],
-            p_argv[5], p_argv[6], p_argv[7], p_argv[8], p_argv[9], p_argv[10],
-            p_argv[11], p_argv[12], p_argv[13], p_argv[14], p_argv[15],
-            p_argv[16], p_argv[17], p_argv[18], p_argv[19], p_argv[20],
-            p_argv[21], p_argv[22], p_argv[23], p_argv[24], p_argv[25],
-            p_argv[26], p_argv[27], p_argv[28], p_argv[29], p_argv[30],
-            p_argv[31], p_argv[32], p_argv[33], p_argv[34], p_argv[35]);
-    break;
-  case 37:
-    (*pkfn)(&gtid, &tid, p_argv[0], p_argv[1], p_argv[2], p_argv[3], p_argv[4],
-            p_argv[5], p_argv[6], p_argv[7], p_argv[8], p_argv[9], p_argv[10],
-            p_argv[11], p_argv[12], p_argv[13], p_argv[14], p_argv[15],
-            p_argv[16], p_argv[17], p_argv[18], p_argv[19], p_argv[20],
-            p_argv[21], p_argv[22], p_argv[23], p_argv[24], p_argv[25],
-            p_argv[26], p_argv[27], p_argv[28], p_argv[29], p_argv[30],
-            p_argv[31], p_argv[32], p_argv[33], p_argv[34], p_argv[35],
-            p_argv[36]);
-    break;
-  case 38:
-    (*pkfn)(&gtid, &tid, p_argv[0], p_argv[1], p_argv[2], p_argv[3], p_argv[4],
-            p_argv[5], p_argv[6], p_argv[7], p_argv[8], p_argv[9], p_argv[10],
-            p_argv[11], p_argv[12], p_argv[13], p_argv[14], p_argv[15],
-            p_argv[16], p_argv[17], p_argv[18], p_argv[19], p_argv[20],
-            p_argv[21], p_argv[22], p_argv[23], p_argv[24], p_argv[25],
-            p_argv[26], p_argv[27], p_argv[28], p_argv[29], p_argv[30],
-            p_argv[31], p_argv[32], p_argv[33], p_argv[34], p_argv[35],
-            p_argv[36], p_argv[37]);
-    break;
-  case 39:
-    (*pkfn)(&gtid, &tid, p_argv[0], p_argv[1], p_argv[2], p_argv[3], p_argv[4],
-            p_argv[5], p_argv[6], p_argv[7], p_argv[8], p_argv[9], p_argv[10],
-            p_argv[11], p_argv[12], p_argv[13], p_argv[14], p_argv[15],
-            p_argv[16], p_argv[17], p_argv[18], p_argv[19], p_argv[20],
-            p_argv[21], p_argv[22], p_argv[23], p_argv[24], p_argv[25],
-            p_argv[26], p_argv[27], p_argv[28], p_argv[29], p_argv[30],
-            p_argv[31], p_argv[32], p_argv[33], p_argv[34], p_argv[35],
-            p_argv[36], p_argv[37], p_argv[38]);
-    break;
-  case 40:
-    (*pkfn)(&gtid, &tid, p_argv[0], p_argv[1], p_argv[2], p_argv[3], p_argv[4],
-            p_argv[5], p_argv[6], p_argv[7], p_argv[8], p_argv[9], p_argv[10],
-            p_argv[11], p_argv[12], p_argv[13], p_argv[14], p_argv[15],
-            p_argv[16], p_argv[17], p_argv[18], p_argv[19], p_argv[20],
-            p_argv[21], p_argv[22], p_argv[23], p_argv[24], p_argv[25],
-            p_argv[26], p_argv[27], p_argv[28], p_argv[29], p_argv[30],
-            p_argv[31], p_argv[32], p_argv[33], p_argv[34], p_argv[35],
-            p_argv[36], p_argv[37], p_argv[38], p_argv[39]);
-    break;
-  case 41:
-    (*pkfn)(&gtid, &tid, p_argv[0], p_argv[1], p_argv[2], p_argv[3], p_argv[4],
-            p_argv[5], p_argv[6], p_argv[7], p_argv[8], p_argv[9], p_argv[10],
-            p_argv[11], p_argv[12], p_argv[13], p_argv[14], p_argv[15],
-            p_argv[16], p_argv[17], p_argv[18], p_argv[19], p_argv[20],
-            p_argv[21], p_argv[22], p_argv[23], p_argv[24], p_argv[25],
-            p_argv[26], p_argv[27], p_argv[28], p_argv[29], p_argv[30],
-            p_argv[31], p_argv[32], p_argv[33], p_argv[34], p_argv[35],
-            p_argv[36], p_argv[37], p_argv[38], p_argv[39], p_argv[40]);
-    break;
-  case 42:
-    (*pkfn)(&gtid, &tid, p_argv[0], p_argv[1], p_argv[2], p_argv[3], p_argv[4],
-            p_argv[5], p_argv[6], p_argv[7], p_argv[8], p_argv[9], p_argv[10],
-            p_argv[11], p_argv[12], p_argv[13], p_argv[14], p_argv[15],
-            p_argv[16], p_argv[17], p_argv[18], p_argv[19], p_argv[20],
-            p_argv[21], p_argv[22], p_argv[23], p_argv[24], p_argv[25],
-            p_argv[26], p_argv[27], p_argv[28], p_argv[29], p_argv[30],
-            p_argv[31], p_argv[32], p_argv[33], p_argv[34], p_argv[35],
-            p_argv[36], p_argv[37], p_argv[38], p_argv[39], p_argv[40],
-            p_argv[41]);
-    break;
-  case 43:
-    (*pkfn)(&gtid, &tid, p_argv[0], p_argv[1], p_argv[2], p_argv[3], p_argv[4],
-            p_argv[5], p_argv[6], p_argv[7], p_argv[8], p_argv[9], p_argv[10],
-            p_argv[11], p_argv[12], p_argv[13], p_argv[14], p_argv[15],
-            p_argv[16], p_argv[17], p_argv[18], p_argv[19], p_argv[20],
-            p_argv[21], p_argv[22], p_argv[23], p_argv[24], p_argv[25],
-            p_argv[26], p_argv[27], p_argv[28], p_argv[29], p_argv[30],
-            p_argv[31], p_argv[32], p_argv[33], p_argv[34], p_argv[35],
-            p_argv[36], p_argv[37], p_argv[38], p_argv[39], p_argv[40],
-            p_argv[41], p_argv[42]);
-    break;
-  case 44:
-    (*pkfn)(&gtid, &tid, p_argv[0], p_argv[1], p_argv[2], p_argv[3], p_argv[4],
-            p_argv[5], p_argv[6], p_argv[7], p_argv[8], p_argv[9], p_argv[10],
-            p_argv[11], p_argv[12], p_argv[13], p_argv[14], p_argv[15],
-            p_argv[16], p_argv[17], p_argv[18], p_argv[19], p_argv[20],
-            p_argv[21], p_argv[22], p_argv[23], p_argv[24], p_argv[25],
-            p_argv[26], p_argv[27], p_argv[28], p_argv[29], p_argv[30],
-            p_argv[31], p_argv[32], p_argv[33], p_argv[34], p_argv[35],
-            p_argv[36], p_argv[37], p_argv[38], p_argv[39], p_argv[40],
-            p_argv[41], p_argv[42], p_argv[43]);
-    break;
-  case 45:
-    (*pkfn)(&gtid, &tid, p_argv[0], p_argv[1], p_argv[2], p_argv[3], p_argv[4],
-            p_argv[5], p_argv[6], p_argv[7], p_argv[8], p_argv[9], p_argv[10],
-            p_argv[11], p_argv[12], p_argv[13], p_argv[14], p_argv[15],
-            p_argv[16], p_argv[17], p_argv[18], p_argv[19], p_argv[20],
-            p_argv[21], p_argv[22], p_argv[23], p_argv[24], p_argv[25],
-            p_argv[26], p_argv[27], p_argv[28], p_argv[29], p_argv[30],
-            p_argv[31], p_argv[32], p_argv[33], p_argv[34], p_argv[35],
-            p_argv[36], p_argv[37], p_argv[38], p_argv[39], p_argv[40],
-            p_argv[41], p_argv[42], p_argv[43], p_argv[44]);
-    break;
-  case 46:
-    (*pkfn)(&gtid, &tid, p_argv[0], p_argv[1], p_argv[2], p_argv[3], p_argv[4],
-            p_argv[5], p_argv[6], p_argv[7], p_argv[8], p_argv[9], p_argv[10],
-            p_argv[11], p_argv[12], p_argv[13], p_argv[14], p_argv[15],
-            p_argv[16], p_argv[17], p_argv[18], p_argv[19], p_argv[20],
-            p_argv[21], p_argv[22], p_argv[23], p_argv[24], p_argv[25],
-            p_argv[26], p_argv[27], p_argv[28], p_argv[29], p_argv[30],
-            p_argv[31], p_argv[32], p_argv[33], p_argv[34], p_argv[35],
-            p_argv[36], p_argv[37], p_argv[38], p_argv[39], p_argv[40],
-            p_argv[41], p_argv[42], p_argv[43], p_argv[44], p_argv[45]);
-    break;
-  case 47:
-    (*pkfn)(&gtid, &tid, p_argv[0], p_argv[1], p_argv[2], p_argv[3], p_argv[4],
-            p_argv[5], p_argv[6], p_argv[7], p_argv[8], p_argv[9], p_argv[10],
-            p_argv[11], p_argv[12], p_argv[13], p_argv[14], p_argv[15],
-            p_argv[16], p_argv[17], p_argv[18], p_argv[19], p_argv[20],
-            p_argv[21], p_argv[22], p_argv[23], p_argv[24], p_argv[25],
-            p_argv[26], p_argv[27], p_argv[28], p_argv[29], p_argv[30],
-            p_argv[31], p_argv[32], p_argv[33], p_argv[34], p_argv[35],
-            p_argv[36], p_argv[37], p_argv[38], p_argv[39], p_argv[40],
-            p_argv[41], p_argv[42], p_argv[43], p_argv[44], p_argv[45],
-            p_argv[46]);
-    break;
-  case 48:
-    (*pkfn)(&gtid, &tid, p_argv[0], p_argv[1], p_argv[2], p_argv[3], p_argv[4],
-            p_argv[5], p_argv[6], p_argv[7], p_argv[8], p_argv[9], p_argv[10],
-            p_argv[11], p_argv[12], p_argv[13], p_argv[14], p_argv[15],
-            p_argv[16], p_argv[17], p_argv[18], p_argv[19], p_argv[20],
-            p_argv[21], p_argv[22], p_argv[23], p_argv[24], p_argv[25],
-            p_argv[26], p_argv[27], p_argv[28], p_argv[29], p_argv[30],
-            p_argv[31], p_argv[32], p_argv[33], p_argv[34], p_argv[35],
-            p_argv[36], p_argv[37], p_argv[38], p_argv[39], p_argv[40],
-            p_argv[41], p_argv[42], p_argv[43], p_argv[44], p_argv[45],
-            p_argv[46], p_argv[47]);
-    break;
-  case 49:
-    (*pkfn)(&gtid, &tid, p_argv[0], p_argv[1], p_argv[2], p_argv[3], p_argv[4],
-            p_argv[5], p_argv[6], p_argv[7], p_argv[8], p_argv[9], p_argv[10],
-            p_argv[11], p_argv[12], p_argv[13], p_argv[14], p_argv[15],
-            p_argv[16], p_argv[17], p_argv[18], p_argv[19], p_argv[20],
-            p_argv[21], p_argv[22], p_argv[23], p_argv[24], p_argv[25],
-            p_argv[26], p_argv[27], p_argv[28], p_argv[29], p_argv[30],
-            p_argv[31], p_argv[32], p_argv[33], p_argv[34], p_argv[35],
-            p_argv[36], p_argv[37], p_argv[38], p_argv[39], p_argv[40],
-            p_argv[41], p_argv[42], p_argv[43], p_argv[44], p_argv[45],
-            p_argv[46], p_argv[47], p_argv[48]);
-    break;
-  case 50:
-    (*pkfn)(&gtid, &tid, p_argv[0], p_argv[1], p_argv[2], p_argv[3], p_argv[4],
-            p_argv[5], p_argv[6], p_argv[7], p_argv[8], p_argv[9], p_argv[10],
-            p_argv[11], p_argv[12], p_argv[13], p_argv[14], p_argv[15],
-            p_argv[16], p_argv[17], p_argv[18], p_argv[19], p_argv[20],
-            p_argv[21], p_argv[22], p_argv[23], p_argv[24], p_argv[25],
-            p_argv[26], p_argv[27], p_argv[28], p_argv[29], p_argv[30],
-            p_argv[31], p_argv[32], p_argv[33], p_argv[34], p_argv[35],
-            p_argv[36], p_argv[37], p_argv[38], p_argv[39], p_argv[40],
-            p_argv[41], p_argv[42], p_argv[43], p_argv[44], p_argv[45],
-            p_argv[46], p_argv[47], p_argv[48], p_argv[49]);
-    break;
-  case 51:
-    (*pkfn)(&gtid, &tid, p_argv[0], p_argv[1], p_argv[2], p_argv[3], p_argv[4],
-            p_argv[5], p_argv[6], p_argv[7], p_argv[8], p_argv[9], p_argv[10],
-            p_argv[11], p_argv[12], p_argv[13], p_argv[14], p_argv[15],
-            p_argv[16], p_argv[17], p_argv[18], p_argv[19], p_argv[20],
-            p_argv[21], p_argv[22], p_argv[23], p_argv[24], p_argv[25],
-            p_argv[26], p_argv[27], p_argv[28], p_argv[29], p_argv[30],
-            p_argv[31], p_argv[32], p_argv[33], p_argv[34], p_argv[35],
-            p_argv[36], p_argv[37], p_argv[38], p_argv[39], p_argv[40],
-            p_argv[41], p_argv[42], p_argv[43], p_argv[44], p_argv[45],
-            p_argv[46], p_argv[47], p_argv[48], p_argv[49], p_argv[50]);
-    break;
-  case 52:
-    (*pkfn)(&gtid, &tid, p_argv[0], p_argv[1], p_argv[2], p_argv[3], p_argv[4],
-            p_argv[5], p_argv[6], p_argv[7], p_argv[8], p_argv[9], p_argv[10],
-            p_argv[11], p_argv[12], p_argv[13], p_argv[14], p_argv[15],
-            p_argv[16], p_argv[17], p_argv[18], p_argv[19], p_argv[20],
-            p_argv[21], p_argv[22], p_argv[23], p_argv[24], p_argv[25],
-            p_argv[26], p_argv[27], p_argv[28], p_argv[29], p_argv[30],
-            p_argv[31], p_argv[32], p_argv[33], p_argv[34], p_argv[35],
-            p_argv[36], p_argv[37], p_argv[38], p_argv[39], p_argv[40],
-            p_argv[41], p_argv[42], p_argv[43], p_argv[44], p_argv[45],
-            p_argv[46], p_argv[47], p_argv[48], p_argv[49], p_argv[50],
-            p_argv[51]);
-    break;
-  case 53:
-    (*pkfn)(&gtid, &tid, p_argv[0], p_argv[1], p_argv[2], p_argv[3], p_argv[4],
-            p_argv[5], p_argv[6], p_argv[7], p_argv[8], p_argv[9], p_argv[10],
-            p_argv[11], p_argv[12], p_argv[13], p_argv[14], p_argv[15],
-            p_argv[16], p_argv[17], p_argv[18], p_argv[19], p_argv[20],
-            p_argv[21], p_argv[22], p_argv[23], p_argv[24], p_argv[25],
-            p_argv[26], p_argv[27], p_argv[28], p_argv[29], p_argv[30],
-            p_argv[31], p_argv[32], p_argv[33], p_argv[34], p_argv[35],
-            p_argv[36], p_argv[37], p_argv[38], p_argv[39], p_argv[40],
-            p_argv[41], p_argv[42], p_argv[43], p_argv[44], p_argv[45],
-            p_argv[46], p_argv[47], p_argv[48], p_argv[49], p_argv[50],
-            p_argv[51], p_argv[52]);
-    break;
-  case 54:
-    (*pkfn)(&gtid, &tid, p_argv[0], p_argv[1], p_argv[2], p_argv[3], p_argv[4],
-            p_argv[5], p_argv[6], p_argv[7], p_argv[8], p_argv[9], p_argv[10],
-            p_argv[11], p_argv[12], p_argv[13], p_argv[14], p_argv[15],
-            p_argv[16], p_argv[17], p_argv[18], p_argv[19], p_argv[20],
-            p_argv[21], p_argv[22], p_argv[23], p_argv[24], p_argv[25],
-            p_argv[26], p_argv[27], p_argv[28], p_argv[29], p_argv[30],
-            p_argv[31], p_argv[32], p_argv[33], p_argv[34], p_argv[35],
-            p_argv[36], p_argv[37], p_argv[38], p_argv[39], p_argv[40],
-            p_argv[41], p_argv[42], p_argv[43], p_argv[44], p_argv[45],
-            p_argv[46], p_argv[47], p_argv[48], p_argv[49], p_argv[50],
-            p_argv[51], p_argv[52], p_argv[53]);
-    break;
-  case 55:
-    (*pkfn)(&gtid, &tid, p_argv[0], p_argv[1], p_argv[2], p_argv[3], p_argv[4],
-            p_argv[5], p_argv[6], p_argv[7], p_argv[8], p_argv[9], p_argv[10],
-            p_argv[11], p_argv[12], p_argv[13], p_argv[14], p_argv[15],
-            p_argv[16], p_argv[17], p_argv[18], p_argv[19], p_argv[20],
-            p_argv[21], p_argv[22], p_argv[23], p_argv[24], p_argv[25],
-            p_argv[26], p_argv[27], p_argv[28], p_argv[29], p_argv[30],
-            p_argv[31], p_argv[32], p_argv[33], p_argv[34], p_argv[35],
-            p_argv[36], p_argv[37], p_argv[38], p_argv[39], p_argv[40],
-            p_argv[41], p_argv[42], p_argv[43], p_argv[44], p_argv[45],
-            p_argv[46], p_argv[47], p_argv[48], p_argv[49], p_argv[50],
-            p_argv[51], p_argv[52], p_argv[53], p_argv[54]);
-    break;
-  case 56:
-    (*pkfn)(&gtid, &tid, p_argv[0], p_argv[1], p_argv[2], p_argv[3], p_argv[4],
-            p_argv[5], p_argv[6], p_argv[7], p_argv[8], p_argv[9], p_argv[10],
-            p_argv[11], p_argv[12], p_argv[13], p_argv[14], p_argv[15],
-            p_argv[16], p_argv[17], p_argv[18], p_argv[19], p_argv[20],
-            p_argv[21], p_argv[22], p_argv[23], p_argv[24], p_argv[25],
-            p_argv[26], p_argv[27], p_argv[28], p_argv[29], p_argv[30],
-            p_argv[31], p_argv[32], p_argv[33], p_argv[34], p_argv[35],
-            p_argv[36], p_argv[37], p_argv[38], p_argv[39], p_argv[40],
-            p_argv[41], p_argv[42], p_argv[43], p_argv[44], p_argv[45],
-            p_argv[46], p_argv[47], p_argv[48], p_argv[49], p_argv[50],
-            p_argv[51], p_argv[52], p_argv[53], p_argv[54], p_argv[55]);
-    break;
-  case 57:
-    (*pkfn)(&gtid, &tid, p_argv[0], p_argv[1], p_argv[2], p_argv[3], p_argv[4],
-            p_argv[5], p_argv[6], p_argv[7], p_argv[8], p_argv[9], p_argv[10],
-            p_argv[11], p_argv[12], p_argv[13], p_argv[14], p_argv[15],
-            p_argv[16], p_argv[17], p_argv[18], p_argv[19], p_argv[20],
-            p_argv[21], p_argv[22], p_argv[23], p_argv[24], p_argv[25],
-            p_argv[26], p_argv[27], p_argv[28], p_argv[29], p_argv[30],
-            p_argv[31], p_argv[32], p_argv[33], p_argv[34], p_argv[35],
-            p_argv[36], p_argv[37], p_argv[38], p_argv[39], p_argv[40],
-            p_argv[41], p_argv[42], p_argv[43], p_argv[44], p_argv[45],
-            p_argv[46], p_argv[47], p_argv[48], p_argv[49], p_argv[50],
-            p_argv[51], p_argv[52], p_argv[53], p_argv[54], p_argv[55],
-            p_argv[56]);
-    break;
-  case 58:
-    (*pkfn)(&gtid, &tid, p_argv[0], p_argv[1], p_argv[2], p_argv[3], p_argv[4],
-            p_argv[5], p_argv[6], p_argv[7], p_argv[8], p_argv[9], p_argv[10],
-            p_argv[11], p_argv[12], p_argv[13], p_argv[14], p_argv[15],
-            p_argv[16], p_argv[17], p_argv[18], p_argv[19], p_argv[20],
-            p_argv[21], p_argv[22], p_argv[23], p_argv[24], p_argv[25],
-            p_argv[26], p_argv[27], p_argv[28], p_argv[29], p_argv[30],
-            p_argv[31], p_argv[32], p_argv[33], p_argv[34], p_argv[35],
-            p_argv[36], p_argv[37], p_argv[38], p_argv[39], p_argv[40],
-            p_argv[41], p_argv[42], p_argv[43], p_argv[44], p_argv[45],
-            p_argv[46], p_argv[47], p_argv[48], p_argv[49], p_argv[50],
-            p_argv[51], p_argv[52], p_argv[53], p_argv[54], p_argv[55],
-            p_argv[56], p_argv[57]);
-    break;
-  case 59:
-    (*pkfn)(&gtid, &tid, p_argv[0], p_argv[1], p_argv[2], p_argv[3], p_argv[4],
-            p_argv[5], p_argv[6], p_argv[7], p_argv[8], p_argv[9], p_argv[10],
-            p_argv[11], p_argv[12], p_argv[13], p_argv[14], p_argv[15],
-            p_argv[16], p_argv[17], p_argv[18], p_argv[19], p_argv[20],
-            p_argv[21], p_argv[22], p_argv[23], p_argv[24], p_argv[25],
-            p_argv[26], p_argv[27], p_argv[28], p_argv[29], p_argv[30],
-            p_argv[31], p_argv[32], p_argv[33], p_argv[34], p_argv[35],
-            p_argv[36], p_argv[37], p_argv[38], p_argv[39], p_argv[40],
-            p_argv[41], p_argv[42], p_argv[43], p_argv[44], p_argv[45],
-            p_argv[46], p_argv[47], p_argv[48], p_argv[49], p_argv[50],
-            p_argv[51], p_argv[52], p_argv[53], p_argv[54], p_argv[55],
-            p_argv[56], p_argv[57], p_argv[58]);
-    break;
-  case 60:
-    (*pkfn)(&gtid, &tid, p_argv[0], p_argv[1], p_argv[2], p_argv[3], p_argv[4],
-            p_argv[5], p_argv[6], p_argv[7], p_argv[8], p_argv[9], p_argv[10],
-            p_argv[11], p_argv[12], p_argv[13], p_argv[14], p_argv[15],
-            p_argv[16], p_argv[17], p_argv[18], p_argv[19], p_argv[20],
-            p_argv[21], p_argv[22], p_argv[23], p_argv[24], p_argv[25],
-            p_argv[26], p_argv[27], p_argv[28], p_argv[29], p_argv[30],
-            p_argv[31], p_argv[32], p_argv[33], p_argv[34], p_argv[35],
-            p_argv[36], p_argv[37], p_argv[38], p_argv[39], p_argv[40],
-            p_argv[41], p_argv[42], p_argv[43], p_argv[44], p_argv[45],
-            p_argv[46], p_argv[47], p_argv[48], p_argv[49], p_argv[50],
-            p_argv[51], p_argv[52], p_argv[53], p_argv[54], p_argv[55],
-            p_argv[56], p_argv[57], p_argv[58], p_argv[59]);
-    break;
-  case 61:
-    (*pkfn)(&gtid, &tid, p_argv[0], p_argv[1], p_argv[2], p_argv[3], p_argv[4],
-            p_argv[5], p_argv[6], p_argv[7], p_argv[8], p_argv[9], p_argv[10],
-            p_argv[11], p_argv[12], p_argv[13], p_argv[14], p_argv[15],
-            p_argv[16], p_argv[17], p_argv[18], p_argv[19], p_argv[20],
-            p_argv[21], p_argv[22], p_argv[23], p_argv[24], p_argv[25],
-            p_argv[26], p_argv[27], p_argv[28], p_argv[29], p_argv[30],
-            p_argv[31], p_argv[32], p_argv[33], p_argv[34], p_argv[35],
-            p_argv[36], p_argv[37], p_argv[38], p_argv[39], p_argv[40],
-            p_argv[41], p_argv[42], p_argv[43], p_argv[44], p_argv[45],
-            p_argv[46], p_argv[47], p_argv[48], p_argv[49], p_argv[50],
-            p_argv[51], p_argv[52], p_argv[53], p_argv[54], p_argv[55],
-            p_argv[56], p_argv[57], p_argv[58], p_argv[59], p_argv[60]);
-    break;
-  case 62:
-    (*pkfn)(&gtid, &tid, p_argv[0], p_argv[1], p_argv[2], p_argv[3], p_argv[4],
-            p_argv[5], p_argv[6], p_argv[7], p_argv[8], p_argv[9], p_argv[10],
-            p_argv[11], p_argv[12], p_argv[13], p_argv[14], p_argv[15],
-            p_argv[16], p_argv[17], p_argv[18], p_argv[19], p_argv[20],
-            p_argv[21], p_argv[22], p_argv[23], p_argv[24], p_argv[25],
-            p_argv[26], p_argv[27], p_argv[28], p_argv[29], p_argv[30],
-            p_argv[31], p_argv[32], p_argv[33], p_argv[34], p_argv[35],
-            p_argv[36], p_argv[37], p_argv[38], p_argv[39], p_argv[40],
-            p_argv[41], p_argv[42], p_argv[43], p_argv[44], p_argv[45],
-            p_argv[46], p_argv[47], p_argv[48], p_argv[49], p_argv[50],
-            p_argv[51], p_argv[52], p_argv[53], p_argv[54], p_argv[55],
-            p_argv[56], p_argv[57], p_argv[58], p_argv[59], p_argv[60],
-            p_argv[61]);
-    break;
-  case 63:
-    (*pkfn)(&gtid, &tid, p_argv[0], p_argv[1], p_argv[2], p_argv[3], p_argv[4],
-            p_argv[5], p_argv[6], p_argv[7], p_argv[8], p_argv[9], p_argv[10],
-            p_argv[11], p_argv[12], p_argv[13], p_argv[14], p_argv[15],
-            p_argv[16], p_argv[17], p_argv[18], p_argv[19], p_argv[20],
-            p_argv[21], p_argv[22], p_argv[23], p_argv[24], p_argv[25],
-            p_argv[26], p_argv[27], p_argv[28], p_argv[29], p_argv[30],
-            p_argv[31], p_argv[32], p_argv[33], p_argv[34], p_argv[35],
-            p_argv[36], p_argv[37], p_argv[38], p_argv[39], p_argv[40],
-            p_argv[41], p_argv[42], p_argv[43], p_argv[44], p_argv[45],
-            p_argv[46], p_argv[47], p_argv[48], p_argv[49], p_argv[50],
-            p_argv[51], p_argv[52], p_argv[53], p_argv[54], p_argv[55],
-            p_argv[56], p_argv[57], p_argv[58], p_argv[59], p_argv[60],
-            p_argv[61], p_argv[62]);
-    break;
-  case 64:
-    (*pkfn)(&gtid, &tid, p_argv[0], p_argv[1], p_argv[2], p_argv[3], p_argv[4],
-            p_argv[5], p_argv[6], p_argv[7], p_argv[8], p_argv[9], p_argv[10],
-            p_argv[11], p_argv[12], p_argv[13], p_argv[14], p_argv[15],
-            p_argv[16], p_argv[17], p_argv[18], p_argv[19], p_argv[20],
-            p_argv[21], p_argv[22], p_argv[23], p_argv[24], p_argv[25],
-            p_argv[26], p_argv[27], p_argv[28], p_argv[29], p_argv[30],
-            p_argv[31], p_argv[32], p_argv[33], p_argv[34], p_argv[35],
-            p_argv[36], p_argv[37], p_argv[38], p_argv[39], p_argv[40],
-            p_argv[41], p_argv[42], p_argv[43], p_argv[44], p_argv[45],
-            p_argv[46], p_argv[47], p_argv[48], p_argv[49], p_argv[50],
-            p_argv[51], p_argv[52], p_argv[53], p_argv[54], p_argv[55],
-            p_argv[56], p_argv[57], p_argv[58], p_argv[59], p_argv[60],
-            p_argv[61], p_argv[62], p_argv[63]);
   }
 
   return 1;
 }
 
 #endif
-
-#if KMP_USE_ABT
-
-// self_rank and master_place_id must be specified.
-static inline ABT_pool __kmp_abt_get_pool_thread(int self_rank,
-                                                 int master_place_id, int tid,
-                                                 int num_threads, int level,
-                                                 kmp_proc_bind_t proc_bind,
-                                                 int *p_place_id) {
-  KMP_DEBUG_ASSERT(self_rank >= 0);
-  KMP_DEBUG_ASSERT(master_place_id >= 0);
-  KMP_DEBUG_ASSERT(level >= 0);
-  KMP_DEBUG_ASSERT(tid >= 0);
-  if (level == 0) {
-    // The initial thread must be bound to the first place unless proc_bind is
-    // proc_bind_false
-    if (proc_bind == proc_bind_false || proc_bind == proc_bind_unset) {
-      // Push to a shared pool.
-      *p_place_id = -1;
-      return __kmp_abt_global.locals[self_rank].shared_pool;
-    } else {
-      // Push to the first place pool.
-      *p_place_id = 0;
-      return __kmp_abt_global.place_pools[0];
-    }
-  } else {
-    switch (proc_bind) {
-      case proc_bind_unset:
-        // Push to a shared pool.
-        *p_place_id = -1;
-        return __kmp_abt_global.locals[self_rank].shared_pool;
-      case proc_bind_close: {
-        const int num_places = __kmp_abt_global.num_places;
-        int push_place_id;
-        KMP_DEBUG_ASSERT(master_place_id != -1);
-        if (num_threads <= num_places) {
-          push_place_id = master_place_id + tid;
-        } else {
-          push_place_id = master_place_id + (tid * num_places) / num_threads;
-        }
-        push_place_id = (push_place_id >= num_places)
-                        ? (push_place_id - num_places) : push_place_id;
-        *p_place_id = push_place_id;
-        return __kmp_abt_global.place_pools[push_place_id];
-      }
-      case proc_bind_master: {
-        // Use master pool.
-        int place_id = __kmp_abt_global.locals[self_rank].place_id;
-        ABT_pool place_pool = __kmp_abt_global.locals[self_rank].place_pool;
-        *p_place_id = place_id;
-        return place_pool;
-      }
-      case proc_bind_spread:
-      case proc_bind_true: {
-        // Push to a place pool.
-        const int num_places = __kmp_abt_global.num_places;
-        int push_place_id = master_place_id + (tid * num_places) / num_threads;
-        push_place_id = (push_place_id >= num_places)
-                        ? (push_place_id - num_places) : push_place_id;
-        *p_place_id = push_place_id;
-        return __kmp_abt_global.place_pools[push_place_id];
-      }
-      case proc_bind_false:
-      default: {
-        // Push to a shared pool.
-        *p_place_id = -1;
-        return __kmp_abt_global.locals[self_rank].shared_pool;
-      }
-    }
-  }
-}
-
-static inline ABT_pool __kmp_abt_get_pool_task() {
-  int self_rank;
-  ABT_xstream_self_rank(&self_rank);
-  return __kmp_abt_global.locals[self_rank].shared_pool;
-}
-
-void __kmp_abt_release_info(kmp_info_t *th) {
-  KMP_DEBUG_ASSERT(th->th.th_active == TRUE);
-  TCW_4(th->th.th_active, FALSE);
-}
-
-void __kmp_abt_acquire_info_for_task(kmp_info_t *th, kmp_taskdata_t *taskdata,
-                                     const kmp_team_t *match_team, int atomic) {
-  if (atomic) {
-    while (1) {
-      // task must be executed by an inactive thread belonging to the same team;
-      // if not, yield to a scheduler.
-
-      // Quick check.
-      if (th->th.th_team != match_team)
-        goto END_WHILE;
-      // Take a lock.
-      if (KMP_COMPARE_AND_STORE_RET32(&th->th.th_active, FALSE, TRUE) != FALSE)
-        goto END_WHILE;
-      // th->th.th_team might have been updated while taking a lock; if th_team
-      // is not matched, yield to a scheduler.
-      if (th->th.th_team != match_team) {
-        __kmp_abt_release_info(th);
-        goto END_WHILE;
-      }
-      break;
-  END_WHILE:
-      ABT_thread_yield();
-    }
-  } else {
-    KMP_DEBUG_ASSERT(th->th.th_active == FALSE);
-    th->th.th_active = TRUE;
-  }
-  th->th.th_current_task = taskdata;
-}
-
-void __kmp_abt_set_self_info(kmp_info_t *th) {
-  ABT_thread self;
-
-  KMP_ASSERT(__kmp_init_runtime);
-  ABT_thread_self(&self);
-  if (self == ABT_THREAD_NULL) {
-    KMP_ASSERT(__kmp_init_gtid);
-    /* External threads might call OpenMP functions. */
-    int gtid = (size_t)pthread_getspecific(__kmp_gtid_threadprivate_key);
-    KA_TRACE(50, ("__kmp_abt_set_self_info: key:%d gtid:%d\n",
-                  __kmp_gtid_threadprivate_key, gtid));
-    __kmp_threads[gtid] = th;
-  } else {
-    int ret = ABT_thread_set_arg(self, (void *)th);
-    KMP_ASSERT(ret == ABT_SUCCESS);
-  }
-}
-
-kmp_info_t *__kmp_abt_get_self_info(void) {
-  ABT_thread self;
-
-  KMP_ASSERT(__kmp_init_runtime);
-  ABT_thread_self(&self);
-  if (self == ABT_THREAD_NULL) {
-    KMP_ASSERT(__kmp_init_gtid);
-    /* External threads might call OpenMP functions. */
-    int gtid = (size_t)pthread_getspecific(__kmp_gtid_threadprivate_key);
-    KA_TRACE(50, ("__kmp_abt_get_self_info: key:%d gtid:%d\n",
-                  __kmp_gtid_threadprivate_key, gtid));
-    return __kmp_threads[gtid];
-  } else {
-    kmp_info_t *th;
-    int ret = ABT_thread_get_arg(self, (void **)&th);
-    KMP_ASSERT(th != NULL);
-    KMP_ASSERT(ret == ABT_SUCCESS);
-    return th;
-  }
-}
-
-static void __kmp_abt_initialize(void) {
-  int status;
-  int num_xstreams;
-  int i, k;
-  kmp_abt_affinity_places_t *p_affinity_places = NULL;
-
-  {
-    int verbose = 0;
-    const char *env = getenv("KMP_ABT_VERBOSE");
-    if (env && atoi(env) != 0) {
-      verbose = 1;
-      printf("=== BOLT info (KMP_ABT_VERBOSE) ===\n");
-    }
-
-    env = getenv("KMP_ABT_NUM_ESS");
-    if (env) {
-      num_xstreams = atoi(env);
-      if (num_xstreams < __kmp_xproc)
-        __kmp_xproc = num_xstreams;
-    } else {
-      num_xstreams = __kmp_xproc;
-    }
-    if (verbose)
-      printf("KMP_ABT_NUM_ESS = %d\n", num_xstreams);
-
-    env = getenv("OMP_PLACES");
-    if (!env) {
-      env = getenv("KMP_AFFINITY");
-      if (!env) {
-        env = "threads";
-      } else {
-        if (verbose)
-          printf("[warning] BOLT does not support KMP_AFFINITY; "
-                 "parse it as OMP_PLACES.\n");
-      }
-    }
-    p_affinity_places = __kmp_abt_parse_affinity(num_xstreams, env, strlen(env),
-                                                 verbose);
-    {
-      bool failure = false;
-      for (int rank = 0; rank < num_xstreams; rank++) {
-        int num_assoc_places = 0;
-        int num_places = p_affinity_places->num_places;
-        for (int place_id = 0; place_id < num_places; place_id++) {
-          kmp_abt_affinity_place_t *p_place =
-              p_affinity_places->p_places[place_id];
-          for (int i = 0, num_ranks = p_place->num_ranks; i < num_ranks; i++) {
-            if (p_place->ranks[i] == rank)
-              num_assoc_places++;
-          }
-        }
-        if (num_assoc_places > 1) {
-          failure = true;
-          break;
-        }
-      }
-      if (failure) {
-        printf("[warning] More than one place are associated with the same "
-               "processor; fall back to a default affinity.\n");
-        __kmp_abt_affinity_places_free(p_affinity_places);
-        p_affinity_places = __kmp_abt_parse_affinity(num_xstreams, "threads",
-                                                     strlen("threads"),
-                                                     verbose);
-      }
-    }
-
-    env = getenv("KMP_ABT_FORK_CUTOFF");
-    if (env) {
-      __kmp_abt_global.fork_cutoff = atoi(env);
-      if (__kmp_abt_global.fork_cutoff <= 0)
-        __kmp_abt_global.fork_cutoff = 1;
-    } else {
-      __kmp_abt_global.fork_cutoff = KMP_ABT_FORK_CUTOFF_DEFAULT;
-    }
-    if (verbose)
-      printf("KMP_ABT_FORK_CUTOFF = %d\n", __kmp_abt_global.fork_cutoff);
-
-    env = getenv("KMP_ABT_FORK_NUM_WAYS");
-    if (env) {
-      __kmp_abt_global.fork_num_ways = atoi(env);
-      if (__kmp_abt_global.fork_num_ways <= 1)
-        __kmp_abt_global.fork_num_ways = 2;
-    } else {
-      __kmp_abt_global.fork_num_ways = KMP_ABT_FORK_NUM_WAYS_DEFAULT;
-    }
-    if (verbose)
-      printf("KMP_ABT_FORK_NUM_WAYS = %d\n", __kmp_abt_global.fork_num_ways);
-
-    env = getenv("KMP_ABT_SCHED_SLEEP");
-    if (env) {
-      __kmp_abt_global.is_sched_sleep = atoi(env);
-    } else {
-      __kmp_abt_global.is_sched_sleep = KMP_ABT_SCHED_SLEEP_DEFAULT;
-    }
-    if (verbose)
-      printf("KMP_ABT_SCHED_SLEEP = %d\n", __kmp_abt_global.is_sched_sleep);
-
-    env = getenv("KMP_ABT_SCHED_MIN_SLEEP_NSEC");
-    if (env) {
-      __kmp_abt_global.sched_sleep_min_nsec = atoi(env);
-      if (__kmp_abt_global.sched_sleep_min_nsec <= 0)
-        __kmp_abt_global.sched_sleep_min_nsec = 0;
-    } else {
-      __kmp_abt_global.sched_sleep_min_nsec
-          = KMP_ABT_SCHED_MIN_SLEEP_NSEC_DEFAULT;
-    }
-    if (verbose)
-      printf("KMP_ABT_SCHED_MIN_SLEEP_NSEC = %d\n",
-             __kmp_abt_global.sched_sleep_min_nsec);
-
-    env = getenv("KMP_ABT_SCHED_MAX_SLEEP_NSEC");
-    if (env) {
-      __kmp_abt_global.sched_sleep_max_nsec = atoi(env);
-      if (__kmp_abt_global.sched_sleep_max_nsec
-          < __kmp_abt_global.sched_sleep_min_nsec)
-        __kmp_abt_global.sched_sleep_max_nsec
-            = __kmp_abt_global.sched_sleep_min_nsec;
-    } else {
-      __kmp_abt_global.sched_sleep_max_nsec
-          = KMP_ABT_SCHED_MAX_SLEEP_NSEC_DEFAULT;
-    }
-    if (verbose)
-      printf("KMP_ABT_SCHED_MAX_SLEEP_NSEC = %d\n",
-             __kmp_abt_global.sched_sleep_max_nsec);
-
-    env = getenv("KMP_ABT_SCHED_EVENT_FREQ");
-    if (env) {
-      __kmp_abt_global.sched_event_freq = atoi(env);
-      if (__kmp_abt_global.sched_event_freq <= 1)
-        __kmp_abt_global.sched_event_freq = 1;
-      if (__kmp_abt_global.sched_event_freq > KMP_ABT_SCHED_EVENT_FREQ_MAX)
-        __kmp_abt_global.sched_event_freq = KMP_ABT_SCHED_EVENT_FREQ_MAX;
-    } else {
-      __kmp_abt_global.sched_event_freq = KMP_ABT_SCHED_EVENT_FREQ_DEFAULT;
-    }
-    // Must be 2^N
-    for (int digit = 0;; digit++) {
-      if ((1 << digit) >= __kmp_abt_global.sched_event_freq) {
-        __kmp_abt_global.sched_event_freq = 1 << digit;
-        break;
-       }
-    }
-    if (verbose)
-      printf("KMP_ABT_SCHED_EVENT_FREQ = %d\n",
-             __kmp_abt_global.sched_event_freq);
-
-    env = getenv("KMP_ABT_WORK_STEAL_FREQ");
-    if (env) {
-      __kmp_abt_global.work_steal_freq = atoi(env);
-      if (__kmp_abt_global.work_steal_freq <= 0)
-        __kmp_abt_global.work_steal_freq = 0;
-    } else {
-      __kmp_abt_global.work_steal_freq = KMP_ABT_WORK_STEAL_FREQ_DEFAULT;
-    }
-    // Must be 2^N
-    if (__kmp_abt_global.work_steal_freq != 0) {
-      for (uint32_t digit = 0;; digit++) {
-        if ((1u << digit) >= __kmp_abt_global.work_steal_freq) {
-          __kmp_abt_global.work_steal_freq = 1u << digit;
-          break;
-         }
-      }
-    }
-    if (verbose)
-      printf("KMP_ABT_WORK_STEAL_FREQ = %ud\n",
-             (unsigned int)__kmp_abt_global.work_steal_freq);
-  }
-
-  KA_TRACE(10, ("__kmp_abt_initialize: # of ESs = %d\n", num_xstreams));
-
-  __kmp_abt_global.locals = (kmp_abt_local *)__kmp_allocate
-      (sizeof(kmp_abt_local) * num_xstreams);
-  __kmp_abt_global.num_xstreams = num_xstreams;
-  for (int rank = 0; rank < num_xstreams; rank++) {
-    __kmp_abt_global.locals[rank].place_id = -1;
-    __kmp_abt_global.locals[rank].place_pool = ABT_POOL_NULL;
-  }
-
-  /* Create place pools. */
-  const int num_places = p_affinity_places->num_places;
-  KMP_ASSERT(num_places != 0);
-  ABT_pool *place_pools = (ABT_pool *)__kmp_allocate(sizeof(ABT_pool)
-                                                     * num_places);
-  __kmp_abt_global.num_places = num_places;
-  __kmp_abt_global.place_pools = place_pools;
-  for (int place_id = 0; place_id < num_places; place_id++) {
-    const int num_ranks = p_affinity_places->p_places[place_id]->num_ranks;
-    ABT_pool_access access = (num_ranks == 1) ? ABT_POOL_ACCESS_MPSC
-                                              : ABT_POOL_ACCESS_MPMC;
-    status = ABT_pool_create_basic(ABT_POOL_FIFO, access, ABT_TRUE,
-                                   &place_pools[place_id]);
-    KMP_CHECK_SYSFAIL("ABT_pool_create_basic", status);
-    for (int i = 0; i < num_ranks; i++) {
-      int rank = p_affinity_places->p_places[place_id]->ranks[i];
-      __kmp_abt_global.locals[rank].place_id = place_id;
-      __kmp_abt_global.locals[rank].place_pool = place_pools[place_id];
-    }
-  }
-  __kmp_abt_affinity_places_free(p_affinity_places);
-
-  /* Create shared/private pools */
-  for (i = 0; i < num_xstreams; i++) {
-    status = ABT_pool_create_basic(ABT_POOL_FIFO, ABT_POOL_ACCESS_MPMC,
-                                   ABT_TRUE,
-                                   &__kmp_abt_global.locals[i].shared_pool);
-    KMP_CHECK_SYSFAIL("ABT_pool_create_basic", status);
-  }
-
-  /* Create schedulers */
-  ABT_sched_def sched_def = {
-    .type = ABT_SCHED_TYPE_ULT,
-    .init = __kmp_abt_sched_init,
-    .run = __kmp_abt_sched_run,
-    .free = __kmp_abt_sched_free,
-    .get_migr_pool = NULL
-  };
-
-  ABT_pool *my_pools;
-  my_pools = (ABT_pool *)malloc((num_xstreams + 1) * sizeof(ABT_pool));
-
-  for (i = 0; i < num_xstreams; i++) {
-    for (k = 0; k < num_xstreams; k++) {
-      my_pools[k] =
-          __kmp_abt_global.locals[(i + k) % num_xstreams].shared_pool;
-    }
-    int num_pools = num_xstreams;
-    if (__kmp_abt_global.locals[i].place_id != -1) {
-      my_pools[num_pools++] = __kmp_abt_global.locals[i].place_pool;
-    }
-    status = ABT_sched_create(&sched_def, num_pools, my_pools,
-                              ABT_SCHED_CONFIG_NULL,
-                              &__kmp_abt_global.locals[i].sched);
-    KMP_CHECK_SYSFAIL("ABT_sched_create", status);
-  }
-
-  free(my_pools);
-
-  /* Create ESs */
-  status = ABT_xstream_self(&__kmp_abt_global.locals[0].xstream);
-  KMP_CHECK_SYSFAIL("ABT_xstream_self", status);
-  status = ABT_xstream_set_main_sched(__kmp_abt_global.locals[0].xstream,
-                                      __kmp_abt_global.locals[0].sched);
-  KMP_CHECK_SYSFAIL("ABT_xstream_set_main_sched", status);
-  for (i = 1; i < num_xstreams; i++) {
-    status = ABT_xstream_create(__kmp_abt_global.locals[i].sched,
-                                &__kmp_abt_global.locals[i].xstream);
-    KMP_CHECK_SYSFAIL("ABT_xstream_create", status);
-  }
-}
-
-static void __kmp_abt_finalize(void) {
-  int status;
-  int i;
-
-  for (i = 1; i < __kmp_abt_global.num_xstreams; i++) {
-    status = ABT_xstream_join(__kmp_abt_global.locals[i].xstream);
-    KMP_CHECK_SYSFAIL("ABT_xstream_join", status);
-    status = ABT_xstream_free(&__kmp_abt_global.locals[i].xstream);
-    KMP_CHECK_SYSFAIL("ABT_xstream_free", status);
-  }
-
-  /* Free schedulers */
-  for (i = 1; i < __kmp_abt_global.num_xstreams; i++) {
-    status = ABT_sched_free(&__kmp_abt_global.locals[i].sched);
-    KMP_CHECK_SYSFAIL("ABT_sched_free", status);
-  }
-
-  __kmp_free(__kmp_abt_global.locals);
-  __kmp_free(__kmp_abt_global.place_pools);
-  __kmp_abt_global.num_xstreams = 0;
-  __kmp_abt_global.locals = NULL;
-  __kmp_abt_global.place_pools = NULL;
-}
-
-volatile int __kmp_abt_init_global = FALSE;
-void __kmp_abt_global_initialize() {
-  int status;
-  // Initialize Argobots before other initializations.
-  status = ABT_init(0, NULL);
-  KMP_CHECK_SYSFAIL("ABT_init", status);
-  __kmp_abt_init_global = TRUE;
-}
-
-void __kmp_abt_global_destroy() {
-  ABT_finalize();
-  __kmp_abt_init_global = FALSE;
-}
-
-static int __kmp_abt_sched_init(ABT_sched sched, ABT_sched_config config) {
-  return ABT_SUCCESS;
-}
-
-static void __kmp_abt_sched_run(ABT_sched sched) {
-  uint32_t work_count = 0;
-  int num_pools, num_shared_pools = __kmp_abt_global.num_xstreams;
-  int rank;
-  ABT_xstream_self_rank(&rank);
-  ABT_pool *shared_pools;
-  ABT_pool place_pool;
-  uint32_t seed;
-  const int sched_event_freq = __kmp_abt_global.sched_event_freq;
-  const int sched_sleep_min_nsec = __kmp_abt_global.sched_sleep_min_nsec;
-  const int sched_sleep_max_nsec = __kmp_abt_global.sched_sleep_max_nsec;
-  int sched_sleep_nsec = __kmp_abt_global.is_sched_sleep ? sched_sleep_min_nsec
-                                                         : -1;
-  const uint32_t work_steal_freq = __kmp_abt_global.work_steal_freq;
-  do {
-    seed = (uint32_t)time(NULL) + 64 + rank;
-  } while (seed == 0);
-  KMP_DEBUG_ASSERT(!(sched_event_freq & (sched_event_freq - 1))); // must be 2^N
-  const uint32_t sched_event_freq_mask = sched_event_freq - 1;
-  KMP_DEBUG_ASSERT(!(work_steal_freq & (work_steal_freq - 1))); // must be 2^N
-  const uint32_t work_steal_freq_mask = work_steal_freq - 1;
-
-  ABT_sched_get_num_pools(sched, &num_pools);
-  shared_pools = (ABT_pool *)alloca(num_pools * sizeof(ABT_pool));
-  ABT_sched_get_pools(sched, num_pools, 0, shared_pools);
-  place_pool = __kmp_abt_global.locals[rank].place_pool;
-
-  while (1) {
-    ABT_unit unit;
-    int run_cnt = 0;
-
-    /* From the place pool */
-    if (place_pool != ABT_POOL_NULL) {
-      ABT_pool_pop(place_pool, &unit);
-      if (unit != ABT_UNIT_NULL) {
-        ABT_xstream_run_unit(unit, place_pool);
-        run_cnt++;
-      }
-    }
-
-    /* From the shared pool */
-    ABT_pool_pop(shared_pools[0], &unit);
-    if (unit != ABT_UNIT_NULL) {
-      ABT_xstream_run_unit(unit, shared_pools[0]);
-      run_cnt++;
-    }
-
-    /* Steal a work unit from other pools */
-    if (num_shared_pools >= 2
-        && (run_cnt == 0 || !(work_count & work_steal_freq_mask))) {
-      int target = __kmp_abt_fast_rand32(&seed) %
-                   ((uint32_t)(num_shared_pools - 1)) + 1;
-      ABT_pool_pop(shared_pools[target], &unit);
-      if (unit != ABT_UNIT_NULL) {
-        ABT_unit_set_associated_pool(unit, shared_pools[0]);
-        ABT_xstream_run_unit(unit, shared_pools[0]);
-        run_cnt++;
-      }
-    }
-
-    if (!(++work_count & sched_event_freq_mask)) {
-      ABT_bool stop;
-      ABT_xstream_check_events(sched);
-      ABT_sched_has_to_stop(sched, &stop);
-      if (stop == ABT_TRUE)
-        break;
-      if (sched_sleep_nsec >= 0) {
-        if (run_cnt == 0) {
-          struct timespec sleep_time;
-          sleep_time.tv_sec = 0;
-          sleep_time.tv_nsec = sched_sleep_nsec;
-          nanosleep(&sleep_time, NULL);
-          sched_sleep_nsec = (sched_sleep_nsec == 0) ? 1
-                              : (sched_sleep_nsec << 1);
-          if (sched_sleep_nsec > sched_sleep_max_nsec) {
-            sched_sleep_nsec = sched_sleep_max_nsec;
-          }
-        } else {
-          sched_sleep_nsec = sched_sleep_min_nsec;
-        }
-      }
-    }
-  }
-}
-
-static int __kmp_abt_sched_free(ABT_sched sched) {
-    return ABT_SUCCESS;
-}
-
-static inline void __kmp_abt_free_task(kmp_info_t *th, kmp_taskdata_t *taskdata)
-{
-  int gtid = __kmp_gtid_from_thread(th);
-
-  KA_TRACE(30, ("__kmp_abt_free_task: (enter) T#%d - task %p\n",
-                gtid, taskdata));
-
-  /* [AC] we need those steps to mark the task as finished so the dependencies
-   *  can be completed */
-  taskdata->td_flags.complete = 1; // mark the task as completed
-  __kmp_release_deps(gtid, taskdata);
-  taskdata->td_flags.executing = 0; // suspend the finishing task
-
-  // Wait for all tasks after releasing (=pushing) dependent tasks
-  __kmp_abt_wait_child_tasks(th, true, FALSE);
-
-  taskdata->td_flags.freed = 1;
-
-  /* Free the task queue if it was allocated. */
-  if (taskdata->td_task_queue) {
-    KMP_DEBUG_ASSERT(taskdata->td_tq_cur_size == 0);
-    KMP_INTERNAL_FREE(taskdata->td_task_queue);
-  }
-
-  // deallocate the taskdata and shared variable blocks associated with this
-  // task
-#if USE_FAST_MEMORY
-  __kmp_fast_free(th, taskdata);
-#else
-  __kmp_thread_free(th, taskdata);
-#endif
-
-  KA_TRACE(30, ("__kmp_abt_free_task: (exit) T#%d - task %p\n",
-                gtid, taskdata));
-}
-
-static void __kmp_abt_execute_task(void *arg) {
-  // It is corresponding to __kmp_execute_tasks_.
-
-  kmp_task_t *task = (kmp_task_t *)arg;
-  kmp_taskdata_t *taskdata = KMP_TASK_TO_TASKDATA(task);
-  kmp_info_t *th;
-
-  th = __kmp_abt_bind_task_to_thread(taskdata->td_team, taskdata);
-
-  KA_TRACE(20, ("__kmp_abt_execute_task: T#%d before executing task %p.\n",
-                __kmp_gtid_from_thread(th), task));
-
-  // See __kmp_task_start
-  taskdata->td_flags.started = 1;
-  taskdata->td_flags.executing = 1;
-  KMP_DEBUG_ASSERT(taskdata->td_flags.complete == 0);
-  KMP_DEBUG_ASSERT(taskdata->td_flags.freed == 0);
-
-  while (1) {
-    // Run __kmp_invoke_task to handle internal counters correctly.
-#ifdef KMP_GOMP_COMPAT
-    if (taskdata->td_flags.native) {
-      ((void (*)(void *))(*(task->routine)))(task->shareds);
-    } else
-#endif /* KMP_GOMP_COMPAT */
-    {
-      (*(task->routine))(__kmp_gtid_from_thread(th), task);
-    }
-
-    if (!taskdata->td_flags.tiedness) {
-      // If this task is an untied one, we need to retrieve kmp_info because it
-      // may have been changed.
-      th = __kmp_abt_get_self_info();
-    }
-    // See __kmp_task_finish (untied)
-    if (taskdata->td_flags.tiedness == TASK_UNTIED) {
-      // Check if we can finish this task.
-      kmp_int32 counter = KMP_ATOMIC_DEC(&taskdata->td_untied_count) - 1;
-      if (counter > 0) {
-        // We should keep this ULT.
-        continue;
-      }
-    }
-    // tied or finished untied.
-    break;
-  }
-
-  // See __kmp_task_finish (tied/finished untied)
-  // KMP_DEBUG_ASSERT(taskdata->td_flags.executing == 0);
-  taskdata->td_flags.executing = 0;
-  KMP_DEBUG_ASSERT(taskdata->td_flags.complete == 0);
-  taskdata->td_flags.complete = 1; // mark the task as completed
-  // KMP_DEBUG_ASSERT(taskdata->td_flags.started == 1);
-  // KMP_DEBUG_ASSERT(taskdata->td_flags.freed == 0);
-
-  // Free this task.
-  __kmp_abt_free_task(th, taskdata);
-
-  // Reset th's ownership.
-  __kmp_abt_release_info(th);
-
-  KA_TRACE(20, ("__kmp_abt_execute_task: T#%d after executing task %p.\n",
-                __kmp_gtid_from_thread(th), task));
-}
-
-int __kmp_abt_create_task(kmp_info_t *th, kmp_task_t *task) {
-  int status;
-  ABT_pool dest = __kmp_abt_get_pool_task();
-
-  KA_TRACE(20, ("__kmp_abt_create_task: T#%d before creating task %p into the "
-                "pool %p.\n", __kmp_gtid_from_thread(th), task, dest));
-
-  /* Check if the task queue has an empty slot. */
-  kmp_taskdata_t *td = th->th.th_current_task;
-  if (td->td_tq_cur_size == td->td_tq_max_size) {
-    size_t new_max_size;
-    if (td->td_tq_max_size == 0) {
-      /* Empty queue. We allocate 32 slots by default. */
-      new_max_size = 32;
-    } else {
-      /* The task queue is full. Expand it. */
-      new_max_size = td->td_tq_max_size * 2;
-    }
-
-    void *queue = (void *)td->td_task_queue;
-    size_t size = sizeof(kmp_abt_task_t) * new_max_size;
-    td->td_task_queue = (kmp_abt_task_t *)KMP_INTERNAL_REALLOC(queue, size);
-    td->td_tq_max_size = new_max_size;
-  }
-
-  status = ABT_thread_create(dest, __kmp_abt_execute_task, (void *)task,
-                             ABT_THREAD_ATTR_NULL,
-                             &td->td_task_queue[td->td_tq_cur_size++]);
-  KMP_ASSERT(status == ABT_SUCCESS);
-
-  KA_TRACE(20, ("__kmp_abt_create_task: T#%d after creating task %p into the "
-                "pool %p.\n", __kmp_gtid_from_thread(th), task, dest));
-
-  return TRUE;
-}
-
-kmp_info_t *__kmp_abt_wait_child_tasks(kmp_info_t *th, bool thread_bind,
-                                       int yield) {
-  KA_TRACE(20, ("__kmp_abt_wait_child_tasks: T#%d enter\n",
-                __kmp_gtid_from_thread(th)));
-
-  int i, status;
-  kmp_taskdata_t *taskdata = th->th.th_current_task;
-  // Get the associated team before releasing the ownership of th.
-  kmp_team_t *team = th->th.th_team;
-  kmp_info_t *new_th = th;
-
-  if (taskdata->td_tq_cur_size == 0) {
-    /* leaf task case */
-    if (yield) {
-      __kmp_abt_release_info(th);
-
-      ABT_thread_yield();
-
-      if (thread_bind || taskdata->td_flags.tiedness) {
-        __kmp_abt_acquire_info_for_task(th, taskdata, team);
-      } else {
-        new_th = __kmp_abt_bind_task_to_thread(team, taskdata);
-      }
-    }
-    KA_TRACE(20, ("__kmp_abt_wait_child_tasks: T#%d done\n",
-                  __kmp_gtid_from_thread(new_th)));
-    return new_th;
-  }
-
-  /* Let others, e.g., tasks, can use this kmp_info */
-  __kmp_abt_release_info(th);
-
-  /* Give other tasks a chance for execution */
-  if (yield)
-    ABT_thread_yield();
-
-  /* Wait until all child tasks are complete. */
-  for (i = 0; i < taskdata->td_tq_cur_size; i++) {
-    status = ABT_thread_free(&taskdata->td_task_queue[i]);
-    KMP_ASSERT(status == ABT_SUCCESS);
-  }
-  taskdata->td_tq_cur_size = 0;
-
-  if (thread_bind || taskdata->td_flags.tiedness) {
-    /* Obtain kmp_info to continue the original task. */
-    __kmp_abt_acquire_info_for_task(th, taskdata, team);
-  } else {
-    new_th = __kmp_abt_bind_task_to_thread(team, taskdata);
-  }
-
-  KA_TRACE(20, ("__kmp_abt_wait_child_tasks: T#%d done\n",
-                __kmp_gtid_from_thread(new_th)));
-  return new_th;
-}
-
-kmp_info_t *__kmp_abt_bind_task_to_thread(kmp_team_t *team,
-                                          kmp_taskdata_t *taskdata) {
-  int i, i_start, i_end;
-  kmp_info_t *th = NULL;
-
-  KA_TRACE(20, ("__kmp_abt_bind_task_to_thread: (enter) task %p\n", taskdata));
-
-  /* To handle gtid in the task code, we look for a suspended (blocked)
-   * thread in the team and use its info to execute this task. */
-  while (1) {
-    if (team->t.t_level <= 1) {
-      /* outermost team - we try to assign the thread that was executed on
-       * the same ES first and then check other threads in the team.  */
-      int rank;
-      ABT_xstream_self_rank(&rank);
-      if (rank < team->t.t_nproc) {
-        /* [SM] I think this condition should always be true, but just in
-         * case I miss something we check this condition. */
-        i_start = rank;
-        i_end = team->t.t_nproc + rank;
-      } else {
-        i_start = 0;
-        i_end = team->t.t_nproc;
-      }
-    } else {
-      /* nested team - we ignore the ES info since threads in the nested team
-       * may be executed by any ES. */
-      i_start = 0;
-      i_end = team->t.t_nproc;
-    }
-    /* TODO: This is a linear search. Can we do better? */
-    for (i = i_start; i < i_end; i++) {
-      int idx = (i < team->t.t_nproc) ? i : i % team->t.t_nproc;
-      th = team->t.t_threads[idx];
-      ABT_thread ult = th->th.th_info.ds.ds_thread;
-
-      if (th->th.th_active == FALSE && ult != ABT_THREAD_NULL) {
-        /* Try to take the ownership of kmp_info 'th' */
-        if (th->th.th_team != team)
-          continue;
-        if (KMP_COMPARE_AND_STORE_RET32(&th->th.th_active, FALSE, TRUE)
-            == FALSE) {
-          if (th->th.th_team != team) {
-            __kmp_abt_release_info(th);
-            continue;
-          }
-          /* Bind this task as if it is executed by 'th'. */
-          th->th.th_current_task = taskdata;
-          th->th.th_task_team = taskdata->td_task_team;
-          __kmp_abt_set_self_info(th);
-          KA_TRACE(20, ("__kmp_abt_bind_task_to_thread: (exit) task %p"
-                        "bound to T#%d\n",
-                        taskdata, __kmp_gtid_from_thread(th)));
-          return th;
-        }
-      }
-    }
-    /* We could not find an available kmp_info. Thus, this task yields
-     * control to other work units and will try to find one later. */
-    ABT_thread_yield();
-  }
-  return NULL;
-}
-
-void __kmp_abt_create_uber(int gtid, kmp_info_t *th, size_t stack_size) {
-  KMP_DEBUG_ASSERT(KMP_UBER_GTID(gtid));
-  KA_TRACE(10, ("__kmp_abt_create_uber: T#%d\n", gtid));
-  ABT_thread handle;
-  ABT_thread_self(&handle);
-  if (handle == ABT_THREAD_NULL) {
-    // External threads might call this function.  In this case, we do not need
-    // to set `th` since external threads use pthread_setspecific,
-    __kmp_gtid_set_specific(gtid);
-  } else {
-    ABT_thread_set_arg(handle, (void *)th);
-  }
-  th->th.th_info.ds.ds_thread = handle;
-}
-
-#endif // KMP_USE_ABT
 
 // end of file //

@@ -1,5 +1,5 @@
 // RUN: %libomp-compile && env OMP_DISPLAY_AFFINITY=true OMP_PLACES='{0},{0,1},{0},{0,1},{0},{0,1},{0},{0,1},{0},{0,1},{0}' %libomp-run | %python %S/check.py -c 'CHECK' %s
-// REQUIRES: affinity && !abt
+// REQUIRES: affinity
 
 #include <stdio.h>
 #include <stdlib.h>

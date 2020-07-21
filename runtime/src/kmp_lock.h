@@ -19,10 +19,6 @@
 #include "kmp_debug.h"
 #include "kmp_os.h"
 
-#if KMP_USE_ABT
-#include <abt.h>
-#endif
-
 #ifdef __cplusplus
 #include <atomic>
 
@@ -87,157 +83,6 @@ typedef struct kmp_lock_pool kmp_lock_pool_t;
 
 extern void __kmp_validate_locks(void);
 
-#if KMP_USE_ABT
-
-struct KMP_ALIGN_CACHE kmp_abt_mutex_lock {
-  // `initialized' must be the first entry in the lock data structure!
-  volatile kmp_abt_mutex_lock *initialized;
-  kmp_int32 owner_gtid, nest_level;
-  char lock;
-  ident_t const *location;
-  kmp_lock_flags_t flags;
-};
-
-#define KMP_ABT_MUTEX_LOCK_INITIALIZER(lock) {NULL, 0, 0, 0, NULL, 0}
-
-typedef struct kmp_abt_mutex_lock kmp_abt_mutex_lock_t;
-
-struct KMP_ALIGN_CACHE kmp_abt_spin_lock {
-  char lock;
-};
-typedef struct kmp_abt_spin_lock kmp_abt_spin_lock_t;
-
-static inline int __kmp_abt_acquire_spin_lock(kmp_abt_spin_lock_t *lck) {
-  while (KMP_XCHG_FIXED8(&lck->lock, 1)) {
-    while (*((volatile char *)&lck->lock) == 1) {
-      if (ABT_initialized() == ABT_SUCCESS)
-        ABT_thread_yield();
-    }
-    KMP_MB();
-  }
-  return 0;
-}
-
-static inline int __kmp_abt_test_spin_lock(kmp_abt_spin_lock_t *lck) {
-  if (KMP_XCHG_FIXED8(&lck->lock, 1)) {
-    return 1;
-  } else {
-    // Successfully take the lock.
-    return 0;
-  }
-}
-
-static inline void __kmp_abt_release_spin_lock(kmp_abt_spin_lock_t *lck) {
-  KMP_MB();
-  lck->lock = 0;
-  KMP_MB();
-}
-
-static inline void __kmp_abt_init_spin_lock(kmp_abt_spin_lock_t *lck) {
-  lck->lock = 0;
-}
-
-static inline void __kmp_abt_destroy_spin_lock(kmp_abt_spin_lock_t *lck) {
-  ; // Do nothing.
-}
-
-#define KMP_ABT_SPIN_LOCK_INITIALIZER(lock) {0}
-
-struct KMP_ALIGN_CACHE kmp_abt_rspin_lock {
-  char lock;
-  int owner_rank;
-  int depth;
-};
-typedef struct kmp_abt_rspin_lock kmp_abt_rspin_lock_t;
-
-static inline int __kmp_abt_acquire_rspin_lock_impl(kmp_abt_rspin_lock_t *lck,
-                                                    int if_es_flag) {
-BEGIN_SPIN_LOCK:
-  int rank;
-  {
-    if (ABT_initialized() != ABT_SUCCESS) {
-      rank = -1;
-    } else if (ABT_xstream_self_rank(&rank) != ABT_SUCCESS) {
-      rank = -1;
-    }
-  }
-  if (if_es_flag && rank == -1)
-    return 0;
-  if (rank >= 0 && lck->owner_rank == rank) {
-    lck->depth++;
-  } else {
-    if (KMP_XCHG_FIXED8(&lck->lock, 1)) {
-      if (ABT_initialized() == ABT_SUCCESS)
-        ABT_thread_yield();
-      goto BEGIN_SPIN_LOCK;
-    }
-    KMP_MB();
-    // Successfully take the lock.
-    KMP_DEBUG_ASSERT(lck->depth == 0);
-    KMP_DEBUG_ASSERT(lck->owner_rank == -1);
-    lck->owner_rank = rank;
-  }
-  return 0;
-}
-
-static inline int __kmp_abt_test_rspin_lock(kmp_abt_rspin_lock_t *lck) {
-  int rank;
-  {
-    if (ABT_initialized() != ABT_SUCCESS) {
-      rank = -1;
-    } else if (ABT_xstream_self_rank(&rank) != ABT_SUCCESS) {
-      rank = -1;
-    }
-  }
-  if (rank >= 0 && lck->owner_rank == rank) {
-    // Successfully take the lock.
-    lck->depth++;
-    return 0;
-  } else {
-    if (KMP_XCHG_FIXED8(&lck->lock, 1)) {
-      return 1;
-    } else {
-      // Successfully take the lock.
-      KMP_DEBUG_ASSERT(lck->depth == 0);
-      KMP_DEBUG_ASSERT(lck->owner_rank == -1);
-      lck->owner_rank = rank;
-      return 0;
-    }
-  }
-}
-
-static inline void __kmp_abt_release_rspin_lock_impl(kmp_abt_rspin_lock_t *lck,
-                                                     int if_es_flag) {
-  if (if_es_flag) {
-    int rank;
-    if (ABT_initialized() != ABT_SUCCESS
-        || ABT_xstream_self_rank(&rank) != ABT_SUCCESS)
-        return;
-  }
-  if (lck->depth == 0) {
-    lck->owner_rank = -1;
-    KMP_MB();
-    lck->lock = 0;
-    KMP_MB();
-  } else {
-    lck->depth--;
-  }
-}
-
-static inline void __kmp_abt_init_rspin_lock(kmp_abt_rspin_lock_t *lck) {
-  lck->lock = 0;
-  lck->owner_rank = -1;
-  lck->depth = 0;
-}
-
-static inline void __kmp_abt_destroy_rspin_lock(kmp_abt_rspin_lock_t *lck) {
-  ; // Do nothing.
-}
-
-#define KMP_ABT_RSPIN_LOCK_INITIALIZER(lock) {0, -1, 0}
-
-#endif // KMP_USE_ABT
-
 // ----------------------------------------------------------------------------
 //  There are 5 lock implementations:
 //       1. Test and set locks.
@@ -273,14 +118,6 @@ static inline void __kmp_abt_destroy_rspin_lock(kmp_abt_rspin_lock_t *lck) {
 // set locks.
 // ----------------------------------------------------------------------------
 
-#if KMP_USE_ABT
-
-typedef kmp_abt_mutex_lock_t kmp_tas_lock_t;
-
-#define KMP_TAS_LOCK_INITIALIZER KMP_ABT_MUTEX_LOCK_INITIALIZER
-
-#else // KMP_USE_ABT
-
 struct kmp_base_tas_lock {
   // KMP_LOCK_FREE(tas) => unlocked; locked: (gtid+1) of owning thread
   std::atomic<kmp_int32> poll;
@@ -303,8 +140,6 @@ typedef union kmp_tas_lock kmp_tas_lock_t;
   {                                                                            \
     { ATOMIC_VAR_INIT(KMP_LOCK_FREE(tas)), 0 }                                 \
   }
-
-#endif // !KMP_USE_ABT
 
 extern int __kmp_acquire_tas_lock(kmp_tas_lock_t *lck, kmp_int32 gtid);
 extern int __kmp_test_tas_lock(kmp_tas_lock_t *lck, kmp_int32 gtid);
@@ -340,14 +175,6 @@ extern void __kmp_destroy_nested_tas_lock(kmp_tas_lock_t *lck);
 // set locks. With non-nested futex locks, the lock owner is not even available.
 // ----------------------------------------------------------------------------
 
-#if KMP_USE_ABT
-
-typedef kmp_abt_mutex_lock_t kmp_futex_lock_t;
-
-#define KMP_FUTEX_LOCK_INITIALIZER KMP_ABT_MUTEX_LOCK_INITIALIZER
-
-#else // KMP_USE_ABT
-
 struct kmp_base_futex_lock {
   volatile kmp_int32 poll; // KMP_LOCK_FREE(futex) => unlocked
   // 2*(gtid+1) of owning thread, 0 if unlocked
@@ -373,8 +200,6 @@ typedef union kmp_futex_lock kmp_futex_lock_t;
     { KMP_LOCK_FREE(futex), 0 }                                                \
   }
 
-#endif // !KMP_USE_ABT
-
 extern int __kmp_acquire_futex_lock(kmp_futex_lock_t *lck, kmp_int32 gtid);
 extern int __kmp_test_futex_lock(kmp_futex_lock_t *lck, kmp_int32 gtid);
 extern int __kmp_release_futex_lock(kmp_futex_lock_t *lck, kmp_int32 gtid);
@@ -393,15 +218,6 @@ extern void __kmp_destroy_nested_futex_lock(kmp_futex_lock_t *lck);
 
 // ----------------------------------------------------------------------------
 // Ticket locks.
-
-
-#if KMP_USE_ABT
-
-typedef kmp_abt_mutex_lock_t kmp_ticket_lock_t;
-
-#define KMP_TICKET_LOCK_INITIALIZER KMP_ABT_MUTEX_LOCK_INITIALIZER
-
-#else // KMP_USE_ABT
 
 #ifdef __cplusplus
 
@@ -467,8 +283,6 @@ typedef union kmp_ticket_lock kmp_ticket_lock_t;
     }                                                                          \
   }
 
-#endif // !KMP_USE_ABT
-
 extern int __kmp_acquire_ticket_lock(kmp_ticket_lock_t *lck, kmp_int32 gtid);
 extern int __kmp_test_ticket_lock(kmp_ticket_lock_t *lck, kmp_int32 gtid);
 extern int __kmp_test_ticket_lock_with_cheks(kmp_ticket_lock_t *lck,
@@ -488,12 +302,6 @@ extern void __kmp_destroy_nested_ticket_lock(kmp_ticket_lock_t *lck);
 
 // ----------------------------------------------------------------------------
 // Queuing locks.
-
-#if KMP_USE_ABT
-
-typedef kmp_abt_mutex_lock_t kmp_queuing_lock_t;
-
-#else // KMP_USE_ABT
 
 #if KMP_USE_ADAPTIVE_LOCKS
 
@@ -583,8 +391,6 @@ union KMP_ALIGN_CACHE kmp_queuing_lock {
 
 typedef union kmp_queuing_lock kmp_queuing_lock_t;
 
-#endif // !KMP_USE_ABT
-
 extern int __kmp_acquire_queuing_lock(kmp_queuing_lock_t *lck, kmp_int32 gtid);
 extern int __kmp_test_queuing_lock(kmp_queuing_lock_t *lck, kmp_int32 gtid);
 extern int __kmp_release_queuing_lock(kmp_queuing_lock_t *lck, kmp_int32 gtid);
@@ -604,12 +410,6 @@ extern void __kmp_destroy_nested_queuing_lock(kmp_queuing_lock_t *lck);
 
 // ----------------------------------------------------------------------------
 // Adaptive locks.
-#if KMP_USE_ABT
-
-typedef kmp_abt_mutex_lock_t kmp_adaptive_lock_t;
-
-#else // KMP_USE_ABT
-
 struct kmp_base_adaptive_lock {
   kmp_base_queuing_lock qlk;
   KMP_ALIGN(CACHE_LINE)
@@ -629,18 +429,10 @@ typedef union kmp_adaptive_lock kmp_adaptive_lock_t;
 
 #define GET_QLK_PTR(l) ((kmp_queuing_lock_t *)&(l)->lk.qlk)
 
-#endif // !KMP_USE_ABT
-
 #endif // KMP_USE_ADAPTIVE_LOCKS
 
 // ----------------------------------------------------------------------------
 // DRDPA ticket locks.
-#if KMP_USE_ABT
-
-typedef kmp_abt_mutex_lock_t kmp_drdpa_lock_t;
-
-#else // KMP_USE_ABT
-
 struct kmp_base_drdpa_lock {
   // All of the fields on the first cache line are only written when
   // initializing or reconfiguring the lock.  These are relatively rare
@@ -696,8 +488,6 @@ union KMP_ALIGN_CACHE kmp_drdpa_lock {
 
 typedef union kmp_drdpa_lock kmp_drdpa_lock_t;
 
-#endif // !KMP_USE_ABT
-
 extern int __kmp_acquire_drdpa_lock(kmp_drdpa_lock_t *lck, kmp_int32 gtid);
 extern int __kmp_test_drdpa_lock(kmp_drdpa_lock_t *lck, kmp_int32 gtid);
 extern int __kmp_release_drdpa_lock(kmp_drdpa_lock_t *lck, kmp_int32 gtid);
@@ -724,48 +514,6 @@ extern void __kmp_destroy_nested_drdpa_lock(kmp_drdpa_lock_t *lck);
 // implemented with other lock kinds as they require gtids which are not
 // available at initialization time.
 
-#if KMP_USE_ABT
-
-typedef kmp_abt_spin_lock_t kmp_bootstrap_lock_t;
-
-extern int __kmp_acquire_bootstrap_lock(kmp_bootstrap_lock_t *lck);
-extern int __kmp_test_bootstrap_lock(kmp_bootstrap_lock_t *lck);
-extern void __kmp_release_bootstrap_lock(kmp_bootstrap_lock_t *lck);
-extern void __kmp_init_bootstrap_lock(kmp_bootstrap_lock_t *lck);
-extern void __kmp_destroy_bootstrap_lock(kmp_bootstrap_lock_t *lck);
-
-static inline kmp_bootstrap_lock_t __kmp_bootstrap_lock_init_helper
-                                   (kmp_bootstrap_lock_t *lck) {
-  __kmp_init_bootstrap_lock(lck);
-  return *lck;
-}
-#define KMP_BOOTSTRAP_LOCK_INITIALIZER(lock)                                   \
-        __kmp_bootstrap_lock_init_helper(&lock)
-#define KMP_BOOTSTRAP_LOCK_INIT(lock)                                          \
-  kmp_bootstrap_lock_t lock = KMP_ABT_SPIN_LOCK_INITIALIZER(lock)
-
-typedef kmp_abt_rspin_lock_t kmp_rbootstrap_lock_t;
-
-// Recursive bootstrap lock. An owner must be an execution stream to
-// acquire the lock recursively.
-extern int __kmp_acquire_rbootstrap_lock(kmp_rbootstrap_lock_t *lck);
-extern int __kmp_acquire_rbootstrap_lock_if_es(kmp_rbootstrap_lock_t *lck);
-extern int __kmp_test_rbootstrap_lock(kmp_rbootstrap_lock_t *lck);
-extern void __kmp_release_rbootstrap_lock(kmp_rbootstrap_lock_t *lck);
-extern void __kmp_release_rbootstrap_lock_if_es(kmp_rbootstrap_lock_t *lck);
-extern void __kmp_init_rbootstrap_lock(kmp_rbootstrap_lock_t *lck);
-extern void __kmp_destroy_rbootstrap_lock(kmp_rbootstrap_lock_t *lck);
-
-static inline kmp_rbootstrap_lock_t __kmp_rbootstrap_lock_init_helper
-                                    (kmp_rbootstrap_lock_t *lck) {
-  __kmp_init_rbootstrap_lock(lck);
-  return *lck;
-}
-#define KMP_RBOOTSTRAP_LOCK_INITIALIZER(lock) \
-        __kmp_rbootstrap_lock_init_helper(&lock)
-
-#else // KMP_USE_ABT
-
 typedef kmp_ticket_lock_t kmp_bootstrap_lock_t;
 
 #define KMP_BOOTSTRAP_LOCK_INITIALIZER(lock) KMP_TICKET_LOCK_INITIALIZER((lock))
@@ -791,8 +539,6 @@ static inline void __kmp_init_bootstrap_lock(kmp_bootstrap_lock_t *lck) {
 static inline void __kmp_destroy_bootstrap_lock(kmp_bootstrap_lock_t *lck) {
   __kmp_destroy_ticket_lock(lck);
 }
-
-#endif // !KMP_USE_ABT
 
 // Internal RTL locks.
 //
@@ -1287,9 +1033,8 @@ extern void __kmp_cleanup_user_locks();
 
 // Shortcuts
 #define KMP_USE_INLINED_TAS                                                    \
-  (KMP_OS_LINUX && (KMP_ARCH_X86 || KMP_ARCH_X86_64 || KMP_ARCH_ARM))          \
-  && !KMP_USE_ABT && 1
-#define KMP_USE_INLINED_FUTEX KMP_USE_FUTEX && !KMP_USE_ABT && 0
+  (KMP_OS_LINUX && (KMP_ARCH_X86 || KMP_ARCH_X86_64 || KMP_ARCH_ARM)) && 1
+#define KMP_USE_INLINED_FUTEX KMP_USE_FUTEX && 0
 
 // List of lock definitions; all nested locks are indirect locks.
 // hle lock is xchg lock prefixed with XACQUIRE/XRELEASE.

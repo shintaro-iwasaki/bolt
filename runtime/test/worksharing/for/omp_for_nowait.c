@@ -18,8 +18,7 @@ void wait_for_release_then_increment(int rank)
 {
   fprintf(stderr, "Thread nr %d enters first for construct"
     " and waits.\n", rank);
-  while (release == 0)
-    THREAD_SCHED_POINT();
+  while (release == 0);
   #pragma omp atomic
   count++;
 }
