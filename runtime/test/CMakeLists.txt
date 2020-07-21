@@ -2,6 +2,12 @@
 include(CheckFunctionExists)
 include(CheckLibraryExists)
 
+# Remove -Werror
+set(CMAKE_C_FLAGS "${CMAKE_ORIG_C_FLAGS}")
+set(CMAKE_CXX_FLAGS "${CMAKE_ORIG_CXX_FLAGS}")
+string(REPLACE " -Werror" "" CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
+string(REPLACE " -Werror" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+
 # Some tests use math functions
 check_library_exists(m sqrt "" LIBOMP_HAVE_LIBM)
 # When using libgcc, -latomic may be needed for atomics
@@ -15,6 +21,10 @@ else()
   # not needed
   set(LIBOMP_HAVE_LIBATOMIC 0)
 endif()
+
+# Undo changes
+set(CMAKE_ORIG_C_FLAGS "${CMAKE_C_FLAGS}")
+set(CMAKE_ORIG_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
 
 macro(pythonize_bool var)
   if (${var})

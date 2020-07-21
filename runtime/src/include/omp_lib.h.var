@@ -53,6 +53,13 @@
       integer omp_event_handle_kind
       parameter(omp_event_handle_kind=int_ptr_kind())
 
+      character(*)bolt_version
+      parameter(bolt_version='@BOLT_VERSION@')
+      integer(kind=omp_integer_kind)bolt_numversion
+      parameter(bolt_numversion=@BOLT_NUMVERSION@)
+      character(*)bolt_release_date
+      parameter(bolt_release_date='@BOLT_RELEASE_DATE@')
+
       integer(kind=omp_integer_kind)openmp_version
       parameter(openmp_version=@LIBOMP_OMP_YEAR_MONTH@)
       integer(kind=omp_integer_kind)kmp_version_major

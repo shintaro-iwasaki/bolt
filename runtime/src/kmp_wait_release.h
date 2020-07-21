@@ -20,6 +20,8 @@
 #include "ompt-specific.h"
 #endif
 
+#if !KMP_USE_ABT
+
 /*!
 @defgroup WAIT_RELEASE Wait/Release operations
 
@@ -931,5 +933,7 @@ static inline void __kmp_null_resume_wrapper(int gtid, volatile void *flag) {
 /*!
 @}
 */
+
+#endif // !KMP_USE_ABT
 
 #endif // KMP_WAIT_RELEASE_H

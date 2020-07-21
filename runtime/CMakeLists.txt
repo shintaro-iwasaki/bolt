@@ -123,6 +123,19 @@ set(LIBOMP_USE_HWLOC FALSE CACHE BOOL
 set(LIBOMP_HWLOC_INSTALL_DIR /usr/local CACHE PATH
   "Install path for hwloc library")
 
+# Argobots-support
+set(LIBOMP_USE_ARGOBOTS FALSE CACHE BOOL
+  "Use Argobots (http://www.argobots.org) as threading model?")
+set(LIBOMP_REMOVE_FORKJOIN_LOCK FALSE CACHE BOOL
+  "Remove FORK_JOIN_LOCK (experimental)")
+if(LIBOMP_USE_ARGOBOTS)
+  set(KMP_USE_ABT 1)
+  set(KMP_ABT_USE_SELF_INFO 1)
+  set(BOLT_THREAD_TYPE BOLT_THREAD_ARGOBOTS)
+else()
+  set(BOLT_THREAD_TYPE BOLT_THREAD_NATIVE)
+endif()
+
 # Get the build number from kmp_version.cpp
 libomp_get_build_number("${CMAKE_CURRENT_SOURCE_DIR}" LIBOMP_VERSION_BUILD)
 math(EXPR LIBOMP_VERSION_BUILD_YEAR "${LIBOMP_VERSION_BUILD}/10000")
@@ -186,6 +199,11 @@ endif()
 # Include itt notify interface?
 set(LIBOMP_USE_ITT_NOTIFY TRUE CACHE BOOL
   "Enable ITT notify?")
+
+if(LIBOMP_USE_ARGOBOTS)
+  # BOLT does not support it.
+  set(LIBOMP_USE_ITT_NOTIFY FALSE)
+endif()
 
 # normal, profile, stubs library.
 set(NORMAL_LIBRARY FALSE)
@@ -317,6 +335,11 @@ if(LIBOMP_USE_HWLOC AND (NOT LIBOMP_HAVE_HWLOC))
   libomp_error_say("Hwloc requested but not available")
 endif()
 
+# Error check Argobots support after config-ix has run
+if(LIBOMP_USE_ARGOBOTS AND (NOT LIBOMP_HAVE_ARGOBOTS))
+  libomp_error_say("Argobots requested but not available")
+endif()
+
 # Hierarchical scheduling support
 set(LIBOMP_USE_HIER_SCHED FALSE CACHE BOOL
   "Hierarchical scheduling support?")
@@ -342,6 +365,26 @@ else()
 endif()
 
 set(LIBOMP_LIB_FILE ${LIBOMP_LIB_NAME}${LIBOMP_LIBRARY_SUFFIX})
+
+# Set BOLT version, release date, and build information
+set(BOLT_VERSION "1.0")
+set(BOLT_NUMVERSION "10000300")
+set(BOLT_RELEASE_DATE "Tue May 5 6:00:00 UTC 2020")
+set(BOLT_COMPILER_CC ${CMAKE_C_COMPILER})
+set(BOLT_COMPILER_CXX ${CMAKE_CXX_COMPILER})
+if("${libomp_build_type_lowercase}" STREQUAL "release")
+  set(BOLT_COMPILER_CFLAGS ${CMAKE_C_FLAGS_RELEASE})
+  set(BOLT_COMPILER_CXXFLAGS ${CMAKE_CXX_FLAGS_RELEASE})
+elseif("${libomp_build_type_lowercase}" STREQUAL "debug")
+  set(BOLT_COMPILER_CFLAGS ${CMAKE_C_FLAGS_DEBUG})
+  set(BOLT_COMPILER_CXXFLAGS ${CMAKE_CXX_FLAGS_DEBUG})
+elseif("${libomp_build_type_lowercase}" STREQUAL "relwithdebinfo")
+  set(BOLT_COMPILER_CFLAGS ${CMAKE_C_FLAGS_RELWITHDEBINFO})
+  set(BOLT_COMPILER_CXXFLAGS ${CMAKE_CXX_FLAGS_RELWITHDEBINFO})
+elseif("${libomp_build_type_lowercase}" STREQUAL "minsizerel")
+  set(BOLT_COMPILER_CFLAGS ${CMAKE_C_FLAGS_RELEASE})
+  set(BOLT_COMPILER_CXXFLAGS ${CMAKE_CXX_FLAGS_RELEASE})
+endif()
 
 # Optional backwards compatibility aliases.
 set(LIBOMP_INSTALL_ALIASES TRUE CACHE BOOL
@@ -376,6 +419,9 @@ if(${OPENMP_STANDALONE_BUILD})
   libomp_say("Use quad precision   -- ${LIBOMP_USE_QUAD_PRECISION}")
   libomp_say("Use TSAN-support     -- ${LIBOMP_TSAN_SUPPORT}")
   libomp_say("Use Hwloc library    -- ${LIBOMP_USE_HWLOC}")
+  libomp_say("Use Argobots         -- ${LIBOMP_USE_ARGOBOTS}")
+  libomp_say("Use builtin Argobots -- ${LIBOMP_USE_BUILTIN_ARGOBOTS}")
+  libomp_say("Argobots path        -- ${LIBOMP_ARGOBOTS_INSTALL_DIR}")
 endif()
 
 add_subdirectory(src)

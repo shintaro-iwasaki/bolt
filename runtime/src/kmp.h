@@ -18,6 +18,10 @@
 
 /* #define BUILD_PARALLEL_ORDERED 1 */
 
+#if KMP_USE_ABT
+#include "kmp_abt.h"
+#endif
+
 /* This fix replaces gettimeofday with clock_gettime for better scalability on
    the Altix.  Requires user code to be linked with -lrt. */
 //#define FIX_SGI_CLOCK
@@ -118,7 +122,7 @@ typedef unsigned int kmp_hwloc_depth_t;
 #endif
 #include "kmp_i18n.h"
 
-#define KMP_HANDLE_SIGNALS (KMP_OS_UNIX || KMP_OS_WINDOWS)
+#define KMP_HANDLE_SIGNALS ((KMP_OS_UNIX || KMP_OS_WINDOWS) && !KMP_USE_ABT)
 
 #include "kmp_wrapper_malloc.h"
 #if KMP_OS_UNIX
@@ -803,7 +807,10 @@ typedef enum kmp_proc_bind_t {
   proc_bind_close,
   proc_bind_spread,
   proc_bind_intel, // use KMP_AFFINITY interface
-  proc_bind_default
+  proc_bind_default,
+#if KMP_USE_ABT
+  proc_bind_unset
+#endif
 } kmp_proc_bind_t;
 
 typedef struct kmp_nested_proc_bind_t {
@@ -967,7 +974,8 @@ extern void __kmp_fini_memkind();
 #define KMP_MIN_NTH 1
 
 #ifndef KMP_MAX_NTH
-#if defined(PTHREAD_THREADS_MAX) && PTHREAD_THREADS_MAX < INT_MAX
+#if defined(PTHREAD_THREADS_MAX) && PTHREAD_THREADS_MAX < INT_MAX \
+    && !KMP_USE_ABT
 #define KMP_MAX_NTH PTHREAD_THREADS_MAX
 #else
 #define KMP_MAX_NTH INT_MAX
@@ -1351,6 +1359,18 @@ struct kmp_region_info {
 /* ---------------------------------------------------------------------- */
 /* ---------------------------------------------------------------------- */
 
+#if KMP_USE_ABT
+
+typedef ABT_thread kmp_thread_t;
+typedef ABT_key kmp_key_t;
+typedef ABT_thread kmp_abt_task_t;
+typedef ABT_barrier kmp_barrier_t;
+typedef pthread_key_t kmp_pth_key_t;
+
+extern kmp_pth_key_t __kmp_gtid_threadprivate_key;
+
+#else
+
 #if KMP_OS_WINDOWS
 typedef HANDLE kmp_thread_t;
 typedef DWORD kmp_key_t;
@@ -1362,6 +1382,8 @@ typedef pthread_key_t kmp_key_t;
 #endif
 
 extern kmp_key_t __kmp_gtid_threadprivate_key;
+
+#endif
 
 typedef struct kmp_sys_info {
   long maxrss; /* the maximum resident set size utilized (in kilobytes)     */
@@ -2301,6 +2323,11 @@ struct kmp_taskdata { /* aligned during dynamic allocation       */
 #if OMPT_SUPPORT
   ompt_task_info_t ompt_task_info;
 #endif
+#if KMP_USE_ABT
+  kmp_abt_task_t *td_task_queue; // child tasks
+  kmp_int32 td_tq_cur_size; // current size of td_task_queue
+  kmp_int32 td_tq_max_size; // maximum size of td_task_queue
+#endif
 }; // struct kmp_taskdata
 
 // Make sure padding above worked
@@ -2468,6 +2495,10 @@ typedef struct KMP_ALIGN_CACHE kmp_base_info {
 #endif
   int th_prev_level; /* previous level for affinity format */
   int th_prev_num_threads; /* previous num_threads for affinity format */
+#if KMP_USE_ABT
+  int th_current_place_id; /* place id currently bound to */
+  int th_creation_group_end_tid; /* For N-way thread creation. */
+#endif /* KMP_USE_ABT */
 #if USE_ITT_BUILD
   kmp_uint64 th_bar_arrive_time; /* arrival to barrier timestamp */
   kmp_uint64 th_bar_min_time; /* minimum arrival time at the barrier */
@@ -2519,8 +2550,10 @@ typedef struct KMP_ALIGN_CACHE kmp_base_info {
   kmp_hier_private_bdata_t *th_hier_bar_data;
 #endif
 
+#if !KMP_USE_ABT
   /* Add the syncronizing data which is cache aligned and padded. */
   KMP_ALIGN_CACHE kmp_balign_t th_bar[bs_last_barrier];
+#endif
 
   KMP_ALIGN_CACHE volatile kmp_int32
       th_next_waiting; /* gtid+1 of next thread on lock wait queue, 0 if none */
@@ -2602,7 +2635,11 @@ typedef struct KMP_ALIGN_CACHE kmp_base_team {
   // Synchronization Data
   // ---------------------------------------------------------------------------
   KMP_ALIGN_CACHE kmp_ordered_team_t t_ordered;
+#if KMP_USE_ABT
+  kmp_barrier_t t_team_bar;
+#else
   kmp_balign_team_t t_bar[bs_last_barrier];
+#endif
   std::atomic<int> t_construct; // count of single directive encountered by team
   char pad[sizeof(kmp_lock_t)]; // padding to maintain performance on big iron
 
@@ -2669,6 +2706,14 @@ typedef struct KMP_ALIGN_CACHE kmp_base_team {
   // omp_set_num_threads() call
   omp_allocator_handle_t t_def_allocator; /* default allocator */
 
+#if KMP_USE_ABT && KMP_BARRIER_ICV_PUSH
+  KMP_ALIGN_CACHE
+  kmp_internal_control_t t_master_icvs; // master's icvs
+  // both are updated in __kmp_abt_xxx_workers
+  int t_master_place_id; // Inform child threads of the affinity information.
+  kmp_proc_bind_t t_proc_bind_applied;
+#endif
+
 // Read/write by workers as well
 #if (KMP_ARCH_X86 || KMP_ARCH_X86_64)
   // Using CACHE_LINE=64 reduces memory footprint, but causes a big perf
@@ -2723,13 +2768,9 @@ typedef union KMP_ALIGN_CACHE kmp_global {
 } kmp_global_t;
 
 typedef struct kmp_base_root {
-  // TODO: GEH - combine r_active with r_in_parallel then r_active ==
-  // (r_in_parallel>= 0)
   // TODO: GEH - then replace r_active with t_active_levels if we can to reduce
   // the synch overhead or keeping r_active
   volatile int r_active; /* TRUE if some region in a nest has > 1 thread */
-  // keeps a count of active parallel regions per root
-  std::atomic<int> r_in_parallel;
   // GEH: This is misnamed, should be r_active_levels
   kmp_team_t *r_root_team;
   kmp_team_t *r_hot_team;
@@ -2750,6 +2791,10 @@ struct fortran_inx_info {
 };
 
 /* ------------------------------------------------------------------------ */
+
+#if KMP_USE_ABT
+extern volatile int __kmp_abt_init_global;
+#endif
 
 extern int __kmp_settings;
 extern int __kmp_duplicate_library_ok;
@@ -2908,6 +2953,10 @@ extern int __kmp_max_nth;
 // maximum total number of concurrently-existing threads in a contention group
 extern int __kmp_cg_max_nth;
 extern int __kmp_teams_max_nth; // max threads used in a teams construct
+#if KMP_REMOVE_FORKJOIN_LOCK
+/* __kmp_threads_capacity must be protected by __kmp_threads_lock */
+/* write: lock  read: anytime */
+#endif
 extern int __kmp_threads_capacity; /* capacity of the arrays __kmp_threads and
                                       __kmp_root */
 extern int __kmp_dflt_team_nth; /* default number of threads in a parallel
@@ -3019,6 +3068,7 @@ extern int __kmp_omp_cancellation; /* TRUE or FALSE */
 
 /* ------------------------------------------------------------------------- */
 
+#if !KMP_REMOVE_FORKJOIN_LOCK
 /* the following are protected by the fork/join lock */
 /* write: lock  read: anytime */
 extern kmp_info_t **__kmp_threads; /* Descriptors for the threads */
@@ -3036,6 +3086,30 @@ extern std::atomic<int> __kmp_thread_pool_active_nth;
 
 extern kmp_root_t **__kmp_root; /* root of thread hierarchy */
 /* end data protected by fork/join lock */
+#else
+/* write: lock  read: anytime */
+extern kmp_info_t **__kmp_threads; /* Descriptors for the threads */
+extern kmp_bootstrap_lock_t __kmp_threads_lock;
+/* read/write: lock */
+extern volatile kmp_team_t *__kmp_team_pool;
+extern kmp_bootstrap_lock_t __kmp_team_pool_lock;
+/* read/write: lock */
+extern volatile kmp_info_t *__kmp_thread_pool;
+extern kmp_info_t *__kmp_thread_pool_insert_pt;
+extern kmp_bootstrap_lock_t __kmp_thread_pool_lock;
+
+// Must be updated atomically
+// total num threads reachable from some root thread including all root threads
+extern volatile int __kmp_nth;
+/* total number of threads reachable from some root thread including all root
+   threads, and those in the thread pool */
+extern volatile int __kmp_all_nth;
+extern int __kmp_thread_pool_nth;
+extern std::atomic<int> __kmp_thread_pool_active_nth;
+
+extern kmp_root_t **__kmp_root; /* root of thread hierarchy */
+#endif
+
 /* ------------------------------------------------------------------------- */
 
 #define __kmp_get_gtid() __kmp_get_global_thread_id()
@@ -3371,9 +3445,15 @@ extern int __kmp_read_system_info(struct kmp_sys_info *info);
 extern void __kmp_create_monitor(kmp_info_t *th);
 #endif
 
+#if !KMP_USE_ABT
 extern void *__kmp_launch_thread(kmp_info_t *thr);
+#endif
 
+#if !KMP_USE_ABT
 extern void __kmp_create_worker(int gtid, kmp_info_t *th, size_t stack_size);
+#else
+extern void __kmp_abt_create_workers(kmp_team_t *team);
+#endif
 
 #if KMP_OS_WINDOWS
 extern int __kmp_still_running(kmp_info_t *th);
@@ -3572,6 +3652,25 @@ extern kmp_uint64 __kmp_hardware_timestamp(void);
 
 #if KMP_OS_UNIX
 extern int __kmp_read_from_file(char const *path, char const *format, ...);
+#endif
+
+#if KMP_USE_ABT
+extern void __kmp_abt_global_initialize(void);
+extern void __kmp_abt_global_destroy(void);
+extern void __kmp_abt_create_uber(int gtid, kmp_info_t *th, size_t stack_size);
+extern void __kmp_abt_join_workers(kmp_team_t *team);
+extern int __kmp_abt_create_task(kmp_info_t *th, kmp_task_t *task);
+extern kmp_info_t *__kmp_abt_wait_child_tasks(kmp_info_t *th, bool thread_bind,
+                                              int yield);
+extern kmp_info_t *__kmp_abt_bind_task_to_thread(kmp_team_t *team,
+                                                 kmp_taskdata_t *taskdata);
+extern void __kmp_abt_set_self_info(kmp_info_t *th);
+extern kmp_info_t *__kmp_abt_get_self_info(void);
+extern void __kmp_abt_release_info(kmp_info_t *th);
+extern void __kmp_abt_acquire_info_for_task(kmp_info_t *th,
+                                            kmp_taskdata_t *taskdata,
+                                            const kmp_team_t *match_team,
+                                            int atomic = 1);
 #endif
 
 /* ------------------------------------------------------------------------ */

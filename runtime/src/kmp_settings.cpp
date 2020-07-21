@@ -354,11 +354,14 @@ static void __kmp_stg_parse_size(char const *name, char const *value,
   }
 } // __kmp_stg_parse_size
 
+
+#if KMP_AFFINITY_SUPPORTED || OMPT_SUPPORT
 static void __kmp_stg_parse_str(char const *name, char const *value,
                                 char **out) {
   __kmp_str_free(out);
   *out = __kmp_str_format("%s", value);
 } // __kmp_stg_parse_str
+#endif
 
 static void __kmp_stg_parse_int(
     char const
@@ -498,10 +501,10 @@ int __kmp_initial_threads_capacity(int req_nproc) {
 
   /* MIN( MAX( 32, 4 * $OMP_NUM_THREADS, 4 * omp_get_num_procs() ),
    * __kmp_max_nth) */
-  if (nth < (4 * req_nproc))
-    nth = (4 * req_nproc);
-  if (nth < (4 * __kmp_xproc))
-    nth = (4 * __kmp_xproc);
+  if (nth < (512 * req_nproc))
+    nth = (512 * req_nproc);
+  if (nth < (512 * __kmp_xproc))
+    nth = (512 * __kmp_xproc);
 
   if (nth > __kmp_max_nth)
     nth = __kmp_max_nth;
@@ -3166,6 +3169,13 @@ static void __kmp_stg_parse_proc_bind(char const *name, char const *value,
         buf = next;
         SKIP_WS(buf);
         bind = proc_bind_spread;
+#if KMP_USE_ABT
+      } else if ((num == (int)proc_bind_unset) ||
+                 __kmp_match_str("unset", buf, &next)) {
+        buf = next;
+        SKIP_WS(buf);
+        bind = proc_bind_unset;
+#endif
       } else {
         KMP_WARNING(StgInvalidValue, name, value);
         __kmp_nested_proc_bind.bind_types[0] = proc_bind_false;
@@ -3242,6 +3252,12 @@ static void __kmp_stg_print_proc_bind(kmp_str_buf_t *buffer, char const *name,
       case proc_bind_default:
         __kmp_str_buf_print(buffer, "default");
         break;
+
+#if KMP_USE_ABT
+      case proc_bind_unset:
+        __kmp_str_buf_print(buffer, "unset");
+        break;
+#endif
       }
       if (i < nelem - 1) {
         __kmp_str_buf_print(buffer, ",");
@@ -4050,6 +4066,14 @@ static void __kmp_stg_parse_lock_kind(char const *name, char const *value,
     return;
   }
 
+#if KMP_USE_ABT
+  if (true) {
+      // BOLT only supports a queuing lock.
+      KMP_WARNING(LockTypeNotSupported, name, value);
+      __kmp_user_lock_kind = lk_queuing;
+      KMP_STORE_LOCK_SEQ(queuing);
+  } else
+#endif
   if (__kmp_str_match("tas", 2, value) ||
       __kmp_str_match("test and set", 2, value) ||
       __kmp_str_match("test_and_set", 2, value) ||
