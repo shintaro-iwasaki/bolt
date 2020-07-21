@@ -76,10 +76,8 @@ static void __kmp_partition_places(kmp_team_t *team,
                                    int update_master_only = 0);
 #endif
 static void __kmp_do_serial_initialize(void);
-#if !KMP_USE_ABT
 void __kmp_fork_barrier(int gtid, int tid);
 void __kmp_join_barrier(int gtid);
-#endif
 void __kmp_setup_icv_copy(kmp_team_t *team, int new_nproc,
                           kmp_internal_control_t *new_icvs, ident_t *loc);
 
@@ -3089,32 +3087,6 @@ static void __kmp_alloc_argv_entries(int argc, kmp_team_t *team, int realloc) {
   }
 }
 
-#if KMP_USE_ABT
-/* This function is used to initialize task queues for implicit tasks. */
-static inline void __kmp_abt_init_task_queues(kmp_taskdata_t *tds, int num) {
-  int i;
-  for (i = 0; i < num; i++) {
-    tds[i].td_task_queue = NULL;
-    tds[i].td_tq_cur_size = 0;
-    tds[i].td_tq_max_size = 0;
-  }
-}
-
-/* This function is used to deallocate task queues for implicit tasks. */
-static inline  void __kmp_abt_fini_task_queues(kmp_taskdata_t *tds, int num) {
-  int i;
-  for (i = 0; i < num; i++) {
-    kmp_taskdata_t *td = &tds[i];
-    if (td->td_task_queue) {
-      KMP_DEBUG_ASSERT(td->td_tq_cur_size == 0);
-      KMP_INTERNAL_FREE(td->td_task_queue);
-      td->td_task_queue = NULL;
-      td->td_tq_max_size = 0;
-    }
-  }
-}
-#endif // KMP_USE_ABT
-
 static void __kmp_allocate_team_arrays(kmp_team_t *team, int max_nth) {
   int i;
   int num_disp_buff = max_nth > 1 ? __kmp_dispatch_num_buffers : 2;
@@ -3127,10 +3099,6 @@ static void __kmp_allocate_team_arrays(kmp_team_t *team, int max_nth) {
   team->t.t_implicit_task_taskdata =
       (kmp_taskdata_t *)__kmp_allocate(sizeof(kmp_taskdata_t) * max_nth);
   team->t.t_max_nproc = max_nth;
-
-#if KMP_USE_ABT
-  __kmp_abt_init_task_queues(team->t.t_implicit_task_taskdata, max_nth);
-#endif
 
   /* setup dispatch buffers */
   for (i = 0; i < num_disp_buff; ++i) {
@@ -3148,10 +3116,6 @@ static void __kmp_free_team_arrays(kmp_team_t *team) {
       team->t.t_dispatch[i].th_disp_buffer = NULL;
     }
   }
-#if KMP_USE_ABT
-  __kmp_abt_fini_task_queues(team->t.t_implicit_task_taskdata,
-                             team->t.t_max_nproc);
-#endif
 #if KMP_USE_HIER_SCHED
   __kmp_dispatch_free_hierarchies(team);
 #endif
@@ -3168,10 +3132,6 @@ static void __kmp_free_team_arrays(kmp_team_t *team) {
 static void __kmp_reallocate_team_arrays(kmp_team_t *team, int max_nth) {
   kmp_info_t **oldThreads = team->t.t_threads;
 
-#if KMP_USE_ABT
-  __kmp_abt_fini_task_queues(team->t.t_implicit_task_taskdata,
-                             team->t.t_max_nproc);
-#endif
   __kmp_free(team->t.t_disp_buffer);
   __kmp_free(team->t.t_dispatch);
   __kmp_free(team->t.t_implicit_task_taskdata);
@@ -3853,17 +3813,6 @@ int __kmp_register_root(int initial_thread) {
   __kmp_initialize_info(root_thread, root->r.r_root_team, 0, gtid);
   TCW_4(__kmp_init_gtid, TRUE);
 
-#if KMP_USE_ABT
-
-  /* Mark root_thread as active */
-  TCW_4(root_thread->th.th_active, TRUE);
-  /* prepare the master thread for get_gtid() */
-  root_thread->th.th_info.ds.ds_gtid = gtid;
-  __kmp_abt_create_uber(gtid, root_thread, __kmp_stksize);
-  KMP_DEBUG_ASSERT(__kmp_gtid_get_specific() == gtid);
-
-#else // KMP_USE_ABT
-
   /* prepare the master thread for get_gtid() */
   __kmp_gtid_set_specific(gtid);
 
@@ -3893,8 +3842,6 @@ int __kmp_register_root(int initial_thread) {
   }
   KMP_DEBUG_ASSERT(root->r.r_hot_team->t.t_bar[bs_forkjoin_barrier].b_arrived ==
                    KMP_INIT_BARRIER_STATE);
-
-#endif // !KMP_USE_ABT
 
 #if KMP_AFFINITY_SUPPORTED
   root_thread->th.th_current_place = KMP_PLACE_UNDEFINED;
@@ -5631,16 +5578,6 @@ void __kmp_free_team(kmp_root_t *root,
   if (!use_hot_team) {
     if (__kmp_tasking_mode != tskm_immediate_exec) {
       // Wait for threads to reach reapable state
-#if KMP_USE_ABT
-      // Wait for all tasks.
-      for (f = 1; f < team->t.t_nproc; ++f) {
-        KMP_DEBUG_ASSERT(team->t.t_threads[f]);
-        kmp_info_t *th = team->t.t_threads[f];
-        __kmp_abt_wait_child_tasks(th, true, 0);
-        // Now it is safe to reap this thread.
-        th->th.th_reap_state = KMP_SAFE_TO_REAP;
-      }
-#else // KMP_USE_ABT
       for (f = 1; f < team->t.t_nproc; ++f) {
         KMP_DEBUG_ASSERT(team->t.t_threads[f]);
         kmp_info_t *th = team->t.t_threads[f];
@@ -5661,7 +5598,6 @@ void __kmp_free_team(kmp_root_t *root,
           KMP_CPU_PAUSE();
         }
       }
-#endif // !KMP_USE_ABT
 
       // Delete task teams
       int tt_idx;
@@ -5922,7 +5858,6 @@ void __kmp_free_thread(kmp_info_t *this_th) {
 
 /* ------------------------------------------------------------------------ */
 
-#if !KMP_USE_ABT
 void *__kmp_launch_thread(kmp_info_t *this_thr) {
   int gtid = this_thr->th.th_info.ds.ds_gtid;
   /*    void                 *stack_data;*/
@@ -6026,7 +5961,6 @@ void *__kmp_launch_thread(kmp_info_t *this_thr) {
   KMP_MB();
   return this_thr;
 }
-#endif // !KMP_USE_ABT
 
 /* ------------------------------------------------------------------------ */
 
@@ -7576,22 +7510,8 @@ void __kmp_internal_fork(ident_t *id, int gtid, kmp_team_t *team) {
   }
 #endif /* KMP_DEBUG */
 
-#if KMP_USE_ABT
-  // Set up th_task_team.
-  if (__kmp_tasking_mode != tskm_immediate_exec) {
-    // Originally, it is done in fork_barrier().
-    // Only master thread can execute it.
-    __kmp_task_team_setup(this_thr, team, 0);
-    this_thr->th.th_task_team = team->t.t_task_team[this_thr->th.th_task_state];
-  }
-
-  /* Create worker threads here */
-  __kmp_abt_create_workers(team);
-  KA_TRACE(20, ("__kmp_internal_fork: after __kmp_abt_create_workers"));
-#else // KMP_USE_ABT
   /* release the worker threads so they may begin working */
   __kmp_fork_barrier(gtid, 0);
-#endif // !KMP_USE_ABT
 }
 
 void __kmp_internal_join(ident_t *id, int gtid, kmp_team_t *team) {
@@ -7619,26 +7539,7 @@ void __kmp_internal_join(ident_t *id, int gtid, kmp_team_t *team) {
                    __kmp_threads[gtid]->th.th_team_nproc == team->t.t_nproc);
 #endif /* KMP_DEBUG */
 
-#if KMP_USE_ABT
-  {
-    /* The master thread executes the remaining tasks*/
-    __kmp_abt_wait_child_tasks(this_thr, true, FALSE);
-
-    kmp_taskdata_t *taskdata = this_thr->th.th_current_task;
-
-    __kmp_abt_release_info(this_thr);
-
-    /* Join Argobots ULTs here */
-    __kmp_abt_join_workers(team);
-    KA_TRACE(20, ("__kmp_internal_join: after __kmp_abt_join_workers"));
-    // We don't need atomic operations to get thread info if it joined an
-    // outermost parallel region.
-    __kmp_abt_acquire_info_for_task(this_thr, taskdata, team,
-                                    team->t.t_level != 1);
-  }
-#else // KMP_USE_ABT
   __kmp_join_barrier(gtid); /* wait for everyone */
-#endif // !KMP_USE_ABT
 
 #if OMPT_SUPPORT
   if (ompt_enabled.enabled &&

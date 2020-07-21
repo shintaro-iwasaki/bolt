@@ -697,18 +697,6 @@ void __kmpc_omp_wait_deps(ident_t *loc_ref, kmp_int32 gtid, kmp_int32 ndeps,
     return;
   }
 
-#if KMP_USE_ABT
-  while (1) {
-    if (!__kmp_check_deps(gtid, &node, NULL, &current_task->td_dephash,
-                      DEP_BARRIER, ndeps, dep_list, ndeps_noalias,
-                      noalias_dep_list)) {
-      KA_TRACE(10, ("__kmpc_omp_wait_deps(exit): T#%d finished waiting : "
-                    "loc=%p\n", gtid, loc_ref));
-      return;
-    }
-    KMP_YIELD(1);
-  }
-#else // KMP_USE_ABT
   int thread_finished = FALSE;
   kmp_flag_32 flag((std::atomic<kmp_uint32> *)&node.dn.npredecessors, 0U);
   while (node.dn.npredecessors > 0) {
@@ -719,5 +707,4 @@ void __kmpc_omp_wait_deps(ident_t *loc_ref, kmp_int32 gtid, kmp_int32 ndeps,
 
   KA_TRACE(10, ("__kmpc_omp_wait_deps(exit): T#%d finished waiting : loc=%p\n",
                 gtid, loc_ref));
-#endif // !KMP_USE_ABT
 }

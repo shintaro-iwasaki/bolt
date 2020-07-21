@@ -21,10 +21,6 @@
 #include "kmp_wait_release.h"
 #include "kmp_wrapper_getpid.h"
 
-#if KMP_USE_ABT
-#include "kmp_taskdeps.h"
-#endif
-
 #if !KMP_OS_DRAGONFLY && !KMP_OS_FREEBSD && !KMP_OS_NETBSD && !KMP_OS_OPENBSD
 #include <alloca.h>
 #endif
@@ -112,7 +108,6 @@ static inline ABT_pool __kmp_abt_get_pool_thread(int self_rank,
                                                  int num_threads, int level,
                                                  kmp_proc_bind_t proc_bind,
                                                  int *p_place_id);
-static inline ABT_pool __kmp_abt_get_pool_task();
 static int __kmp_abt_sched_init(ABT_sched sched, ABT_sched_config config);
 static void __kmp_abt_sched_run(ABT_sched sched);
 static int __kmp_abt_sched_free(ABT_sched sched);
@@ -498,16 +493,14 @@ void __kmp_terminate_thread(int gtid) {
   KMP_YIELD(TRUE);
 } //
 
-#if !KMP_USE_ABT
-
 /* Set thread stack info according to values returned by pthread_getattr_np().
    If values are unreasonable, assume call failed and use incremental stack
    refinement method instead. Returns TRUE if the stack parameters could be
    determined exactly, FALSE if incremental refinement is necessary. */
 static kmp_int32 __kmp_set_stack_info(int gtid, kmp_info_t *th) {
   int stack_data;
-#if KMP_OS_LINUX || KMP_OS_DRAGONFLY || KMP_OS_FREEBSD || KMP_OS_NETBSD ||     \
-        KMP_OS_HURD
+#if (KMP_OS_LINUX || KMP_OS_DRAGONFLY || KMP_OS_FREEBSD || KMP_OS_NETBSD ||     \
+        KMP_OS_HURD) && !KMP_USE_ABT
   pthread_attr_t attr;
   int status;
   size_t size = 0;
@@ -545,8 +538,8 @@ static kmp_int32 __kmp_set_stack_info(int gtid, kmp_info_t *th) {
     TCW_4(th->th.th_info.ds.ds_stackgrow, FALSE);
     return TRUE;
   }
-#endif /* KMP_OS_LINUX || KMP_OS_DRAGONFLY || KMP_OS_FREEBSD || KMP_OS_NETBSD ||
-              KMP_OS_HURD */
+#endif /* (KMP_OS_LINUX || KMP_OS_DRAGONFLY || KMP_OS_FREEBSD || KMP_OS_NETBSD ||     \
+        KMP_OS_HURD) && !KMP_USE_ABT */
   /* Use incremental refinement starting from initial conservative estimate */
   TCW_PTR(th->th.th_info.ds.ds_stacksize, 0);
   TCW_PTR(th->th.th_info.ds.ds_stackbase, &stack_data);
@@ -630,80 +623,6 @@ static void *__kmp_launch_worker(void *thr) {
 
   return exit_val;
 }
-
-#else // !KMP_USE_ABT
-
-static void __kmp_abt_create_workers_recursive(kmp_team_t *team, int start_tid,
-                                               int end_tid);
-static void __kmp_abt_join_workers_recursive(kmp_team_t *team, int start_tid,
-                                             int end_tid);
-
-static void __kmp_abt_launch_worker(void *thr) {
-  int gtid;
-  kmp_info_t *this_thr = (kmp_info_t *)thr;
-  kmp_team_t *team = this_thr->th.th_team;
-
-  gtid = this_thr->th.th_info.ds.ds_gtid;
-  KMP_DEBUG_ASSERT(this_thr == __kmp_threads[gtid]);
-
-#if KMP_AFFINITY_SUPPORTED
-  __kmp_affinity_set_init_mask(gtid, FALSE);
-#endif
-
-  KMP_MB();
-
-  const int start_tid = __kmp_tid_from_gtid(gtid);
-  const int end_tid = this_thr->th.th_creation_group_end_tid;
-
-  if (end_tid - start_tid > 1)
-    __kmp_abt_create_workers_recursive(team, start_tid, end_tid);
-
-  if (__kmp_tasking_mode != tskm_immediate_exec) {
-    /* It is originally set up in task_team_sync() */
-    this_thr->th.th_task_team = team->t.t_task_team[this_thr->th.th_task_state];
-  }
-  if (team && !TCR_4(__kmp_global.g.g_done)) {
-    /* run our new task */
-    if ((team->t.t_pkfn) != NULL) {
-      int rc;
-      KA_TRACE(20, ("__kmp_abt_launch_worker: T#%d(%d:%d) "
-                    "invoke microtask = %p\n",
-                    gtid, team->t.t_id, __kmp_tid_from_gtid(gtid),
-                    team->t.t_pkfn));
-      rc = team->t.t_invoke(gtid);
-      KMP_ASSERT(rc);
-      KMP_MB();
-      KA_TRACE(20, ("__kmp_abt_launch_worker: T#%d(%d:%d) "
-                    "done microtask = %p\n",
-                    gtid, team->t.t_id, __kmp_tid_from_gtid(gtid),
-                    team->t.t_pkfn));
-    }
-  }
-
-  KA_TRACE(10, ("__kmp_abt_launch_worker: T#%d done\n", gtid));
-
-  __kmp_abt_wait_child_tasks(this_thr, true, FALSE);
-  this_thr->th.th_task_team = NULL;
-
-  /* Below is for the implicit task */
-  kmp_taskdata_t *td = this_thr->th.th_current_task;
-  if (td->td_task_queue) {
-    KMP_DEBUG_ASSERT(td->td_tq_cur_size == 0);
-    KMP_INTERNAL_FREE(td->td_task_queue);
-    td->td_task_queue = NULL;
-    td->td_tq_max_size = 0;
-  }
-
-  /* This thread has been finished. Any task can use this as a parent. */
-  __kmp_abt_release_info(this_thr);
-
-  if (end_tid - start_tid > 1)
-    __kmp_abt_join_workers_recursive(team, start_tid, end_tid);
-
-  KA_TRACE(10, ("__kmp_abt_launch_worker: T#%d finish\n", gtid));
-}
-
-#endif // KMP_USE_ABT
 
 #if KMP_USE_MONITOR
 /* The monitor thread controls all of the threads in the complex */
@@ -879,15 +798,12 @@ static void *__kmp_launch_monitor(void *thr) {
 }
 #endif // KMP_USE_MONITOR
 
-#if !KMP_USE_ABT
-
 void __kmp_create_worker(int gtid, kmp_info_t *th, size_t stack_size) {
   pthread_t handle;
   pthread_attr_t thread_attr;
   int status;
 
   th->th.th_info.ds.ds_gtid = gtid;
-
 #if KMP_STATS_ENABLED
   // sets up worker thread stats
   __kmp_acquire_tas_lock(&__kmp_stats_lock, gtid);
@@ -909,7 +825,11 @@ void __kmp_create_worker(int gtid, kmp_info_t *th, size_t stack_size) {
 
   if (KMP_UBER_GTID(gtid)) {
     KA_TRACE(10, ("__kmp_create_worker: uber thread (%d)\n", gtid));
+#if !KMP_USE_ABT
     th->th.th_info.ds.ds_thread = pthread_self();
+#else
+    ABT_thread_self(&th->th.th_info.ds.ds_thread);
+#endif
     __kmp_set_stack_info(gtid, th);
     __kmp_check_stack_overlap(th);
     return;
@@ -918,6 +838,8 @@ void __kmp_create_worker(int gtid, kmp_info_t *th, size_t stack_size) {
   KA_TRACE(10, ("__kmp_create_worker: try to create thread (%d)\n", gtid));
 
   KMP_MB(); /* Flush all pending memory write invalidates.  */
+
+#if !KMP_USE_ABT
 
 #ifdef KMP_THREAD_ATTR
 
@@ -1007,241 +929,25 @@ void __kmp_create_worker(int gtid, kmp_info_t *th, size_t stack_size) {
   }
 #endif /* KMP_THREAD_ATTR */
 
+#else /* KMP_USE_ABT */
+
+  int self_rank;
+  ABT_thread_attr abt_thread_attr = ABT_THREAD_ATTR_NULL;
+  ABT_xstream_self_rank(&self_rank);
+  ABT_pool target_pool = __kmp_abt_global.locals[self_rank].shared_pool;
+  status = ABT_thread_attr_create(&abt_thread_attr);
+  status = ABT_thread_attr_set_stacksize(abt_thread_attr, __kmp_stksize);
+  status = ABT_thread_create(target_pool, (void (*)(void *))__kmp_launch_worker, (void *)th,
+                    abt_thread_attr, &th->th.th_info.ds.ds_thread);
+  status = ABT_thread_attr_free(&abt_thread_attr);
+
+#endif /* KMP_USE_ABT */
+
   KMP_MB(); /* Flush all pending memory write invalidates.  */
 
   KA_TRACE(10, ("__kmp_create_worker: done creating thread (%d)\n", gtid));
 
 } // __kmp_create_worker
-
-#else // KMP_USE_ABT
-
-static inline void __kmp_abt_create_workers_impl(kmp_team_t *team,
-                                                 const int self_rank,
-                                                 int start_tid, int end_tid) {
-  // tid must be start_tid.
-
-#ifdef KMP_THREAD_ATTR
-  ABT_thread_attr thread_attr = ABT_THREAD_ATTR_NULL;
-#endif
-
-  const kmp_proc_bind_t proc_bind = team->t.t_proc_bind_applied;
-  const int master_place_id = team->t.t_master_place_id;
-  const int team_level = team->t.t_level;
-  const int num_threads = team->t.t_nproc;
-
-  const int num_ways = __kmp_abt_global.fork_num_ways;
-  const int cutoff = __kmp_abt_global.fork_cutoff;
-  const int inc = ((end_tid - start_tid) < cutoff) ? 1
-                  : ((end_tid - start_tid + num_ways - 1) / num_ways);
-  KMP_DEBUG_ASSERT(self_rank != -1);
-  KMP_DEBUG_ASSERT(master_place_id != -1);
-  KMP_DEBUG_ASSERT(inc > 0);
-
-  // create / revive workers.
-  for (int f = start_tid + inc; f < end_tid; f += inc) {
-    kmp_info_t *th = team->t.t_threads[f];
-
-    // set up recursive division policy.
-    int new_creation_group_end_tid = f + inc;
-    if (f + inc > end_tid)
-      new_creation_group_end_tid = end_tid;
-
-#if KMP_BARRIER_ICV_PUSH
-    // If we create a thread, the master thread eagerly pushes it.
-    // If it has been run, the slave thread reads it from its master.
-    __kmp_init_implicit_task(team->t.t_ident, th, team, f, FALSE);
-    copy_icvs(&team->t.t_implicit_task_taskdata[f].td_icvs,
-              &team->t.t_master_icvs);
-#endif
-
-    // [SM] th->th.th_info.ds.ds_gtid is setup in __kmp_allocate_thread
-    KMP_DEBUG_ASSERT(th->th.th_info.ds.ds_gtid == __kmp_gtid_from_tid(f, team));
-    // uber thread is created in __kmp_abt_create_uber().
-    KMP_DEBUG_ASSERT(!KMP_UBER_GTID(__kmp_gtid_from_tid(f, team)));
-
-#if KMP_STATS_ENABLED
-    int gtid = __kmp_gtid_from_tid(f, team);
-
-    // sets up worker thread stats
-    __kmp_acquire_tas_lock(&__kmp_stats_lock, gtid);
-
-    // th->th.th_stats is used to transfer thread-specific stats-pointer to
-    // __kmp_launch_worker. So when thread is created (goes into
-    // __kmp_launch_worker) it will set its thread local pointer to
-    // th->th.th_stats
-    if (!KMP_UBER_GTID(gtid)) {
-      th->th.th_stats = __kmp_stats_list->push_back(gtid);
-    } else {
-      // For root threads, __kmp_stats_thread_ptr is set in
-      // __kmp_register_root(), so set the th->th.th_stats field to it.
-      th->th.th_stats = __kmp_stats_thread_ptr;
-    }
-    __kmp_release_tas_lock(&__kmp_stats_lock, gtid);
-#endif // KMP_STATS_ENABLED
-
-    ABT_pool target;
-    int place_id = 0;
-    target = __kmp_abt_get_pool_thread(self_rank, master_place_id, f,
-                                       num_threads, team_level, proc_bind,
-                                       &place_id);
-    th->th.th_current_place_id = place_id;
-    th->th.th_creation_group_end_tid = new_creation_group_end_tid;
-
-    if (th->th.th_info.ds.ds_thread == ABT_THREAD_NULL) {
-      int status;
-      // Create threads.
-#ifdef KMP_THREAD_ATTR
-      if (thread_attr == ABT_THREAD_ATTR_NULL) {
-        status = ABT_thread_attr_create(&thread_attr);
-        KMP_ASSERT(status == ABT_SUCCESS);
-        status = ABT_thread_attr_set_stacksize(thread_attr, __kmp_stksize);
-        KMP_ASSERT(status == ABT_SUCCESS);
-      }
-#endif
-      status = ABT_thread_create(target, __kmp_abt_launch_worker, (void *)th,
-                                 thread_attr, &th->th.th_info.ds.ds_thread);
-      KMP_ASSERT(status == ABT_SUCCESS);
-    } else {
-      // Revive thread.
-      int status = ABT_thread_revive(target, __kmp_abt_launch_worker,
-                                     (void *)th, &th->th.th_info.ds.ds_thread);
-      KMP_ASSERT(status == ABT_SUCCESS);
-    }
-  }
-
-#ifdef KMP_THREAD_ATTR
-  if (thread_attr != ABT_THREAD_ATTR_NULL) {
-      int status = ABT_thread_attr_free(&thread_attr);
-      KMP_ASSERT(status == ABT_SUCCESS);
-  }
-#endif /* KMP_THREAD_ATTR */
-
-  if (inc != 1) {
-    // Create threads in a sub group.
-    int rec_start_tid = start_tid;
-    int rec_end_tid = start_tid + inc;
-    if (rec_end_tid > end_tid)
-      rec_end_tid = end_tid;
-    __kmp_abt_create_workers_impl(team, self_rank, rec_start_tid, rec_end_tid);
-  }
-}
-
-static void __kmp_abt_create_workers_recursive(kmp_team_t *team, int start_tid,
-                                               int end_tid) {
-  int self_rank;
-  ABT_xstream_self_rank(&self_rank);
-  __kmp_abt_create_workers_impl(team, self_rank, start_tid, end_tid);
-}
-
-void __kmp_abt_create_workers(kmp_team_t *team) {
-  const int team_level = team->t.t_level;
-  const int num_threads = team->t.t_nproc;
-#if KMP_BARRIER_ICV_PUSH
-  // set up the master icvs.
-  copy_icvs(&team->t.t_master_icvs,
-            &team->t.t_implicit_task_taskdata[0].td_icvs);
-#endif
-
-  // Get self_rank
-  int self_rank;
-  ABT_xstream_self_rank(&self_rank);
-
-  // Set up proc bind.
-  kmp_proc_bind_t proc_bind = proc_bind_false;
-#if OMP_40_ENABLED
-  // Set up the affinity of the master thread.
-  kmp_proc_bind_t team_proc_bind = team->t.t_proc_bind;
-  if (team_proc_bind == proc_bind_default) {
-    // Use global setting.
-    int size = __kmp_nested_proc_bind.size;
-    if (size > (team_level - 1))
-      proc_bind = __kmp_nested_proc_bind.bind_types[team_level - 1];
-  } else if (team_proc_bind != proc_bind_intel) {
-    proc_bind = team_proc_bind;
-  }
-#endif
-  team->t.t_proc_bind_applied = proc_bind;
-
-  // Obtain master place id.
-  int master_tid = team->t.t_master_tid;
-  int master_place_id;
-  if (team_level <= 1) {
-    master_place_id = 0; // master place is set to 0.
-  } else {
-    kmp_team_t *parent_team = team->t.t_parent;
-    master_place_id
-        = parent_team->t.t_threads[master_tid]->th.th_current_place_id;
-    if (master_place_id == -1) {
-      // master thread is not bound to any place.
-      // Use the current place.
-      master_place_id = __kmp_abt_global.locals[self_rank].place_id;
-    }
-  }
-  team->t.t_master_place_id = master_place_id;
-
-  int place_id;
-  __kmp_abt_get_pool_thread(self_rank, master_place_id, master_tid, num_threads,
-                            team_level, proc_bind, &place_id);
-  team->t.t_threads[0]->th.th_current_place_id = place_id;
-
-  // core.
-  __kmp_abt_create_workers_impl(team, self_rank, 0, num_threads);
-} // __kmp_abt_create_workers
-
-static inline void __kmp_abt_join_workers_impl(kmp_team_t *team, int start_tid,
-                                               int end_tid) {
-  KMP_MB(); /* Flush all pending memory write invalidates.  */
-
-  const int num_ways = __kmp_abt_global.fork_num_ways;
-  const int cutoff = __kmp_abt_global.fork_cutoff;
-  const int inc = ((end_tid - start_tid) < cutoff) ? 1
-                  : ((end_tid - start_tid + num_ways - 1) / num_ways);
-
-  if (inc != 1) {
-    // Join threads in a sub group first.
-    int rec_start_tid = start_tid;
-    int rec_end_tid = start_tid + inc;
-    if (rec_end_tid > end_tid)
-      rec_end_tid = end_tid;
-    __kmp_abt_join_workers_recursive(team, rec_start_tid, rec_end_tid);
-  }
-
-  kmp_info_t **threads = team->t.t_threads;
-
-  /* Join Argobots ULTs here */
-  for (int f = start_tid + inc; f < end_tid; f += inc) {
-    // t_threads[0] is not joined.
-    ABT_thread ds_thread = threads[f]->th.th_info.ds.ds_thread;
-    int status = ABT_thread_join(ds_thread);
-    KMP_DEBUG_ASSERT(status == ABT_SUCCESS);
-    (void)status;
-  }
-  KMP_MB(); /* Flush all pending memory write invalidates.  */
-} // __kmp_abt_join_workers_impl
-
-static void __kmp_abt_join_workers_recursive(kmp_team_t *team, int start_tid,
-                                             int end_tid) {
-  __kmp_abt_join_workers_impl(team, start_tid, end_tid);
-}
-
-void __kmp_abt_join_workers(kmp_team_t *team) {
-  const int num_threads = team->t.t_nproc;
-  __kmp_abt_join_workers_impl(team, 0, num_threads);
-  for (int tid = 0; tid < num_threads; tid++) {
-    kmp_info_t *th = team->t.t_threads[tid];
-    // Reset th_current_task; th_current_task must be consistent when the team
-    // is reused in the future. BOLT cannot run tasks on top of implicit tasks,
-    // so such an inconsistency problem occurs.
-    th->th.th_current_task = &team->t.t_implicit_task_taskdata[tid];
-    // Reset threads so that tasks cannot use these threads.
-    KMP_DEBUG_ASSERT(th->th.th_active == FALSE);
-    if (tid != 0) {
-      th->th.th_active = TRUE;
-    }
-  }
-} // __kmp_abt_join_workers
-
-#endif /* KMP_USE_ABT */
 
 #if KMP_USE_MONITOR
 void __kmp_create_monitor(kmp_info_t *th) {
@@ -1839,7 +1545,6 @@ void __kmp_unlock_suspend_mx(kmp_info_t *th) {
 #endif
 }
 
-#if !KMP_USE_ABT
 /* This routine puts the calling thread to sleep after setting the
    sleep bit for the indicated flag variable to true. */
 template <class C>
@@ -2098,8 +1803,6 @@ void __kmp_resume_monitor() {
 }
 #endif // KMP_USE_MONITOR
 
-#endif // !KMP_USE_ABT
-
 void __kmp_yield() {
 #if KMP_USE_ABT
   ABT_thread_yield();
@@ -2117,6 +1820,11 @@ void __kmp_gtid_set_specific(int gtid) {
 
   if (self != ABT_THREAD_NULL) {
     ABT_thread_get_arg(self, (void **)&th);
+    if (th == NULL) {
+      /* The caller should be a main thread (= a root thread). */
+      th = __kmp_root[gtid]->r.r_uber_thread;
+      ABT_thread_set_arg(self, (void *)th);
+    }
     KMP_ASSERT(th != NULL);
     th->th.th_info.ds.ds_gtid = gtid;
     KMP_ASSERT(__kmp_init_gtid);
@@ -3540,47 +3248,6 @@ static inline ABT_pool __kmp_abt_get_pool_thread(int self_rank,
   }
 }
 
-static inline ABT_pool __kmp_abt_get_pool_task() {
-  int self_rank;
-  ABT_xstream_self_rank(&self_rank);
-  return __kmp_abt_global.locals[self_rank].shared_pool;
-}
-
-void __kmp_abt_release_info(kmp_info_t *th) {
-  KMP_DEBUG_ASSERT(th->th.th_active == TRUE);
-  TCW_4(th->th.th_active, FALSE);
-}
-
-void __kmp_abt_acquire_info_for_task(kmp_info_t *th, kmp_taskdata_t *taskdata,
-                                     const kmp_team_t *match_team, int atomic) {
-  if (atomic) {
-    while (1) {
-      // task must be executed by an inactive thread belonging to the same team;
-      // if not, yield to a scheduler.
-
-      // Quick check.
-      if (th->th.th_team != match_team)
-        goto END_WHILE;
-      // Take a lock.
-      if (KMP_COMPARE_AND_STORE_RET32(&th->th.th_active, FALSE, TRUE) != FALSE)
-        goto END_WHILE;
-      // th->th.th_team might have been updated while taking a lock; if th_team
-      // is not matched, yield to a scheduler.
-      if (th->th.th_team != match_team) {
-        __kmp_abt_release_info(th);
-        goto END_WHILE;
-      }
-      break;
-  END_WHILE:
-      ABT_thread_yield();
-    }
-  } else {
-    KMP_DEBUG_ASSERT(th->th.th_active == FALSE);
-    th->th.th_active = TRUE;
-  }
-  th->th.th_current_task = taskdata;
-}
-
 void __kmp_abt_set_self_info(kmp_info_t *th) {
   ABT_thread self;
 
@@ -3999,262 +3666,6 @@ static void __kmp_abt_sched_run(ABT_sched sched) {
 
 static int __kmp_abt_sched_free(ABT_sched sched) {
     return ABT_SUCCESS;
-}
-
-static inline void __kmp_abt_free_task(kmp_info_t *th, kmp_taskdata_t *taskdata)
-{
-  int gtid = __kmp_gtid_from_thread(th);
-
-  KA_TRACE(30, ("__kmp_abt_free_task: (enter) T#%d - task %p\n",
-                gtid, taskdata));
-
-  /* [AC] we need those steps to mark the task as finished so the dependencies
-   *  can be completed */
-  taskdata->td_flags.complete = 1; // mark the task as completed
-  __kmp_release_deps(gtid, taskdata);
-  taskdata->td_flags.executing = 0; // suspend the finishing task
-
-  // Wait for all tasks after releasing (=pushing) dependent tasks
-  __kmp_abt_wait_child_tasks(th, true, FALSE);
-
-  taskdata->td_flags.freed = 1;
-
-  /* Free the task queue if it was allocated. */
-  if (taskdata->td_task_queue) {
-    KMP_DEBUG_ASSERT(taskdata->td_tq_cur_size == 0);
-    KMP_INTERNAL_FREE(taskdata->td_task_queue);
-  }
-
-  // deallocate the taskdata and shared variable blocks associated with this
-  // task
-#if USE_FAST_MEMORY
-  __kmp_fast_free(th, taskdata);
-#else
-  __kmp_thread_free(th, taskdata);
-#endif
-
-  KA_TRACE(30, ("__kmp_abt_free_task: (exit) T#%d - task %p\n",
-                gtid, taskdata));
-}
-
-static void __kmp_abt_execute_task(void *arg) {
-  // It is corresponding to __kmp_execute_tasks_.
-
-  kmp_task_t *task = (kmp_task_t *)arg;
-  kmp_taskdata_t *taskdata = KMP_TASK_TO_TASKDATA(task);
-  kmp_info_t *th;
-
-  th = __kmp_abt_bind_task_to_thread(taskdata->td_team, taskdata);
-
-  KA_TRACE(20, ("__kmp_abt_execute_task: T#%d before executing task %p.\n",
-                __kmp_gtid_from_thread(th), task));
-
-  // See __kmp_task_start
-  taskdata->td_flags.started = 1;
-  taskdata->td_flags.executing = 1;
-  KMP_DEBUG_ASSERT(taskdata->td_flags.complete == 0);
-  KMP_DEBUG_ASSERT(taskdata->td_flags.freed == 0);
-
-  while (1) {
-    // Run __kmp_invoke_task to handle internal counters correctly.
-#ifdef KMP_GOMP_COMPAT
-    if (taskdata->td_flags.native) {
-      ((void (*)(void *))(*(task->routine)))(task->shareds);
-    } else
-#endif /* KMP_GOMP_COMPAT */
-    {
-      (*(task->routine))(__kmp_gtid_from_thread(th), task);
-    }
-
-    if (!taskdata->td_flags.tiedness) {
-      // If this task is an untied one, we need to retrieve kmp_info because it
-      // may have been changed.
-      th = __kmp_abt_get_self_info();
-    }
-    // See __kmp_task_finish (untied)
-    if (taskdata->td_flags.tiedness == TASK_UNTIED) {
-      // Check if we can finish this task.
-      kmp_int32 counter = KMP_ATOMIC_DEC(&taskdata->td_untied_count) - 1;
-      if (counter > 0) {
-        // We should keep this ULT.
-        continue;
-      }
-    }
-    // tied or finished untied.
-    break;
-  }
-
-  // See __kmp_task_finish (tied/finished untied)
-  // KMP_DEBUG_ASSERT(taskdata->td_flags.executing == 0);
-  taskdata->td_flags.executing = 0;
-  KMP_DEBUG_ASSERT(taskdata->td_flags.complete == 0);
-  taskdata->td_flags.complete = 1; // mark the task as completed
-  // KMP_DEBUG_ASSERT(taskdata->td_flags.started == 1);
-  // KMP_DEBUG_ASSERT(taskdata->td_flags.freed == 0);
-
-  // Free this task.
-  __kmp_abt_free_task(th, taskdata);
-
-  // Reset th's ownership.
-  __kmp_abt_release_info(th);
-
-  KA_TRACE(20, ("__kmp_abt_execute_task: T#%d after executing task %p.\n",
-                __kmp_gtid_from_thread(th), task));
-}
-
-int __kmp_abt_create_task(kmp_info_t *th, kmp_task_t *task) {
-  int status;
-  ABT_pool dest = __kmp_abt_get_pool_task();
-
-  KA_TRACE(20, ("__kmp_abt_create_task: T#%d before creating task %p into the "
-                "pool %p.\n", __kmp_gtid_from_thread(th), task, dest));
-
-  /* Check if the task queue has an empty slot. */
-  kmp_taskdata_t *td = th->th.th_current_task;
-  if (td->td_tq_cur_size == td->td_tq_max_size) {
-    size_t new_max_size;
-    if (td->td_tq_max_size == 0) {
-      /* Empty queue. We allocate 32 slots by default. */
-      new_max_size = 32;
-    } else {
-      /* The task queue is full. Expand it. */
-      new_max_size = td->td_tq_max_size * 2;
-    }
-
-    void *queue = (void *)td->td_task_queue;
-    size_t size = sizeof(kmp_abt_task_t) * new_max_size;
-    td->td_task_queue = (kmp_abt_task_t *)KMP_INTERNAL_REALLOC(queue, size);
-    td->td_tq_max_size = new_max_size;
-  }
-
-  status = ABT_thread_create(dest, __kmp_abt_execute_task, (void *)task,
-                             ABT_THREAD_ATTR_NULL,
-                             &td->td_task_queue[td->td_tq_cur_size++]);
-  KMP_ASSERT(status == ABT_SUCCESS);
-
-  KA_TRACE(20, ("__kmp_abt_create_task: T#%d after creating task %p into the "
-                "pool %p.\n", __kmp_gtid_from_thread(th), task, dest));
-
-  return TRUE;
-}
-
-kmp_info_t *__kmp_abt_wait_child_tasks(kmp_info_t *th, bool thread_bind,
-                                       int yield) {
-  KA_TRACE(20, ("__kmp_abt_wait_child_tasks: T#%d enter\n",
-                __kmp_gtid_from_thread(th)));
-
-  int i, status;
-  kmp_taskdata_t *taskdata = th->th.th_current_task;
-  // Get the associated team before releasing the ownership of th.
-  kmp_team_t *team = th->th.th_team;
-  kmp_info_t *new_th = th;
-
-  if (taskdata->td_tq_cur_size == 0) {
-    /* leaf task case */
-    if (yield) {
-      __kmp_abt_release_info(th);
-
-      ABT_thread_yield();
-
-      if (thread_bind || taskdata->td_flags.tiedness) {
-        __kmp_abt_acquire_info_for_task(th, taskdata, team);
-      } else {
-        new_th = __kmp_abt_bind_task_to_thread(team, taskdata);
-      }
-    }
-    KA_TRACE(20, ("__kmp_abt_wait_child_tasks: T#%d done\n",
-                  __kmp_gtid_from_thread(new_th)));
-    return new_th;
-  }
-
-  /* Let others, e.g., tasks, can use this kmp_info */
-  __kmp_abt_release_info(th);
-
-  /* Give other tasks a chance for execution */
-  if (yield)
-    ABT_thread_yield();
-
-  /* Wait until all child tasks are complete. */
-  for (i = 0; i < taskdata->td_tq_cur_size; i++) {
-    status = ABT_thread_free(&taskdata->td_task_queue[i]);
-    KMP_ASSERT(status == ABT_SUCCESS);
-  }
-  taskdata->td_tq_cur_size = 0;
-
-  if (thread_bind || taskdata->td_flags.tiedness) {
-    /* Obtain kmp_info to continue the original task. */
-    __kmp_abt_acquire_info_for_task(th, taskdata, team);
-  } else {
-    new_th = __kmp_abt_bind_task_to_thread(team, taskdata);
-  }
-
-  KA_TRACE(20, ("__kmp_abt_wait_child_tasks: T#%d done\n",
-                __kmp_gtid_from_thread(new_th)));
-  return new_th;
-}
-
-kmp_info_t *__kmp_abt_bind_task_to_thread(kmp_team_t *team,
-                                          kmp_taskdata_t *taskdata) {
-  int i, i_start, i_end;
-  kmp_info_t *th = NULL;
-
-  KA_TRACE(20, ("__kmp_abt_bind_task_to_thread: (enter) task %p\n", taskdata));
-
-  /* To handle gtid in the task code, we look for a suspended (blocked)
-   * thread in the team and use its info to execute this task. */
-  while (1) {
-    if (team->t.t_level <= 1) {
-      /* outermost team - we try to assign the thread that was executed on
-       * the same ES first and then check other threads in the team.  */
-      int rank;
-      ABT_xstream_self_rank(&rank);
-      if (rank < team->t.t_nproc) {
-        /* [SM] I think this condition should always be true, but just in
-         * case I miss something we check this condition. */
-        i_start = rank;
-        i_end = team->t.t_nproc + rank;
-      } else {
-        i_start = 0;
-        i_end = team->t.t_nproc;
-      }
-    } else {
-      /* nested team - we ignore the ES info since threads in the nested team
-       * may be executed by any ES. */
-      i_start = 0;
-      i_end = team->t.t_nproc;
-    }
-    /* TODO: This is a linear search. Can we do better? */
-    for (i = i_start; i < i_end; i++) {
-      int idx = (i < team->t.t_nproc) ? i : i % team->t.t_nproc;
-      th = team->t.t_threads[idx];
-      ABT_thread ult = th->th.th_info.ds.ds_thread;
-
-      if (th->th.th_active == FALSE && ult != ABT_THREAD_NULL) {
-        /* Try to take the ownership of kmp_info 'th' */
-        if (th->th.th_team != team)
-          continue;
-        if (KMP_COMPARE_AND_STORE_RET32(&th->th.th_active, FALSE, TRUE)
-            == FALSE) {
-          if (th->th.th_team != team) {
-            __kmp_abt_release_info(th);
-            continue;
-          }
-          /* Bind this task as if it is executed by 'th'. */
-          th->th.th_current_task = taskdata;
-          th->th.th_task_team = taskdata->td_task_team;
-          __kmp_abt_set_self_info(th);
-          KA_TRACE(20, ("__kmp_abt_bind_task_to_thread: (exit) task %p"
-                        "bound to T#%d\n",
-                        taskdata, __kmp_gtid_from_thread(th)));
-          return th;
-        }
-      }
-    }
-    /* We could not find an available kmp_info. Thus, this task yields
-     * control to other work units and will try to find one later. */
-    ABT_thread_yield();
-  }
-  return NULL;
 }
 
 void __kmp_abt_create_uber(int gtid, kmp_info_t *th, size_t stack_size) {
