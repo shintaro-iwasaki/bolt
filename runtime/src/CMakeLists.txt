@@ -229,7 +229,7 @@ if(WIN32)
   # the import library is "re-linked" to include kmp_import.cpp which prevents
   # linking of both Visual Studio OpenMP and newly built OpenMP
   set_source_files_properties(kmp_import.cpp PROPERTIES COMPILE_FLAGS "${LIBOMP_CONFIGURED_CXXFLAGS}")
-  set(LIBOMP_IMP_LIB_FILE ${LIBBOLT_LIB_NAME}${CMAKE_STATIC_LIBRARY_SUFFIX})
+  set(LIBOMP_IMP_LIB_FILE ${LIBBOLT_LIB_NAME}${CMAKE_IMPORT_LIBRARY_SUFFIX})
   set(LIBOMP_GENERATED_IMP_LIB_FILENAME ${LIBOMP_LIB_FILE}${CMAKE_STATIC_LIBRARY_SUFFIX})
   set_target_properties(bolt-omp PROPERTIES
     VERSION ${LIBBOLT_VERSION_MAJOR}.${LIBBOLT_VERSION_MINOR} # uses /version flag
