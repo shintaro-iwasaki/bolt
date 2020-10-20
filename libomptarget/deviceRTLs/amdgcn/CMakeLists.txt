@@ -38,9 +38,9 @@ endif()
 
 libomptarget_say("Building AMDGCN device RTL. LLVM_COMPILER_PATH=${AOMP_BINDIR}")
 
-project(omptarget-amdgcn)
+project(bolt-omptarget-amdgcn)
 
-add_custom_target(omptarget-amdgcn ALL)
+add_custom_target(bolt-omptarget-amdgcn ALL)
 
 #optimization level
 set(optimization_level 2)
@@ -131,7 +131,7 @@ macro(add_cuda_bc_library)
   list(APPEND bc_files linkout.cuda.${mcpu}.bc)
 endmacro()
 
-set(libname "omptarget-amdgcn")
+set(libname "bolt-omptarget-amdgcn")
 
 foreach(mcpu ${mcpus})
   set(bc_files)

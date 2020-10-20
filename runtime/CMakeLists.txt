@@ -16,8 +16,8 @@ endif()
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake ${CMAKE_MODULE_PATH})
 
 # Set libomp version
-set(LIBOMP_VERSION_MAJOR 5)
-set(LIBOMP_VERSION_MINOR 0)
+set(LIBBOLT_VERSION_MAJOR 5)
+set(LIBBOLT_VERSION_MINOR 0)
 
 # These include files are in the cmake/ subdirectory
 include(LibompUtils)
@@ -72,7 +72,7 @@ set(LIBOMP_LIB_TYPE normal CACHE STRING
   "Performance,Profiling,Stubs library (normal/profile/stubs)")
 libomp_check_variable(LIBOMP_LIB_TYPE normal profile stubs)
 # Set the OpenMP Year and Month associated with version
-set(LIBOMP_OMP_YEAR_MONTH 201611)
+set(LIBBOLT_OMP_YEAR_MONTH 201611)
 set(LIBOMP_MIC_ARCH knc CACHE STRING
   "Intel(R) Many Integrated Core Architecture (Intel(R) MIC Architecture) (knf/knc).  Ignored if not Intel(R) MIC Architecture build.")
 if("${LIBOMP_ARCH}" STREQUAL "mic")
@@ -114,7 +114,7 @@ set(LIBOMP_FFLAGS "" CACHE STRING
 # Turning this to FALSE aids parallel builds to not interfere with each other.
 # Currently, the testsuite module expects the just built OpenMP library to be located inside the exports/
 # directory.  TODO: have testsuite run under llvm-lit directly.  We can then get rid of copying to exports/
-set(LIBOMP_COPY_EXPORTS TRUE CACHE STRING
+set(LIBBOLT_COPY_EXPORTS TRUE CACHE STRING
   "Should exports be copied into source exports/ directory?")
 
 # HWLOC-support
@@ -137,9 +137,9 @@ else()
 endif()
 
 # Get the build number from kmp_version.cpp
-libomp_get_build_number("${CMAKE_CURRENT_SOURCE_DIR}" LIBOMP_VERSION_BUILD)
-math(EXPR LIBOMP_VERSION_BUILD_YEAR "${LIBOMP_VERSION_BUILD}/10000")
-math(EXPR LIBOMP_VERSION_BUILD_MONTH_DAY "${LIBOMP_VERSION_BUILD}%10000")
+libomp_get_build_number("${CMAKE_CURRENT_SOURCE_DIR}" LIBBOLT_VERSION_BUILD)
+math(EXPR LIBBOLT_VERSION_BUILD_YEAR "${LIBBOLT_VERSION_BUILD}/10000")
+math(EXPR LIBBOLT_VERSION_BUILD_MONTH_DAY "${LIBBOLT_VERSION_BUILD}%10000")
 
 # Currently don't record any timestamps
 set(LIBOMP_BUILD_DATE "No_Timestamp")
@@ -234,8 +234,8 @@ if(WIN32)
 endif()
 
 # Getting legal type/arch
-libomp_get_legal_type(LIBOMP_LEGAL_TYPE)
-libomp_get_legal_arch(LIBOMP_LEGAL_ARCH)
+libomp_get_legal_type(LIBBOLT_LEGAL_TYPE)
+libomp_get_legal_arch(LIBBOLT_LEGAL_ARCH)
 
 # Compiler flag checks, library checks, threading check, etc.
 include(config-ix)
@@ -312,14 +312,14 @@ set(OMPT_DEFAULT FALSE)
 if ((LIBOMP_HAVE_OMPT_SUPPORT) AND (NOT WIN32))
   set(OMPT_DEFAULT TRUE)
 endif()
-set(LIBOMP_OMPT_SUPPORT ${OMPT_DEFAULT} CACHE BOOL
+set(LIBBOLT_OMPT_SUPPORT ${OMPT_DEFAULT} CACHE BOOL
   "OMPT-support?")
 
 set(LIBOMP_OMPT_DEBUG FALSE CACHE BOOL
   "Trace OMPT initialization?")
 set(LIBOMP_OMPT_OPTIONAL TRUE CACHE BOOL
   "OMPT-optional?")
-if(LIBOMP_OMPT_SUPPORT AND (NOT LIBOMP_HAVE_OMPT_SUPPORT))
+if(LIBBOLT_OMPT_SUPPORT AND (NOT LIBOMP_HAVE_OMPT_SUPPORT))
   libomp_error_say("OpenMP Tools Interface requested but not available in this implementation")
 endif()
 
@@ -346,13 +346,23 @@ set(LIBOMP_USE_HIER_SCHED FALSE CACHE BOOL
 
 # Setting final library name
 set(LIBOMP_DEFAULT_LIB_NAME libomp)
+set(LIBBOLT_DEFAULT_LIB_NAME libbolt)
 if(${PROFILE_LIBRARY})
-  set(LIBOMP_DEFAULT_LIB_NAME ${LIBOMP_DEFAULT_LIB_NAME}prof)
+  set(LIBBOLT_DEFAULT_LIB_NAME ${LIBBOLT_DEFAULT_LIB_NAME}prof)
 endif()
 if(${STUBS_LIBRARY})
-  set(LIBOMP_DEFAULT_LIB_NAME ${LIBOMP_DEFAULT_LIB_NAME}stubs)
+  set(LIBBOLT_DEFAULT_LIB_NAME ${LIBBOLT_DEFAULT_LIB_NAME}stubs)
 endif()
-set(LIBOMP_LIB_NAME ${LIBOMP_DEFAULT_LIB_NAME} CACHE STRING "Base OMP library name")
+set(LIBBOLT_LIB_NAME ${LIBBOLT_DEFAULT_LIB_NAME} CACHE STRING "Base BOLT library name")
+if (NOT DEFINED LIBOMP_LIB_NAME)
+  set(LIBOMP_LIB_NAME ${LIBOMP_DEFAULT_LIB_NAME} CACHE STRING "Base OpenMP library name")
+endif()
+if (OPENMP_STANDALONE_BUILD
+    AND NOT (${LIBOMP_LIB_NAME} STREQUAL ${LIBOMP_DEFAULT_LIB_NAME})
+    AND (${LIBBOLT_LIB_NAME} STREQUAL ${LIBBOLT_DEFAULT_LIB_NAME}))
+  # Use LIBOMP_LIB_NAME.
+  set(LIBBOLT_LIB_NAME, ${LIBOMP_LIB_NAME})
+endif()
 
 if(${LIBOMP_ENABLE_SHARED})
   set(LIBOMP_LIBRARY_SUFFIX ${CMAKE_SHARED_LIBRARY_SUFFIX})
@@ -364,7 +374,7 @@ else()
   set(LIBOMP_INSTALL_KIND ARCHIVE)
 endif()
 
-set(LIBOMP_LIB_FILE ${LIBOMP_LIB_NAME}${LIBOMP_LIBRARY_SUFFIX})
+set(LIBOMP_LIB_FILE ${LIBBOLT_LIB_NAME}${LIBOMP_LIBRARY_SUFFIX})
 
 # Set BOLT version, release date, and build information
 set(BOLT_VERSION "1.0")
@@ -402,17 +412,17 @@ if(${OPENMP_STANDALONE_BUILD})
   libomp_say("Library Type         -- ${LIBOMP_LIB_TYPE}")
   libomp_say("Fortran Modules      -- ${LIBOMP_FORTRAN_MODULES}")
   # will say development if all zeros
-  if(${LIBOMP_VERSION_BUILD} STREQUAL 00000000)
+  if(${LIBBOLT_VERSION_BUILD} STREQUAL 00000000)
     set(LIBOMP_BUILD Development)
   else()
-    set(LIBOMP_BUILD ${LIBOMP_VERSION_BUILD})
+    set(LIBOMP_BUILD ${LIBBOLT_VERSION_BUILD})
   endif()
   libomp_say("Build                -- ${LIBOMP_BUILD}")
   libomp_say("Use Stats-gathering  -- ${LIBOMP_STATS}")
   libomp_say("Use Debugger-support -- ${LIBOMP_USE_DEBUGGER}")
   libomp_say("Use ITT notify       -- ${LIBOMP_USE_ITT_NOTIFY}")
-  libomp_say("Use OMPT-support     -- ${LIBOMP_OMPT_SUPPORT}")
-  if(${LIBOMP_OMPT_SUPPORT})
+  libomp_say("Use OMPT-support     -- ${LIBBOLT_OMPT_SUPPORT}")
+  if(${LIBBOLT_OMPT_SUPPORT})
     libomp_say("Use OMPT-optional  -- ${LIBOMP_OMPT_OPTIONAL}")
   endif()
   libomp_say("Use Adaptive locks   -- ${LIBOMP_USE_ADAPTIVE_LOCKS}")
@@ -428,5 +438,5 @@ add_subdirectory(src)
 add_subdirectory(test)
 
 # make these variables available for tools:
-set(LIBOMP_LIBRARY_DIR ${LIBOMP_LIBRARY_DIR} PARENT_SCOPE)
-set(LIBOMP_INCLUDE_DIR ${LIBOMP_INCLUDE_DIR} PARENT_SCOPE)
+set(LIBBOLT_LIBRARY_DIR ${LIBBOLT_LIBRARY_DIR} PARENT_SCOPE)
+set(LIBBOLT_INCLUDE_DIR ${LIBBOLT_INCLUDE_DIR} PARENT_SCOPE)

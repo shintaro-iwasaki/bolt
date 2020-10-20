@@ -11,19 +11,19 @@
 # void libomp_say(string message_to_user);
 # - prints out message_to_user
 macro(libomp_say message_to_user)
-  message(STATUS "LIBOMP: ${message_to_user}")
+  message(STATUS "BOLT-LIBOMP: ${message_to_user}")
 endmacro()
 
 # void libomp_warning_say(string message_to_user);
 # - prints out message_to_user with a warning
 macro(libomp_warning_say message_to_user)
-  message(WARNING "LIBOMP: ${message_to_user}")
+  message(WARNING "BOLT-LIBOMP: ${message_to_user}")
 endmacro()
 
 # void libomp_error_say(string message_to_user);
 # - prints out message_to_user with an error and exits cmake
 macro(libomp_error_say message_to_user)
-  message(FATAL_ERROR "LIBOMP: ${message_to_user}")
+  message(FATAL_ERROR "BOLT-LIBOMP: ${message_to_user}")
 endmacro()
 
 # libomp_append(<flag> <flags_list> [(IF_TRUE | IF_FALSE | IF_TRUE_1_0 ) BOOLEAN])

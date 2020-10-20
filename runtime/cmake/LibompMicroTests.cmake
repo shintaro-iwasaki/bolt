@@ -39,13 +39,13 @@
 
 # get library location
 if(WIN32)
-  get_target_property(LIBOMP_OUTPUT_DIRECTORY omp RUNTIME_OUTPUT_DIRECTORY)
-  get_target_property(LIBOMPIMP_OUTPUT_DIRECTORY ompimp ARCHIVE_OUTPUT_DIRECTORY)
+  get_target_property(LIBOMP_OUTPUT_DIRECTORY bolt-omp RUNTIME_OUTPUT_DIRECTORY)
+  get_target_property(LIBOMPIMP_OUTPUT_DIRECTORY bolt-ompimp ARCHIVE_OUTPUT_DIRECTORY)
   if(NOT LIBOMPIMP_OUTPUT_DIRECTORY)
     set(LIBOMPIMP_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
   endif()
 else()
-  get_target_property(LIBOMP_OUTPUT_DIRECTORY omp LIBRARY_OUTPUT_DIRECTORY)
+  get_target_property(LIBOMP_OUTPUT_DIRECTORY bolt-omp LIBRARY_OUTPUT_DIRECTORY)
 endif()
 if(NOT LIBOMP_OUTPUT_DIRECTORY)
   set(LIBOMP_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
@@ -94,7 +94,7 @@ else() # (Unix based systems, Intel(R) MIC Architecture, and Mac)
   endif()
 endif()
 macro(libomp_test_touch_recipe test_touch_dir)
-  set(libomp_test_touch_dependencies ${LIBOMP_SRC_DIR}/test-touch.c omp)
+  set(libomp_test_touch_dependencies ${LIBOMP_SRC_DIR}/test-touch.c bolt-omp)
   set(libomp_test_touch_exe ${test_touch_dir}/test-touch${CMAKE_EXECUTABLE_SUFFIX})
   set(libomp_test_touch_obj ${test_touch_dir}/test-touch${CMAKE_C_OUTPUT_EXTENSION})
   if(WIN32)
@@ -112,7 +112,7 @@ macro(libomp_test_touch_recipe test_touch_dir)
       endif()
     endif()
     set(libomp_test_touch_out_flags -Fe${libomp_test_touch_exe} -Fo${libomp_test_touch_obj})
-    list(APPEND libomp_test_touch_dependencies ompimp)
+    list(APPEND libomp_test_touch_dependencies bolt-ompimp)
   else()
     set(libomp_test_touch_out_flags -o ${libomp_test_touch_exe})
   endif()
@@ -128,7 +128,7 @@ macro(libomp_test_touch_recipe test_touch_dir)
   )
 endmacro()
 libomp_append(libomp_test_touch_env "KMP_VERSION=1")
-add_custom_target(libomp-test-touch DEPENDS ${libomp_test_touch_targets})
+add_custom_target(bolt-libomp-test-touch DEPENDS ${libomp_test_touch_targets})
 if(WIN32)
   libomp_test_touch_recipe(test-touch-mt)
   libomp_test_touch_recipe(test-touch-md)
@@ -137,40 +137,40 @@ else()
 endif()
 
 # test-relo
-add_custom_target(libomp-test-relo DEPENDS test-relo/.success)
+add_custom_target(bolt-libomp-test-relo DEPENDS test-relo/.success)
 add_custom_command(
   OUTPUT  test-relo/.success test-relo/readelf.log
   COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/test-relo
   COMMAND readelf -d ${LIBOMP_OUTPUT_DIRECTORY}/${LIBOMP_LIB_FILE} > test-relo/readelf.log
   COMMAND grep -e TEXTREL test-relo/readelf.log \; test $$? -eq 1
   COMMAND ${CMAKE_COMMAND} -E touch test-relo/.success
-  DEPENDS omp
+  DEPENDS bolt-omp
 )
 
 # test-execstack
-add_custom_target(libomp-test-execstack DEPENDS test-execstack/.success)
+add_custom_target(bolt-libomp-test-execstack DEPENDS test-execstack/.success)
 add_custom_command(
   OUTPUT  test-execstack/.success
   COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/test-execstack
   COMMAND ${PERL_EXECUTABLE} ${LIBOMP_TOOLS_DIR}/check-execstack.pl
     --arch=${LIBOMP_PERL_SCRIPT_ARCH} ${LIBOMP_OUTPUT_DIRECTORY}/${LIBOMP_LIB_FILE}
   COMMAND ${CMAKE_COMMAND} -E touch test-execstack/.success
-  DEPENDS omp
+  DEPENDS bolt-omp
 )
 
 # test-instr
-add_custom_target(libomp-test-instr DEPENDS test-instr/.success)
+add_custom_target(bolt-libomp-test-instr DEPENDS test-instr/.success)
 add_custom_command(
   OUTPUT  test-instr/.success
   COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/test-instr
   COMMAND ${PERL_EXECUTABLE} ${LIBOMP_TOOLS_DIR}/check-instruction-set.pl --os=${LIBOMP_PERL_SCRIPT_OS}
     --arch=${LIBOMP_PERL_SCRIPT_ARCH} --show --mic-arch=${LIBOMP_MIC_ARCH} ${LIBOMP_OUTPUT_DIRECTORY}/${LIBOMP_LIB_FILE}
   COMMAND ${CMAKE_COMMAND} -E touch test-instr/.success
-  DEPENDS omp ${LIBOMP_TOOLS_DIR}/check-instruction-set.pl
+  DEPENDS bolt-omp ${LIBOMP_TOOLS_DIR}/check-instruction-set.pl
 )
 
 # test-deps
-add_custom_target(libomp-test-deps DEPENDS test-deps/.success)
+add_custom_target(bolt-libomp-test-deps DEPENDS test-deps/.success)
 set(libomp_expected_library_deps)
 if(CMAKE_SYSTEM_NAME MATCHES "FreeBSD")
   set(libomp_expected_library_deps libc.so.7 libthr.so.3 libm.so.5)
@@ -189,7 +189,7 @@ elseif(APPLE)
   libomp_append(libomp_expected_library_deps libabt.dylib LIBOMP_USE_ARGOBOTS)
 elseif(WIN32)
   set(libomp_expected_library_deps kernel32.dll)
-  libomp_append(libomp_expected_library_deps psapi.dll LIBOMP_OMPT_SUPPORT)
+  libomp_append(libomp_expected_library_deps psapi.dll LIBBOLT_OMPT_SUPPORT)
 else()
   if(${MIC})
     set(libomp_expected_library_deps libc.so.6 libpthread.so.0 libdl.so.2)
@@ -237,5 +237,5 @@ add_custom_command(
   COMMAND ${PERL_EXECUTABLE} ${LIBOMP_TOOLS_DIR}/check-depends.pl --os=${LIBOMP_PERL_SCRIPT_OS}
     --arch=${LIBOMP_PERL_SCRIPT_ARCH} --expected="${libomp_expected_library_deps}" ${LIBOMP_OUTPUT_DIRECTORY}/${LIBOMP_LIB_FILE}
   COMMAND ${CMAKE_COMMAND} -E touch test-deps/.success
-  DEPENDS omp ${LIBOMP_TOOLS_DIR}/check-depends.pl
+  DEPENDS bolt-omp ${LIBOMP_TOOLS_DIR}/check-depends.pl
 )

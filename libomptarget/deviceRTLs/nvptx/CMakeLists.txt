@@ -95,13 +95,26 @@ if(LIBOMPTARGET_DEP_CUDA_FOUND)
   set(CUDA_SEPARABLE_COMPILATION ON)
   list(APPEND CUDA_NVCC_FLAGS -I${devicertl_base_directory}
                               -I${devicertl_nvptx_directory}/src)
-  cuda_add_library(omptarget-nvptx STATIC ${cuda_src_files} ${omp_data_objects}
+  cuda_add_library(bolt-omptarget-nvptx STATIC ${cuda_src_files} ${omp_data_objects}
       OPTIONS ${CUDA_ARCH} ${CUDA_DEBUG})
 
   # Install device RTL under the lib destination folder.
-  install(TARGETS omptarget-nvptx ARCHIVE DESTINATION "${OPENMP_INSTALL_LIBDIR}")
+  install(TARGETS bolt-omptarget-nvptx ARCHIVE DESTINATION "${OPENMP_INSTALL_LIBDIR}")
 
-  target_link_libraries(omptarget-nvptx ${CUDA_LIBRARIES})
+  # Install aliases
+  get_target_property(BOLT_LIBOMPTARGET_LIBRARY_DIR bolt-omptarget-nvptx LIBRARY_OUTPUT_DIRECTORY)
+  if(BOLT_LIBOMPTARGET_LIBRARY_DIR)
+    add_custom_command(TARGET bolt-omptarget-nvptx POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E create_symlink ${CMAKE_STATIC_LIBRARY_PREFIX}bolt-omptarget-nvptx${CMAKE_STATIC_LIBRARY_SUFFIX}
+        ${CMAKE_STATIC_LIBRARY_PREFIX}omptarget-nvptx${CMAKE_STATIC_LIBRARY_SUFFIX}
+      WORKING_DIRECTORY ${BOLT_LIBOMPTARGET_LIBRARY_DIR}
+    )
+  endif()
+  install(CODE "execute_process(COMMAND \"\${CMAKE_COMMAND}\" -E create_symlink \"${CMAKE_STATIC_LIBRARY_PREFIX}bolt-omptarget-nvptx${CMAKE_STATIC_LIBRARY_SUFFIX}\"
+    \"${CMAKE_STATIC_LIBRARY_PREFIX}omptarget-nvptx${CMAKE_STATIC_LIBRARY_SUFFIX}\" WORKING_DIRECTORY
+    \$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${OPENMP_INSTALL_LIBDIR})")
+
+  target_link_libraries(bolt-omptarget-nvptx ${CUDA_LIBRARIES})
 
 
   # Check if we can create an LLVM bitcode implementation of the runtime library
@@ -146,7 +159,7 @@ if(LIBOMPTARGET_DEP_CUDA_FOUND)
     endif()
 
     # Create target to build all Bitcode libraries.
-    add_custom_target(omptarget-nvptx-bc)
+    add_custom_target(bolt-omptarget-nvptx-bc)
 
     # Generate a Bitcode library for all the compute capabilities the user requested.
     foreach(sm ${nvptx_sm_list})
@@ -180,11 +193,11 @@ if(LIBOMPTARGET_DEP_CUDA_FOUND)
       )
       set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_MAKE_CLEAN_FILES libomptarget-nvptx-sm_${sm}.bc)
 
-      add_custom_target(omptarget-nvptx-${sm}-bc ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/libomptarget-nvptx-sm_${sm}.bc)
-      add_dependencies(omptarget-nvptx-bc omptarget-nvptx-${sm}-bc)
+      add_custom_target(bolt-omptarget-nvptx-${sm}-bc ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/libomptarget-nvptx-sm_${sm}.bc)
+      add_dependencies(bolt-omptarget-nvptx-bc bolt-omptarget-nvptx-${sm}-bc)
 
       # Copy library to destination.
-      add_custom_command(TARGET omptarget-nvptx-${sm}-bc POST_BUILD
+      add_custom_command(TARGET bolt-omptarget-nvptx-${sm}-bc POST_BUILD
                          COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/libomptarget-nvptx-sm_${sm}.bc
                          $<TARGET_FILE_DIR:omptarget-nvptx>)
 

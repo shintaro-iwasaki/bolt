@@ -61,13 +61,13 @@
       parameter(bolt_release_date='@BOLT_RELEASE_DATE@')
 
       integer(kind=omp_integer_kind)openmp_version
-      parameter(openmp_version=@LIBOMP_OMP_YEAR_MONTH@)
+      parameter(openmp_version=@LIBBOLT_OMP_YEAR_MONTH@)
       integer(kind=omp_integer_kind)kmp_version_major
-      parameter(kmp_version_major=@LIBOMP_VERSION_MAJOR@)
+      parameter(kmp_version_major=@LIBBOLT_VERSION_MAJOR@)
       integer(kind=omp_integer_kind)kmp_version_minor
-      parameter(kmp_version_minor=@LIBOMP_VERSION_MINOR@)
+      parameter(kmp_version_minor=@LIBBOLT_VERSION_MINOR@)
       integer(kind=omp_integer_kind)kmp_version_build
-      parameter(kmp_version_build=@LIBOMP_VERSION_BUILD@)
+      parameter(kmp_version_build=@LIBBOLT_VERSION_BUILD@)
       character(*)kmp_build_date
       parameter(kmp_build_date='@LIBOMP_BUILD_DATE@')
 

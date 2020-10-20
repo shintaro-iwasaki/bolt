@@ -6,7 +6,7 @@ set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake ${CMAKE_MODULE_PATH})
 # llvm/runtimes/ will set OPENMP_STANDALONE_BUILD.
 if (OPENMP_STANDALONE_BUILD OR "${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_SOURCE_DIR}")
   set(OPENMP_STANDALONE_BUILD TRUE)
-  project(openmp C CXX)
+  project(bolt C CXX)
 
   # CMAKE_BUILD_TYPE was not set, default to Release.
   if (NOT CMAKE_BUILD_TYPE)
@@ -29,8 +29,17 @@ if (OPENMP_STANDALONE_BUILD OR "${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_S
   set(OPENMP_LLVM_TOOLS_DIR "" CACHE PATH "Path to LLVM tools for testing.")
 else()
   set(OPENMP_ENABLE_WERROR ${LLVM_ENABLE_WERROR})
-  # If building in tree, we honor the same install suffix LLVM uses.
-  set(OPENMP_INSTALL_LIBDIR "lib${LLVM_LIBDIR_SUFFIX}")
+  set(LIBOMP_USE_BOLT_DEFAULT FALSE CACHE BOOL "Use BOLT as a default LLVM OpenMP?")
+  if (${LIBOMP_USE_BOLT_DEFAULT})
+    # If building in tree, we honor the same install suffix LLVM uses.
+    set(OPENMP_INSTALL_LIBDIR "lib${LLVM_LIBDIR_SUFFIX}")
+  else()
+    # If building in tree, we put BOLT libraries in a special directory
+    set(OPENMP_INSTALL_LIBDIR "lib${LLVM_LIBDIR_SUFFIX}/bolt")
+  endif()
+  # Place libraries in "lib/bolt"
+  set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}/bolt)
+  set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/bolt)
 
   if (NOT MSVC)
     set(OPENMP_TEST_C_COMPILER ${LLVM_RUNTIME_OUTPUT_INTDIR}/clang)
