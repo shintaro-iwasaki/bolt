@@ -1,6 +1,6 @@
 // RUN: %libomp-compile-and-run | FileCheck %s
 // REQUIRES: ompt
-// UNSUPPORTED: gcc
+// UNSUPPORTED: gcc, icc-19
 #include "callback.h"
 
 int main() {
