@@ -1,4 +1,5 @@
 // RUN: %libomp-compile-and-run
+// UNSUPPORTED: abt
 
 // https://bugs.llvm.org/show_bug.cgi?id=26540 requested
 // stack size to be propagated from master to workers.
