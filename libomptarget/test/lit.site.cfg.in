@@ -13,7 +13,7 @@ config.operating_system = "@CMAKE_SYSTEM_NAME@"
 config.using_abt = @LIBOMP_TEST_USE_ARGOBOTS@
 config.libabt_dir = "@LIBOMP_ARGOBOTS_INSTALL_DIR@"
 config.libomptarget_all_targets = "@LIBOMPTARGET_ALL_TARGETS@".split()
-config.libomptarget_system_targets = "@LIBOMPTARGET_SYSTEM_TARGETS@".split()
+config.libomptarget_system_targets = "@LIBBOLTTARGET_SYSTEM_TARGETS@".split()
 config.libomptarget_filecheck = "@OPENMP_FILECHECK_EXECUTABLE@"
 config.libomptarget_debug = @LIBOMPTARGET_DEBUG@
 

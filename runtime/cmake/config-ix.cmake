@@ -290,7 +290,7 @@ if(${LIBOMP_USE_ARGOBOTS})
     endif()
   endif()
   libomp_say("BOLT does not support OMPT")
-  set(LIBOMP_OMPT_SUPPORT FALSE)
+  set(LIBBOLT_OMPT_SUPPORT FALSE)
   set(LIBOMP_HAVE_OMPT_SUPPORT FALSE)
 endif()
 

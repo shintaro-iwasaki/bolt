@@ -53,13 +53,25 @@ if(${LIBOMP_USE_BUILTIN_ARGOBOTS})
     BINARY_DIR ${ABT_BUILD_DIR}
     CONFIGURE_COMMAND ${ABT_CONFIGURE} --prefix=${ABT_INSTALL_DIR} CC=${CMAKE_C_COMPILER}
   )
-  # FIXME: pkfconfig is not properly set since the built-in Argobots is
-  # once installed to a different path.  Temporarily pkgconfig is not installed.
-  install(DIRECTORY ${ABT_INSTALL_DIR}/lib
-          DESTINATION ${CMAKE_INSTALL_PREFIX}
+  # Install libraries.
+  if(${OPENMP_STANDALONE_BUILD})
+    set(ABT_LIBS_INSTALL_PATH ${CMAKE_INSTALL_PREFIX}/lib)
+  else()
+    set(ABT_LIBS_INSTALL_PATH ${OPENMP_INSTALL_LIBDIR})
+  endif()
+  # pkgconfig is not installed.
+  install(DIRECTORY ${ABT_INSTALL_DIR}/lib/
+          DESTINATION ${ABT_LIBS_INSTALL_PATH}
           PATTERN pkgconfig EXCLUDE)
-  install(DIRECTORY ${ABT_INSTALL_DIR}/include
-          DESTINATION ${CMAKE_INSTALL_PREFIX})
+  # Install headers.  pkgconfig is not installed.
+  if(${OPENMP_STANDALONE_BUILD})
+    set(ABT_HEADERS_INSTALL_PATH ${CMAKE_INSTALL_PREFIX}/include)
+  else()
+    string(REGEX MATCH "[0-9]+\\.[0-9]+(\\.[0-9]+)?" CLANG_VERSION ${PACKAGE_VERSION})
+    set(ABT_HEADERS_INSTALL_PATH "${OPENMP_INSTALL_LIBDIR}/clang/${CLANG_VERSION}/include")
+  endif()
+  install(FILES ${ABT_INSTALL_DIR}/include/abt.h
+          DESTINATION ${ABT_HEADERS_INSTALL_PATH})
 
   set(LIBOMP_ARGOBOTS_INSTALL_DIR ${ABT_INSTALL_DIR} PARENT_SCOPE)
 else()

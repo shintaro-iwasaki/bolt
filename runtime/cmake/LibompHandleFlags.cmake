@@ -88,11 +88,11 @@ endfunction()
 # Linker flags
 function(libomp_get_ldflags ldflags)
   set(ldflags_local)
-  libomp_append(ldflags_local "${CMAKE_LINK_DEF_FILE_FLAG}${CMAKE_CURRENT_BINARY_DIR}/${LIBOMP_LIB_NAME}.def"
+  libomp_append(ldflags_local "${CMAKE_LINK_DEF_FILE_FLAG}${CMAKE_CURRENT_BINARY_DIR}/${LIBBOLT_LIB_NAME}.def"
     IF_DEFINED CMAKE_LINK_DEF_FILE_FLAG)
-  libomp_append(ldflags_local "${CMAKE_C_OSX_CURRENT_VERSION_FLAG}${LIBOMP_VERSION_MAJOR}.${LIBOMP_VERSION_MINOR}"
+  libomp_append(ldflags_local "${CMAKE_C_OSX_CURRENT_VERSION_FLAG}${LIBBOLT_VERSION_MAJOR}.${LIBBOLT_VERSION_MINOR}"
     IF_DEFINED CMAKE_C_OSX_CURRENT_VERSION_FLAG)
-  libomp_append(ldflags_local "${CMAKE_C_OSX_COMPATIBILITY_VERSION_FLAG}${LIBOMP_VERSION_MAJOR}.${LIBOMP_VERSION_MINOR}"
+  libomp_append(ldflags_local "${CMAKE_C_OSX_COMPATIBILITY_VERSION_FLAG}${LIBBOLT_VERSION_MAJOR}.${LIBBOLT_VERSION_MINOR}"
     IF_DEFINED CMAKE_C_OSX_COMPATIBILITY_VERSION_FLAG)
   libomp_append(ldflags_local -Wl,--warn-shared-textrel LIBOMP_HAVE_WARN_SHARED_TEXTREL_FLAG)
   libomp_append(ldflags_local -Wl,--as-needed LIBOMP_HAVE_AS_NEEDED_FLAG)

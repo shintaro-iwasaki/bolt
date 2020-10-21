@@ -3,15 +3,15 @@ if(NOT OPENMP_TEST_COMPILER_ID STREQUAL "Clang")
   return()
 endif()
 
-set(deps omptarget-nvptx omptarget omp)
+set(deps bolt-omptarget-nvptx bolt-omptarget bolt-omp)
 if(LIBOMPTARGET_NVPTX_ENABLE_BCLIB)
-  set(deps ${deps} omptarget-nvptx-bc)
+  set(deps ${deps} bolt-omptarget-nvptx-bc)
 endif()
 
 # Don't run by default.
 set(EXCLUDE_FROM_ALL True)
 # Run with only one thread to only launch one application to the GPU at a time.
-add_openmp_testsuite(check-libomptarget-nvptx
+add_openmp_testsuite(check-bolt-libomptarget-nvptx
     "Running libomptarget-nvptx tests" ${CMAKE_CURRENT_BINARY_DIR}
     DEPENDS ${deps} ARGS -j1)
 

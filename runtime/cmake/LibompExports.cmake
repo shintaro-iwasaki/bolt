@@ -21,8 +21,8 @@ libomp_append(libomp_suffix .deb DEBUG_BUILD)
 libomp_append(libomp_suffix .dia RELWITHDEBINFO_BUILD)
 libomp_append(libomp_suffix .min MINSIZEREL_BUILD)
 libomp_append(libomp_suffix .s1 LIBOMP_STATS)
-libomp_append(libomp_suffix .ompt LIBOMP_OMPT_SUPPORT)
-if(${LIBOMP_OMPT_SUPPORT})
+libomp_append(libomp_suffix .ompt LIBBOLT_OMPT_SUPPORT)
+if(${LIBBOLT_OMPT_SUPPORT})
   libomp_append(libomp_suffix .optional LIBOMP_OMPT_OPTIONAL)
 endif()
 string(REPLACE ";" "" libomp_suffix "${libomp_suffix}")
@@ -47,12 +47,12 @@ set(LIBOMP_EXPORTS_MOD_DIR "${LIBOMP_EXPORTS_PLATFORM_DIR}/include_compat")
 set(LIBOMP_EXPORTS_LIB_DIR "${LIBOMP_EXPORTS_DIR}/${libomp_platform}${libomp_suffix}/lib")
 
 # Put headers in exports/ directory post build
-add_custom_command(TARGET omp POST_BUILD
+add_custom_command(TARGET bolt-omp POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E make_directory ${LIBOMP_EXPORTS_CMN_DIR}
   COMMAND ${CMAKE_COMMAND} -E copy omp.h ${LIBOMP_EXPORTS_CMN_DIR}
 )
-if(${LIBOMP_OMPT_SUPPORT})
-  add_custom_command(TARGET omp POST_BUILD
+if(${LIBBOLT_OMPT_SUPPORT})
+  add_custom_command(TARGET bolt-omp POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy omp-tools.h ${LIBOMP_EXPORTS_CMN_DIR}
   )
 endif()
@@ -62,32 +62,32 @@ if(${LIBOMP_FORTRAN_MODULES})
     COMMAND ${CMAKE_COMMAND} -E copy omp_lib.mod ${LIBOMP_EXPORTS_MOD_DIR}
     COMMAND ${CMAKE_COMMAND} -E copy omp_lib_kinds.mod ${LIBOMP_EXPORTS_MOD_DIR}
   )
-  add_custom_command(TARGET omp POST_BUILD
+  add_custom_command(TARGET bolt-omp POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy omp_lib.h ${LIBOMP_EXPORTS_CMN_DIR}
   )
 endif()
 
 # Copy OpenMP library into exports/ directory post build
 if(WIN32)
-  get_target_property(LIBOMP_OUTPUT_DIRECTORY omp RUNTIME_OUTPUT_DIRECTORY)
+  get_target_property(LIBOMP_OUTPUT_DIRECTORY bolt-omp RUNTIME_OUTPUT_DIRECTORY)
 else()
-  get_target_property(LIBOMP_OUTPUT_DIRECTORY omp LIBRARY_OUTPUT_DIRECTORY)
+  get_target_property(LIBOMP_OUTPUT_DIRECTORY bolt-omp LIBRARY_OUTPUT_DIRECTORY)
 endif()
 if(NOT LIBOMP_OUTPUT_DIRECTORY)
   set(LIBOMP_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 endif()
-add_custom_command(TARGET omp POST_BUILD
+add_custom_command(TARGET bolt-omp POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E make_directory ${LIBOMP_EXPORTS_LIB_DIR}
   COMMAND ${CMAKE_COMMAND} -E copy ${LIBOMP_OUTPUT_DIRECTORY}/${LIBOMP_LIB_FILE} ${LIBOMP_EXPORTS_LIB_DIR}
 )
 
 # Copy Windows import library into exports/ directory post build
 if(WIN32)
-  get_target_property(LIBOMPIMP_OUTPUT_DIRECTORY ompimp ARCHIVE_OUTPUT_DIRECTORY)
+  get_target_property(LIBOMPIMP_OUTPUT_DIRECTORY bolt-ompimp ARCHIVE_OUTPUT_DIRECTORY)
   if(NOT LIBOMPIMP_OUTPUT_DIRECTORY)
     set(LIBOMPIMP_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
   endif()
-  add_custom_command(TARGET ompimp POST_BUILD
+  add_custom_command(TARGET bolt-ompimp POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory ${LIBOMP_EXPORTS_LIB_DIR}
     COMMAND ${CMAKE_COMMAND} -E copy ${LIBOMPIMP_OUTPUT_DIRECTORY}/${LIBOMP_IMP_LIB_FILE} ${LIBOMP_EXPORTS_LIB_DIR}
   )

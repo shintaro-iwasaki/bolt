@@ -19,14 +19,14 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US    // English (U.S.) resources
 VS_VERSION_INFO VERSIONINFO
     // Parts of FILEVERSION and PRODUCTVERSION are 16-bit fields, entire build date yyyymmdd
     // does not fit into one version part, so we need to split it into yyyy and mmdd:
-    FILEVERSION    @LIBOMP_VERSION_MAJOR@,@LIBOMP_VERSION_MINOR@,@LIBOMP_VERSION_BUILD_YEAR@,@LIBOMP_VERSION_BUILD_MONTH_DAY@
-    PRODUCTVERSION @LIBOMP_VERSION_MAJOR@,@LIBOMP_VERSION_MINOR@,@LIBOMP_VERSION_BUILD_YEAR@,@LIBOMP_VERSION_BUILD_MONTH_DAY@
+    FILEVERSION    @LIBBOLT_VERSION_MAJOR@,@LIBBOLT_VERSION_MINOR@,@LIBBOLT_VERSION_BUILD_YEAR@,@LIBBOLT_VERSION_BUILD_MONTH_DAY@
+    PRODUCTVERSION @LIBBOLT_VERSION_MAJOR@,@LIBBOLT_VERSION_MINOR@,@LIBBOLT_VERSION_BUILD_YEAR@,@LIBBOLT_VERSION_BUILD_MONTH_DAY@
     FILEFLAGSMASK  VS_FFI_FILEFLAGSMASK
     FILEFLAGS      0
 #if KMP_DEBUG
         | VS_FF_DEBUG
 #endif
-#if @LIBOMP_VERSION_BUILD@ == 0
+#if @LIBBOLT_VERSION_BUILD@ == 0
         | VS_FF_PRIVATEBUILD | VS_FF_PRERELEASE
 #endif
     FILEOS          VOS_NT_WINDOWS32    // Windows* Server* 2003, XP*, 2000, or NT*
@@ -43,15 +43,15 @@ VS_VERSION_INFO VERSIONINFO
                 VALUE "CompanyName",      "LLVM\0"
                 // VALUE "LegalTrademarks",  "\0"  // Not used for now.
                 VALUE "ProductName",      "LLVM* OpenMP* Runtime Library\0"
-                VALUE "ProductVersion",   "@LIBOMP_VERSION_MAJOR@.@LIBOMP_VERSION_MINOR@\0"
-                VALUE "FileVersion",      "@LIBOMP_VERSION_BUILD@\0"
+                VALUE "ProductVersion",   "@LIBBOLT_VERSION_MAJOR@.@LIBBOLT_VERSION_MINOR@\0"
+                VALUE "FileVersion",      "@LIBBOLT_VERSION_BUILD@\0"
                 VALUE "InternalName",     "@LIBOMP_LIB_FILE@\0"
                 VALUE "OriginalFilename", "@LIBOMP_LIB_FILE@\0"
                 VALUE "Comments",
-                    "LLVM* OpenMP* @LIBOMP_LEGAL_TYPE@ Library "
-                    "version @LIBOMP_VERSION_MAJOR@.@LIBOMP_VERSION_MINOR@.@LIBOMP_VERSION_BUILD@ "
-                    "for @LIBOMP_LEGAL_ARCH@ architecture built on @LIBOMP_BUILD_DATE@.\0"
-#if @LIBOMP_VERSION_BUILD@ == 0
+                    "LLVM* OpenMP* @LIBBOLT_LEGAL_TYPE@ Library "
+                    "version @LIBBOLT_VERSION_MAJOR@.@LIBBOLT_VERSION_MINOR@.@LIBBOLT_VERSION_BUILD@ "
+                    "for @LIBBOLT_LEGAL_ARCH@ architecture built on @LIBOMP_BUILD_DATE@.\0"
+#if @LIBBOLT_VERSION_BUILD@ == 0
                     VALUE "PrivateBuild",
                         "This is a development build.\0"
 #endif

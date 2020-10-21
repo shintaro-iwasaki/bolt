@@ -195,5 +195,5 @@ function(construct_check_openmp_target)
 
   # We already added the testsuites themselves, no need to do that again.
   set(EXCLUDE_FROM_ALL True)
-  add_openmp_testsuite(check-openmp "Running OpenMP tests" ${OPENMP_LIT_TESTSUITES} DEPENDS ${OPENMP_LIT_DEPENDS})
+  add_openmp_testsuite(check-bolt-openmp "Running BOLT tests" ${OPENMP_LIT_TESTSUITES} DEPENDS ${OPENMP_LIT_DEPENDS})
 endfunction()

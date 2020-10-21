@@ -38,8 +38,8 @@ set (LIBOMPTARGET_ALL_TARGETS "${LIBOMPTARGET_ALL_TARGETS} nvptx64-nvidia-cuda")
 
 # Once the plugins for the different targets are validated, they will be added to
 # the list of supported targets in the current system.
-set (LIBOMPTARGET_SYSTEM_TARGETS "")
-set (LIBOMPTARGET_TESTED_PLUGINS "")
+set (LIBBOLTTARGET_SYSTEM_TARGETS "")
+set (LIBBOLTTARGET_TESTED_PLUGINS "")
 
 # Check whether using debug mode. In debug mode, allow dumping progress
 # messages at runtime by default. Otherwise, it can be enabled
@@ -61,7 +61,7 @@ add_subdirectory(src)
 
 # Retrieve the path to the resulting library so that it can be used for 
 # testing.
-get_target_property(LIBOMPTARGET_LIBRARY_DIR omptarget LIBRARY_OUTPUT_DIRECTORY)
+get_target_property(LIBOMPTARGET_LIBRARY_DIR bolt-omptarget LIBRARY_OUTPUT_DIRECTORY)
 if(NOT LIBOMPTARGET_LIBRARY_DIR)
   set(LIBOMPTARGET_LIBRARY_DIR ${CMAKE_CURRENT_BINARY_DIR})
 endif()
