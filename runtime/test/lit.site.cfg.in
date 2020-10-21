@@ -13,7 +13,6 @@ config.operating_system = "@CMAKE_SYSTEM_NAME@"
 config.hwloc_library_dir = "@LIBOMP_HWLOC_LIBRARY_DIR@"
 config.using_hwloc = @LIBOMP_USE_HWLOC@
 config.using_abt = @LIBOMP_TEST_USE_ARGOBOTS@
-config.libabt_dir = "@LIBOMP_ARGOBOTS_INSTALL_DIR@"
 config.has_ompt = @LIBBOLT_OMPT_SUPPORT@ and @LIBOMP_OMPT_OPTIONAL@
 config.has_libm = @LIBOMP_HAVE_LIBM@
 config.has_libatomic = @LIBOMP_HAVE_LIBATOMIC@
