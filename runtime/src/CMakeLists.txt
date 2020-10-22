@@ -186,6 +186,20 @@ if(NOT WIN32)
   endif()
 endif()
 
+# Add symbolic links to Argobots to the runtime path for testing
+if(${LIBOMP_USE_ARGOBOTS})
+  add_custom_command(TARGET bolt-omp POST_BUILD
+    COMMAND ${CMAKE_COMMAND}
+            -D LIBOMP_ARGOBOTS_INSTALL_DIR="${LIBOMP_ARGOBOTS_INSTALL_DIR}"
+            -D LIBBOLT_LIBRARY_DIR="${LIBBOLT_LIBRARY_DIR}"
+            -D LIBBOLT_INCLUDE_DIR="${CMAKE_CURRENT_BINARY_DIR}"
+            -D SHARED_LIBRARY_SUFFIX="${CMAKE_SHARED_LIBRARY_SUFFIX}"
+            -D SHARED_LIBRARY_PREFIX="${CMAKE_SHARED_LIBRARY_PREFIX}"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/../cmake/LibboltSymlinkArgobots.cmake"
+    WORKING_DIRECTORY ${LIBBOLT_LIBRARY_DIR}
+  )
+endif()
+
 # Linking command will include libraries in LIBOMP_CONFIGURED_LIBFLAGS
 libomp_get_libflags(LIBOMP_CONFIGURED_LIBFLAGS)
 target_link_libraries(bolt-omp ${LIBOMP_CONFIGURED_LIBFLAGS} ${CMAKE_DL_LIBS})
