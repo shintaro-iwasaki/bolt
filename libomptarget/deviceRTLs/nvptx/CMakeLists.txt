@@ -199,7 +199,7 @@ if(LIBOMPTARGET_DEP_CUDA_FOUND)
       # Copy library to destination.
       add_custom_command(TARGET bolt-omptarget-nvptx-${sm}-bc POST_BUILD
                          COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/libomptarget-nvptx-sm_${sm}.bc
-                         $<TARGET_FILE_DIR:omptarget-nvptx>)
+                         $<TARGET_FILE_DIR:bolt-omptarget-nvptx>)
 
       # Install bitcode library under the lib destination folder.
       install(FILES ${CMAKE_CURRENT_BINARY_DIR}/libomptarget-nvptx-sm_${sm}.bc DESTINATION "${OPENMP_INSTALL_LIBDIR}")
