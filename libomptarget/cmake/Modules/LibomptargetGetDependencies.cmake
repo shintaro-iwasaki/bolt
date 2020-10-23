@@ -15,6 +15,7 @@
 # libffi : required to launch target kernels given function and argument 
 #          pointers.
 # CUDA : required to control offloading to NVIDIA GPUs.
+# VEOS : required to control offloading to NEC Aurora.
 
 include (FindPackageHandleStandardArgs)
 
@@ -136,17 +137,8 @@ find_library (
 
 # There is a libcuda.so in lib64/stubs that can be used for linking.
 if (NOT LIBOMPTARGET_DEP_CUDA_DRIVER_LIBRARIES AND CUDA_FOUND)
-  # Since CMake 3.3 FindCUDA.cmake defaults to using static libraries. In this
-  # case CUDA_LIBRARIES contains additional linker arguments which breaks
-  # get_filename_component below. Fortunately, since that change the module
-  # exports CUDA_cudart_static_LIBRARY which points to a single file in the
-  # right directory.
-  set(cuda_library ${CUDA_LIBRARIES})
-  if (DEFINED CUDA_cudart_static_LIBRARY)
-    set(cuda_library ${CUDA_cudart_static_LIBRARY})
-  endif()
-  get_filename_component(CUDA_LIBDIR ${cuda_library} DIRECTORY)
-  find_library (
+  get_filename_component(CUDA_LIBDIR "${CUDA_cudart_static_LIBRARY}" DIRECTORY)
+  find_library(
       LIBOMPTARGET_DEP_CUDA_DRIVER_LIBRARIES
     NAMES
       cuda
@@ -162,6 +154,61 @@ find_package_handle_standard_args(
 mark_as_advanced(LIBOMPTARGET_DEP_CUDA_DRIVER_LIBRARIES)
 
 ################################################################################
+# Looking for VEO...
+################################################################################
+
+find_path (
+  LIBOMPTARGET_DEP_VEO_INCLUDE_DIR
+  NAMES
+    ve_offload.h
+  PATHS
+    /usr/include
+    /usr/local/include
+    /opt/local/include
+    /sw/include
+    /opt/nec/ve/veos/include
+    ENV CPATH
+  PATH_SUFFIXES
+    libveo)
+
+find_library (
+  LIBOMPTARGET_DEP_VEO_LIBRARIES
+  NAMES
+    veo
+  PATHS
+    /usr/lib
+    /usr/local/lib
+    /opt/local/lib
+    /sw/lib
+    /opt/nec/ve/veos/lib64
+    ENV LIBRARY_PATH
+    ENV LD_LIBRARY_PATH)
+
+find_library(
+  LIBOMPTARGET_DEP_VEOSINFO_LIBRARIES
+  NAMES
+    veosinfo
+  PATHS
+    /usr/lib
+    /usr/local/lib
+    /opt/local/lib
+    /sw/lib
+    /opt/nec/ve/veos/lib64
+    ENV LIBRARY_PATH
+    ENV LD_LIBRARY_PATH)
+
+set(LIBOMPTARGET_DEP_VEO_INCLUDE_DIRS ${LIBOMPTARGET_DEP_VEO_INCLUDE_DIR})
+find_package_handle_standard_args(
+  LIBOMPTARGET_DEP_VEO
+  DEFAULT_MSG
+  LIBOMPTARGET_DEP_VEO_LIBRARIES
+  LIBOMPTARGET_DEP_VEOSINFO_LIBRARIES
+  LIBOMPTARGET_DEP_VEO_INCLUDE_DIRS)
+
+mark_as_advanced(
+  LIBOMPTARGET_DEP_VEO_FOUND
+  LIBOMPTARGET_DEP_VEO_INCLUDE_DIRS)
+
 # Looking for CUDA libdevice subdirectory
 #
 # Special case for Debian/Ubuntu to have nvidia-cuda-toolkit work

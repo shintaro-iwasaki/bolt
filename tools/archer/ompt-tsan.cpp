@@ -15,18 +15,18 @@
 #define __STDC_FORMAT_MACROS
 #endif
 
+#include <algorithm>
 #include <atomic>
 #include <cassert>
 #include <cstdlib>
 #include <cstring>
 #include <inttypes.h>
 #include <iostream>
+#include <list>
 #include <mutex>
 #include <sstream>
 #include <stack>
-#include <list>
 #include <string>
-#include <iostream>
 #include <unordered_map>
 #include <vector>
 
@@ -89,17 +89,26 @@ public:
   TsanFlags(const char *env) : ignore_noninstrumented_modules(0) {
     if (env) {
       std::vector<std::string> tokens;
-      std::string token;
       std::string str(env);
-      std::istringstream iss(str);
-      while (std::getline(iss, token, ' '))
-        tokens.push_back(token);
+      auto end = str.end();
+      auto it = str.begin();
+      auto is_sep = [](char c) {
+        return c == ' ' || c == ',' || c == ':' || c == '\n' || c == '\t' ||
+               c == '\r';
+      };
+      while (it != end) {
+        auto next_it = std::find_if(it, end, is_sep);
+        tokens.emplace_back(it, next_it);
+        it = next_it;
+        if (it != end) {
+          ++it;
+        }
+      }
 
-      for (std::vector<std::string>::iterator it = tokens.begin();
-           it != tokens.end(); ++it) {
+      for (const auto &token : tokens) {
         // we are interested in ignore_noninstrumented_modules to print a
         // warning
-        if (sscanf(it->c_str(), "ignore_noninstrumented_modules=%d",
+        if (sscanf(token.c_str(), "ignore_noninstrumented_modules=%d",
                    &ignore_noninstrumented_modules))
           continue;
       }
@@ -258,7 +267,7 @@ template <typename T, int N> struct DataPool {
       T data;
     };
     // We alloc without initialize the memory. We cannot call constructors.
-    // Therfore use malloc!
+    // Therefore use malloc!
     pooldata *datas = (pooldata *)malloc(sizeof(pooldata) * N);
     memory.push_back(datas);
     for (int i = 0; i < N; i++) {
@@ -899,7 +908,7 @@ static int ompt_tsan_initialize(ompt_function_lookup_t lookup,
     fprintf(
         stderr,
         "Warning: please export TSAN_OPTIONS='ignore_noninstrumented_modules=1' "
-        "to avoid false positive reports from the OpenMP runtime.!\n");
+        "to avoid false positive reports from the OpenMP runtime!\n");
   return 1; // success
 }
 

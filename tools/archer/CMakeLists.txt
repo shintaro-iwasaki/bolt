@@ -32,6 +32,5 @@ if(LIBBOLT_OMPT_SUPPORT)
   install(CODE "execute_process(COMMAND \"\${CMAKE_COMMAND}\" -E create_symlink \"${CMAKE_STATIC_LIBRARY_PREFIX}bolt-archer_static${CMAKE_STATIC_LIBRARY_SUFFIX}\"
     \"${CMAKE_STATIC_LIBRARY_PREFIX}archer_static${LIBOMP_LIBRARY_SUFFIX}\" WORKING_DIRECTORY
     \$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${OPENMP_INSTALL_LIBDIR})")
-
   add_subdirectory(tests)
 endif()

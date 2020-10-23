@@ -1,5 +1,5 @@
 # Keep track if we have all dependencies.
-set(ENABLE_CHECK_TARGETS TRUE)
+set(ENABLE_CHECK_BOLT_TARGETS TRUE)
 
 # Function to find required dependencies for testing.
 function(find_standalone_test_dependencies)
@@ -8,7 +8,7 @@ function(find_standalone_test_dependencies)
   if (NOT PYTHONINTERP_FOUND)
     message(STATUS "Could not find Python.")
     message(WARNING "The check targets will not be available!")
-    set(ENABLE_CHECK_TARGETS FALSE PARENT_SCOPE)
+    set(ENABLE_CHECK_BOLT_TARGETS FALSE PARENT_SCOPE)
     return()
   endif()
 
@@ -20,7 +20,7 @@ function(find_standalone_test_dependencies)
     message(STATUS "Cannot find llvm-lit.")
     message(STATUS "Please put llvm-lit in your PATH, set OPENMP_LLVM_LIT_EXECUTABLE to its full path, or point OPENMP_LLVM_TOOLS_DIR to its directory.")
     message(WARNING "The check targets will not be available!")
-    set(ENABLE_CHECK_TARGETS FALSE PARENT_SCOPE)
+    set(ENABLE_CHECK_BOLT_TARGETS FALSE PARENT_SCOPE)
     return()
   endif()
 
@@ -31,20 +31,24 @@ function(find_standalone_test_dependencies)
     message(STATUS "Cannot find FileCheck.")
     message(STATUS "Please put FileCheck in your PATH, set OPENMP_FILECHECK_EXECUTABLE to its full path, or point OPENMP_LLVM_TOOLS_DIR to its directory.")
     message(WARNING "The check targets will not be available!")
-    set(ENABLE_CHECK_TARGETS FALSE PARENT_SCOPE)
+    set(ENABLE_CHECK_BOLT_TARGETS FALSE PARENT_SCOPE)
+    return()
+  endif()
+
+  find_program(OPENMP_NOT_EXECUTABLE
+    NAMES not
+    PATHS ${OPENMP_LLVM_TOOLS_DIR})
+  if (NOT OPENMP_NOT_EXECUTABLE)
+    message(STATUS "Cannot find 'not'.")
+    message(STATUS "Please put 'not' in your PATH, set OPENMP_NOT_EXECUTABLE to its full path, or point OPENMP_LLVM_TOOLS_DIR to its directory.")
+    message(WARNING "The check targets will not be available!")
+    set(ENABLE_CHECK_BOLT_TARGETS FALSE PARENT_SCOPE)
     return()
   endif()
 endfunction()
 
 if (${OPENMP_STANDALONE_BUILD})
   find_standalone_test_dependencies()
-
-  # Make sure we can use the console pool for recent CMake and Ninja > 1.5.
-  if (CMAKE_VERSION VERSION_LESS 3.1.20141117)
-    set(cmake_3_2_USES_TERMINAL)
-  else()
-    set(cmake_3_2_USES_TERMINAL USES_TERMINAL)
-  endif()
 
   # Set lit arguments.
   set(DEFAULT_LIT_ARGS "-sv --show-unsupported --show-xfail")
@@ -55,6 +59,7 @@ if (${OPENMP_STANDALONE_BUILD})
   separate_arguments(OPENMP_LIT_ARGS)
 else()
   set(OPENMP_FILECHECK_EXECUTABLE ${LLVM_RUNTIME_OUTPUT_INTDIR}/FileCheck)
+  set(OPENMP_NOT_EXECUTABLE ${LLVM_RUNTIME_OUTPUT_INTDIR}/not)
 endif()
 
 # Macro to extract information about compiler from file. (no own scope)
@@ -81,7 +86,7 @@ function(set_test_compiler_information dir)
           "${OPENMP_TEST_C_COMPILER_VERSION}" STREQUAL "${OPENMP_TEST_CXX_COMPILER_VERSION}"))
     message(STATUS "Test compilers for C and C++ don't match.")
     message(WARNING "The check targets will not be available!")
-    set(ENABLE_CHECK_TARGETS FALSE PARENT_SCOPE)
+    set(ENABLE_CHECK_BOLT_TARGETS FALSE PARENT_SCOPE)
   else()
     set(OPENMP_TEST_COMPILER_ID "${OPENMP_TEST_C_COMPILER_ID}" PARENT_SCOPE)
     set(OPENMP_TEST_COMPILER_VERSION "${OPENMP_TEST_C_COMPILER_VERSION}" PARENT_SCOPE)
@@ -112,7 +117,7 @@ if (${OPENMP_STANDALONE_BUILD})
   if (DETECT_COMPILER_RESULT)
     message(STATUS "Could not detect test compilers.")
     message(WARNING "The check targets will not be available!")
-    set(ENABLE_CHECK_TARGETS FALSE)
+    set(ENABLE_CHECK_BOLT_TARGETS FALSE)
   else()
     set_test_compiler_information(${CMAKE_CURRENT_BINARY_DIR}/DetectTestCompiler)
   endif()
@@ -121,8 +126,8 @@ else()
   set(OPENMP_TEST_COMPILER_ID "Clang")
   # Cannot use CLANG_VERSION because we are not guaranteed that this is already set.
   set(OPENMP_TEST_COMPILER_VERSION "${LLVM_VERSION}")
-  set(OPENMP_TEST_COMPILER_VERSION_MAJOR "${LLVM_MAJOR_VERSION}")
-  set(OPENMP_TEST_COMPILER_VERSION_MAJOR_MINOR "${LLVM_MAJOR_VERSION}.${LLVM_MINOR_VERSION}")
+  set(OPENMP_TEST_COMPILER_VERSION_MAJOR "${LLVM_VERSION_MAJOR}")
+  set(OPENMP_TEST_COMPILER_VERSION_MAJOR_MINOR "${LLVM_VERSION_MAJOR}.${LLVM_VERSION_MINOR}")
   # Unfortunately the top-level cmake/config-ix.cmake file mangles CMake's
   # CMAKE_THREAD_LIBS_INIT variable from the FindThreads package, so work
   # around that, until it is fixed there.
@@ -156,16 +161,16 @@ set_test_compiler_features()
 
 # Function to add a testsuite for an OpenMP runtime library.
 function(add_openmp_testsuite target comment)
-  if (NOT ENABLE_CHECK_TARGETS)
+  if (NOT ENABLE_CHECK_BOLT_TARGETS)
     add_custom_target(${target}
       COMMAND ${CMAKE_COMMAND} -E echo "${target} does nothing, dependencies not found.")
     message(STATUS "${target} does nothing.")
     return()
   endif()
 
-  cmake_parse_arguments(ARG "" "" "DEPENDS;ARGS" ${ARGN})
-  # EXCLUDE_FROM_ALL excludes the test ${target} out of check-openmp.
-  if (NOT EXCLUDE_FROM_ALL)
+  cmake_parse_arguments(ARG "EXCLUDE_FROM_CHECK_ALL" "" "DEPENDS;ARGS" ${ARGN})
+  # EXCLUDE_FROM_CHECK_ALL excludes the test ${target} out of check-openmp.
+  if (NOT ARG_EXCLUDE_FROM_CHECK_ALL)
     # Register the testsuites and depends for the check-openmp rule.
     set_property(GLOBAL APPEND PROPERTY OPENMP_LIT_TESTSUITES ${ARG_UNPARSED_ARGUMENTS})
     set_property(GLOBAL APPEND PROPERTY OPENMP_LIT_DEPENDS ${ARG_DEPENDS})
@@ -177,15 +182,25 @@ function(add_openmp_testsuite target comment)
       COMMAND ${PYTHON_EXECUTABLE} ${OPENMP_LLVM_LIT_EXECUTABLE} ${LIT_ARGS} ${ARG_UNPARSED_ARGUMENTS}
       COMMENT ${comment}
       DEPENDS ${ARG_DEPENDS}
-      ${cmake_3_2_USES_TERMINAL}
+      USES_TERMINAL
     )
   else()
-    add_lit_testsuite(${target}
-      ${comment}
-      ${ARG_UNPARSED_ARGUMENTS}
-      DEPENDS clang clang-resource-headers FileCheck ${ARG_DEPENDS}
-      ARGS ${ARG_ARGS}
-    )
+    if (ARG_EXCLUDE_FROM_CHECK_ALL)
+      add_lit_testsuite(${target}
+        ${comment}
+        ${ARG_UNPARSED_ARGUMENTS}
+        EXCLUDE_FROM_CHECK_ALL
+        DEPENDS clang clang-resource-headers FileCheck ${ARG_DEPENDS}
+        ARGS ${ARG_ARGS}
+      )
+    else()
+      add_lit_testsuite(${target}
+        ${comment}
+        ${ARG_UNPARSED_ARGUMENTS}
+        DEPENDS clang clang-resource-headers FileCheck ${ARG_DEPENDS}
+        ARGS ${ARG_ARGS}
+      )
+    endif()
   endif()
 endfunction()
 
@@ -194,6 +209,5 @@ function(construct_check_openmp_target)
   get_property(OPENMP_LIT_DEPENDS GLOBAL PROPERTY OPENMP_LIT_DEPENDS)
 
   # We already added the testsuites themselves, no need to do that again.
-  set(EXCLUDE_FROM_ALL True)
-  add_openmp_testsuite(check-bolt-openmp "Running BOLT tests" ${OPENMP_LIT_TESTSUITES} DEPENDS ${OPENMP_LIT_DEPENDS})
+  add_openmp_testsuite(check-bolt-openmp "Running BOLT tests" ${OPENMP_LIT_TESTSUITES} EXCLUDE_FROM_CHECK_ALL DEPENDS ${OPENMP_LIT_DEPENDS})
 endfunction()
