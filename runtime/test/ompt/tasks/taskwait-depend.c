@@ -9,6 +9,9 @@
 // update expected result when codegen in clang was added
 // XFAIL: clang
 
+// old icc does not support this
+// UNSUPPORTED: icc-18, icc-19
+
 #include "callback.h"
 #include <omp.h>
 

@@ -10,6 +10,9 @@
 // Should be removed once the functions are implemented
 // XFAIL: gcc-9, gcc-10
 
+// Parsing error in old icc:
+// UNSUPPORTED: icc-18, icc-19
+
 #include <stdio.h>
 #include <omp.h>
 

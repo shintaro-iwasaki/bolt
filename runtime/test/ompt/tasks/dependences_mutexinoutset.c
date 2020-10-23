@@ -7,6 +7,9 @@
 // clang 9 introduced codegen for mutexinoutset
 // UNSUPPORTED: clang-4, clang-5, clang-6, clang-7, clang-8
 
+// old icc does not support mutexinoutset
+// UNSUPPORTED: icc-18, icc-19
+
 #include "callback.h"
 #include <omp.h>
 #include <math.h>
