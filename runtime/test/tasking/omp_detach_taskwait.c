@@ -8,6 +8,8 @@
 // icc compiler does not support detach clause.
 // UNSUPPORTED: icc
 
+// REQUIRES: !abt
+
 #include <omp.h>
 
 int main()
