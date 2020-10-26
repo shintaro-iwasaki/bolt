@@ -46,6 +46,8 @@
 // RUN: %libomptarget-run-fail-x86_64-pc-linux-gnu 2>&1 \
 // RUN: | %fcheck-x86_64-pc-linux-gnu
 
+// UNSUPPORTED: clang-11
+
 // END.
 
 #include <stdio.h>

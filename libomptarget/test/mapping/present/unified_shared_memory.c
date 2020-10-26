@@ -14,6 +14,8 @@
 // RUN: %libomptarget-run-x86_64-pc-linux-gnu 2>&1 \
 // RUN: | %fcheck-x86_64-pc-linux-gnu
 
+// UNSUPPORTED: clang-11
+
 #include <stdio.h>
 
 // The runtime considers unified shared memory to be always present.
