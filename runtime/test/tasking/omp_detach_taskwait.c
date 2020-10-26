@@ -7,6 +7,7 @@
 // UNSUPPORTED: clang-10, clang-9, clang-8, clang-7
 // icc compiler does not support detach clause.
 // UNSUPPORTED: icc
+// REQUIRES: !abt
 
 #include <omp.h>
 
