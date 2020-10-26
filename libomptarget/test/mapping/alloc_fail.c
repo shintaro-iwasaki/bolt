@@ -15,6 +15,7 @@
 // RUN: | %fcheck-x86_64-pc-linux-gnu
 
 // CHECK: Libomptarget fatal error 1: failure of target construct while offloading is mandatory
+// UNSUPPORTED: clang-11
 
 int main() {
   int arr[4] = {0, 1, 2, 3};
