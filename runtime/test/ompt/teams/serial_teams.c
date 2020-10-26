@@ -1,5 +1,5 @@
 // RUN: %libomp-compile-and-run | %sort-threads | FileCheck %s
-// REQUIRES: ompt
+// REQUIRES: ompt, multicpu
 // UNSUPPORTED: gcc, icc-19
 #include "callback.h"
 
