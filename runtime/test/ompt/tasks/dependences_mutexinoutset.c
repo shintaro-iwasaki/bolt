@@ -6,6 +6,7 @@
 
 // UNSUPPORTED: gcc
 // UNSUPPORTED: clang-4, clang-5, clang-6, clang-7, clang-8
+// UNSUPPORTED: icc-19
 
 #include "callback.h"
 #include <omp.h>
