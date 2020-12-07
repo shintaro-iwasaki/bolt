@@ -52,7 +52,8 @@ install(CODE "execute_process(COMMAND \"\${CMAKE_COMMAND}\" -E create_symlink \"
 target_link_libraries(bolt-omptarget.rtl.cuda
   ${LIBOMPTARGET_DEP_CUDA_DRIVER_LIBRARIES}
   ${LIBOMPTARGET_DEP_LIBELF_LIBRARIES}
-  "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/../exports")
+  "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/../exports"
+  "-Wl,-z,defs")
 
 # Report to the parent scope that we are building a plugin for CUDA.
 set(LIBBOLTTARGET_SYSTEM_TARGETS "${LIBBOLTTARGET_SYSTEM_TARGETS} nvptx64-nvidia-cuda" PARENT_SCOPE)
