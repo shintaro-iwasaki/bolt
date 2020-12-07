@@ -1148,7 +1148,6 @@ void __kmp_abt_create_workers(kmp_team_t *team) {
 
   // Set up proc bind.
   kmp_proc_bind_t proc_bind = proc_bind_false;
-#if OMP_40_ENABLED
   // Set up the affinity of the master thread.
   kmp_proc_bind_t team_proc_bind = team->t.t_proc_bind;
   if (team_proc_bind == proc_bind_default) {
@@ -1159,7 +1158,6 @@ void __kmp_abt_create_workers(kmp_team_t *team) {
   } else if (team_proc_bind != proc_bind_intel) {
     proc_bind = team_proc_bind;
   }
-#endif
   team->t.t_proc_bind_applied = proc_bind;
 
   // Obtain master place id.
