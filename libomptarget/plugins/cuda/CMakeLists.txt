@@ -36,20 +36,9 @@ add_library(bolt-omptarget.rtl.cuda SHARED src/rtl.cpp)
 # Install plugin under the lib destination folder.
 install(TARGETS bolt-omptarget.rtl.cuda LIBRARY DESTINATION "${OPENMP_INSTALL_LIBDIR}")
 
-# Install aliases
-get_target_property(BOLT_LIBOMPTARGET_LIBRARY_DIR bolt-omptarget.rtl.cuda LIBRARY_OUTPUT_DIRECTORY)
-if(BOLT_LIBOMPTARGET_LIBRARY_DIR)
-  add_custom_command(TARGET bolt-omptarget.rtl.cuda POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E create_symlink ${CMAKE_SHARED_LIBRARY_PREFIX}bolt-omptarget.rtl.cuda${CMAKE_SHARED_LIBRARY_SUFFIX}
-      ${CMAKE_SHARED_LIBRARY_PREFIX}omptarget.rtl.cuda${CMAKE_SHARED_LIBRARY_SUFFIX}
-      WORKING_DIRECTORY ${BOLT_LIBOMPTARGET_LIBRARY_DIR}
-  )
-endif()
-install(CODE "execute_process(COMMAND \"\${CMAKE_COMMAND}\" -E create_symlink \"${CMAKE_SHARED_LIBRARY_PREFIX}bolt-omptarget.rtl.cuda${CMAKE_SHARED_LIBRARY_SUFFIX}\"
-  \"${CMAKE_SHARED_LIBRARY_PREFIX}omptarget.rtl.cuda${CMAKE_SHARED_LIBRARY_SUFFIX}\" WORKING_DIRECTORY
-  \$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${OPENMP_INSTALL_LIBDIR})")
-
 target_link_libraries(bolt-omptarget.rtl.cuda
+  elf_common
+  MemoryManager
   ${LIBOMPTARGET_DEP_CUDA_DRIVER_LIBRARIES}
   ${LIBOMPTARGET_DEP_LIBELF_LIBRARIES}
   "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/../exports"
