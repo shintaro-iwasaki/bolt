@@ -143,7 +143,18 @@ endif()
 # Add the OpenMP library
 libomp_get_ldflags(LIBOMP_CONFIGURED_LDFLAGS)
 
-add_library(bolt-omp ${LIBOMP_LIBRARY_KIND} ${LIBOMP_SOURCE_FILES})
+libomp_get_libflags(LIBOMP_CONFIGURED_LIBFLAGS)
+# Build libomp library. Add LLVMSupport dependency if building in-tree with libomptarget profiling enabled.
+if(OPENMP_STANDALONE_BUILD OR (NOT OPENMP_ENABLE_LIBOMPTARGET_PROFILING))
+  add_library(bolt-omp ${LIBOMP_LIBRARY_KIND} ${LIBOMP_SOURCE_FILES})
+  # Linking command will include libraries in LIBOMP_CONFIGURED_LIBFLAGS
+  target_link_libraries(bolt-omp ${LIBOMP_CONFIGURED_LIBFLAGS} ${CMAKE_DL_LIBS})
+else()
+  add_llvm_library(bolt-omp ${LIBOMP_LIBRARY_KIND} ${LIBOMP_SOURCE_FILES} PARTIAL_SOURCES_INTENDED
+    LINK_LIBS ${LIBOMP_CONFIGURED_LIBFLAGS} ${CMAKE_DL_LIBS}
+    LINK_COMPONENTS Support
+    )
+endif()
 if(${LIBOMP_USE_BUILTIN_ARGOBOTS})
   add_dependencies(bolt-omp libabt)
 endif()
@@ -199,10 +210,6 @@ if(${LIBOMP_USE_ARGOBOTS})
     WORKING_DIRECTORY ${LIBBOLT_LIBRARY_DIR}
   )
 endif()
-
-# Linking command will include libraries in LIBOMP_CONFIGURED_LIBFLAGS
-libomp_get_libflags(LIBOMP_CONFIGURED_LIBFLAGS)
-target_link_libraries(bolt-omp ${LIBOMP_CONFIGURED_LIBFLAGS} ${CMAKE_DL_LIBS})
 
 # Create *.inc before compiling any sources
 # objects depend on : .inc files
